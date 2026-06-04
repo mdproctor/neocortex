@@ -32,13 +32,14 @@ Scaffold — no source code yet. Design complete, pending prototype validation (
 
 ## Documentation
 
-- [Platform Architecture](https://raw.githubusercontent.com/casehubio/parent/main/docs/PLATFORM.md)
-- [Deep Dive](https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-neural-text.md)
-- [AI Fusion Brief](https://raw.githubusercontent.com/casehubio/parent/main/docs/specs/2026-06-03-ai-fusion-hybrid-fact-space.md)
-- [ONNX Inference Brief](https://raw.githubusercontent.com/casehubio/parent/main/docs/specs/2026-06-03-standalone-rag-retrieval-brief.md)
+- [Platform Architecture](https://github.com/casehubio/parent/blob/main/docs/PLATFORM.md)
+- [Deep Dive](https://github.com/casehubio/parent/blob/main/docs/repos/casehub-neural-text.md)
+- [Architecture & Delivery Plan (ARC42STORIES)](https://github.com/casehubio/neural-text/blob/main/ARC42STORIES.MD)
+- [AI Fusion Brief](https://github.com/casehubio/parent/blob/main/docs/specs/2026-06-03-ai-fusion-hybrid-fact-space.md)
+- [ONNX Inference Brief](https://github.com/casehubio/parent/blob/main/docs/specs/2026-06-03-standalone-rag-retrieval-brief.md)
 
 ## Tracking
 
-- `casehubio/parent#158` — casehubio/neural-text (onnx inference)
-- `casehubio/parent#164` — casehub-rag (LangChain4j RAG integration)
-- `Hortora/spec#15` — Hortora alignment
+- [casehubio/parent#158](https://github.com/casehubio/parent/issues/158) — casehubio/neural-text (onnx inference)
+- [casehubio/parent#164](https://github.com/casehubio/parent/issues/164) — casehub-rag (LangChain4j RAG integration)
+- [Hortora/spec#15](https://github.com/Hortora/spec/issues/15) — Hortora alignment
