@@ -1,0 +1,225 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.casehub</groupId>
+  <artifactId>casehub-neural-text-parent</artifactId>
+  <version>0.2-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>CaseHub Neural Text - Parent</name>
+  <description>ONNX neural text inference (NLI, classification, SPLADE, reranking) and LangChain4j RAG integration for the casehubio platform</description>
+  <url>https://github.com/casehubio/neural-text</url>
+
+  <modules>
+    <module>inference-api</module>
+    <module>inference-runtime</module>
+    <module>inference-tasks</module>
+    <module>inference-splade</module>
+    <module>inference-inmem</module>
+    <module>inference-quarkus</module>
+    <module>rag-api</module>
+    <module>rag</module>
+    <module>rag-testing</module>
+  </modules>
+
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>casehubio GitHub Packages</name>
+      <url>https://maven.pkg.github.com/casehubio/neural-text</url>
+    </repository>
+    <snapshotRepository>
+      <id>github</id>
+      <name>casehubio GitHub Packages</name>
+      <url>https://maven.pkg.github.com/casehubio/neural-text</url>
+      <uniqueVersion>false</uniqueVersion>
+    </snapshotRepository>
+  </distributionManagement>
+
+  <scm>
+    <connection>scm:git:https://github.com/casehubio/neural-text.git</connection>
+    <developerConnection>scm:git:https://github.com/casehubio/neural-text.git</developerConnection>
+    <url>https://github.com/casehubio/neural-text</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <repositories>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/casehubio/*</url>
+      <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+  </repositories>
+
+  <properties>
+    <quarkus.version>3.32.2</quarkus.version>
+    <langchain4j.version>1.14.1</langchain4j.version>
+    <onnxruntime.version>1.17.3</onnxruntime.version>
+    <djl.tokenizers.version>0.29.0</djl.tokenizers.version>
+    <qdrant.client.version>1.9.1</qdrant.client.version>
+    <compiler-plugin.version>3.13.0</compiler-plugin.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <surefire-plugin.version>3.2.5</surefire-plugin.version>
+    <casehub-platform-api.version>0.2-SNAPSHOT</casehub-platform-api.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+
+      <!-- Quarkus BOM — manages quarkus-arc, quarkus-junit5, etc. -->
+      <dependency>
+        <groupId>io.quarkus.platform</groupId>
+        <artifactId>quarkus-bom</artifactId>
+        <version>${quarkus.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- casehub-platform -->
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-platform-api</artifactId>
+        <version>${casehub-platform-api.version}</version>
+      </dependency>
+
+      <!-- casehub-neural-text internal artifacts -->
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-inference-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-inference-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-inference-tasks</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-inference-splade</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-inference-inmem</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-inference-quarkus</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-rag-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-rag</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-rag-testing</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- ONNX Runtime JVM — model execution via JNI -->
+      <dependency>
+        <groupId>com.microsoft.onnxruntime</groupId>
+        <artifactId>onnxruntime</artifactId>
+        <version>${onnxruntime.version}</version>
+      </dependency>
+
+      <!-- HuggingFace Tokenizers JNI — tokenization -->
+      <dependency>
+        <groupId>ai.djl.huggingface</groupId>
+        <artifactId>tokenizers</artifactId>
+        <version>${djl.tokenizers.version}</version>
+      </dependency>
+
+      <!-- LangChain4j — RAG pipeline, dense embeddings, Qdrant EmbeddingStore -->
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j</artifactId>
+        <version>${langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-core</artifactId>
+        <version>${langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-document-parser-apache-tika</artifactId>
+        <version>${langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-embeddings</artifactId>
+        <version>${langchain4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-qdrant</artifactId>
+        <version>${langchain4j.version}</version>
+      </dependency>
+
+      <!-- Qdrant Java client — direct REST for sparse vector leg (until LangChain4j #4994) -->
+      <dependency>
+        <groupId>io.qdrant</groupId>
+        <artifactId>client</artifactId>
+        <version>${qdrant.client.version}</version>
+      </dependency>
+
+      <!-- Testing -->
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>3.26.3</version>
+        <scope>test</scope>
+      </dependency>
+
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${compiler-plugin.version}</version>
+          <configuration>
+            <release>${maven.compiler.release}</release>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefire-plugin.version}</version>
+          <configuration>
+            <systemPropertyVariables>
+              <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+            </systemPropertyVariables>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>io.smallrye</groupId>
+          <artifactId>jandex-maven-plugin</artifactId>
+          <version>3.1.2</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+</project>
