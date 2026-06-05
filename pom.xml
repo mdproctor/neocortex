@@ -48,6 +48,12 @@
 
   <repositories>
     <repository>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <releases><enabled>true</enabled></releases>
+      <snapshots><enabled>false</enabled></snapshots>
+    </repository>
+    <repository>
       <id>github</id>
       <url>https://maven.pkg.github.com/casehubio/*</url>
       <snapshots><enabled>true</enabled></snapshots>
@@ -57,13 +63,14 @@
   <properties>
     <quarkus.version>3.32.2</quarkus.version>
     <langchain4j.version>1.14.1</langchain4j.version>
-    <onnxruntime.version>1.17.3</onnxruntime.version>
-    <djl.tokenizers.version>0.29.0</djl.tokenizers.version>
+    <onnxruntime.version>1.26.0</onnxruntime.version>
+    <djl.tokenizers.version>0.36.0</djl.tokenizers.version>
     <qdrant.client.version>1.9.1</qdrant.client.version>
     <compiler-plugin.version>3.13.0</compiler-plugin.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <surefire-plugin.version>3.2.5</surefire-plugin.version>
+    <download-maven-plugin.version>1.9.0</download-maven-plugin.version>
     <casehub-platform-api.version>0.2-SNAPSHOT</casehub-platform-api.version>
   </properties>
 
@@ -217,6 +224,11 @@
           <groupId>io.smallrye</groupId>
           <artifactId>jandex-maven-plugin</artifactId>
           <version>3.1.2</version>
+        </plugin>
+        <plugin>
+          <groupId>com.googlecode.maven-download-plugin</groupId>
+          <artifactId>download-maven-plugin</artifactId>
+          <version>${download-maven-plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

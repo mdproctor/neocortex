@@ -51,7 +51,7 @@
     <!-- Testing -->
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -80,7 +80,89 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>com.googlecode.maven-download-plugin</groupId>
+        <artifactId>download-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>download-onnx-model</id>
+            <phase>generate-test-resources</phase>
+            <goals><goal>wget</goal></goals>
+            <configuration>
+              <url>https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/main/onnx/model_quantized.onnx</url>
+              <outputDirectory>${project.build.directory}/test-models/nli-deberta-v3-xsmall</outputDirectory>
+              <outputFileName>model.onnx</outputFileName>
+              <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>download-tokenizer</id>
+            <phase>generate-test-resources</phase>
+            <goals><goal>wget</goal></goals>
+            <configuration>
+              <url>https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/main/tokenizer.json</url>
+              <outputDirectory>${project.build.directory}/test-models/nli-deberta-v3-xsmall</outputDirectory>
+              <outputFileName>tokenizer.json</outputFileName>
+              <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>native</id>
+      <activation>
+        <property><name>native</name></property>
+      </activation>
+      <properties>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-maven-plugin</artifactId>
+            <version>${quarkus.version}</version>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>build</goal>
+                  <goal>generate-code</goal>
+                  <goal>generate-code-tests</goal>
+                  <goal>native-image-agent</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <version>${surefire-plugin.version}</version>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
 </project>
