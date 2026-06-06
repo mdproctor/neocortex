@@ -350,7 +350,7 @@ flowchart LR
 | # | Chapter | Journey | Layers touched | Delta summary | Status |
 |---|---|---|---|---|---|
 | 1 | Scaffold | J1 | — | None | ✅ |
-| 2 | Native Image Gate | J1 | (cross-cutting) | Risk validation | 🔲 |
+| 2 | Native Image Gate | J1 | (cross-cutting) | Risk validation | ✅ |
 | 3 | SPI Foundation + Runtime Core | J1 | L1, L2 | High, High | 🔲 |
 | 4 | Task Adapters | J1 | L3 | High | 🔲 |
 | 5 | Quarkus Integration | J1 | L5 | High | 🔲 |
@@ -396,8 +396,8 @@ None — this is infrastructure only.
 
 #### Chapter 2 — Native Image Gate
 
-**Journey:** J1 | **Sequence:** 2 of 7 | **Status:** 🔲 Pending  
-**Issues:** #2
+**Journey:** J1 | **Sequence:** 2 of 7 | **Status:** ✅ Complete  
+**Delivered:** 2026-06-06 | **Issues:** #2
 
 **What this delivers**  
 A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and execute a real ONNX model inside a Quarkus native image binary on macOS ARM. This is a binary pass/fail gate — either both JNI layers work natively or they do not.
@@ -597,7 +597,7 @@ HuggingFace Tokenizers JNI: requires the native library to be on `java.library.p
 Two JNI layers (ONNX Runtime + HuggingFace Tokenizers) are required rather than one. ONNX Runtime handles model execution; HuggingFace Tokenizers handles tokenization. Alternative (LangChain4j tokenization) rejected — LangChain4j tokenizers are dense-embedding-specific and do not produce token ID + attention mask tensors needed for arbitrary ONNX model input.
 
 #### Gotchas
-🔲 — populated after C2 prototype (JNI native image issues expected here)
+See `inference-quarkus/src/main/resources/NATIVE-IMAGE-NOTES.md` — 3 gotchas documented (GE-20260606-d3cd87, GE-20260606-7bf5dd, GE-20260606-025601)
 
 #### Pattern to replicate
 🔲 — populated at C3 close
