@@ -417,7 +417,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 #### Chapter 3 — SPI Foundation + Runtime Core
 
-**Journey:** J1 | **Sequence:** 3 of 7 | **Status:** 🔲 Pending  
+**Journey:** J1 | **Sequence:** 3 of 7 | **Status:** ✅ Complete  
 **Issues:** #3 | **Blocked by:** — (independent of C2)
 
 **What this delivers**  
@@ -525,7 +525,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 **Key protocols:** `module-tier-structure.md` (pure Java, zero deps), `spi-default-method-contract-test.md`  
 **Design refs:** `docs/specs/2026-06-03-standalone-rag-retrieval-brief.md`, `Hortora/spec: docs/superpowers/specs/2026-06-03-onnx-inference-module-design.md`  
 **Issues:** #3 | parent#158  
-**Completed:** 🔲
+**Completed:** ✅
 
 #### What it adds
 
@@ -570,7 +570,7 @@ Defines the contract between callers and ONNX model execution. Before this layer
 **Architectural patterns:** Session Pool (one session per ModelConfig, singleton lifetime)  
 **Design refs:** `docs/specs/2026-06-03-standalone-rag-retrieval-brief.md` §Native Image Gate  
 **Issues:** #2, #3 | parent#158  
-**Completed:** 🔲
+**Completed:** ✅
 
 #### What it adds
 
