@@ -128,8 +128,8 @@ Tracks `casehubio/parent#164`.
 ## Module Structure
 
 ```
-inference-api/      — zero deps: InferenceModel SPI, InferenceInput, InferenceOutput, ModelConfig
-inference-runtime/  — ONNX Runtime JVM + HuggingFace Tokenizers JNI; session management
+inference-api/      — zero deps: InferenceModel SPI, InferenceInput, InferenceOutput, InferenceException
+inference-runtime/  — ONNX Runtime JVM + HuggingFace Tokenizers JNI; OnnxInferenceModel, ModelConfig
 inference-tasks/    — NliClassifier, TextClassifier, ScalarRegressor, CrossEncoderReranker
 inference-splade/   — sparse SPLADE embeddings (Map<Integer, Float>)
 inference-inmem/    — deterministic stubs; no JNI; safe in all test contexts

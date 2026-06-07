@@ -36,8 +36,7 @@ public class NativeImageGateTest {
 
         assertThat(exitCode).isEqualTo(0);
         assertThat(output)
-            .contains("PASS: DJL Tokenizer JNI loaded and executed")
-            .contains("PASS: ONNX Runtime JNI loaded and session created")
+            .contains("PASS: ONNX Runtime JNI + DJL Tokenizer JNI loaded")
             .contains("PASS: End-to-end inference completed");
     }
 }
