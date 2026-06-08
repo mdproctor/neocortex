@@ -25,6 +25,7 @@ class OnnxInferenceModelTest {
     private static final Path MODEL_PATH = TEST_MODEL_DIR.resolve("model.onnx");
     private static final Path TOKENIZER_PATH = TEST_MODEL_DIR.resolve("tokenizer.json");
     private static final Path WRONG_INPUTS_MODEL = TEST_MODEL_DIR.resolve("wrong-inputs-model.onnx");
+    private static final Path BERT_MODEL_PATH = TEST_MODEL_DIR.resolve("bert-model.onnx");
 
     // ── load + run ─────────────────────────────────────────────────────
 
@@ -129,6 +130,71 @@ class OnnxInferenceModelTest {
             assertThatThrownBy(() -> model.runBatch(inputs))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("inputs[1] must not be null");
+        }
+    }
+
+    // ── token_type_ids (BERT-style 3-input model) ───────────────────────
+
+    @Nested
+    @DisplayName("token_type_ids support")
+    class TokenTypeIds {
+
+        private OnnxInferenceModel model;
+
+        @BeforeEach
+        void setUp() {
+            model = new OnnxInferenceModel(new ModelConfig(BERT_MODEL_PATH, TOKENIZER_PATH));
+        }
+
+        @AfterEach
+        void tearDown() {
+            if (model != null) model.close();
+        }
+
+        @Test
+        void loadsModelWithTokenTypeIds() {
+            assertThat(model.outputSize()).isEqualTo(OptionalInt.of(3));
+        }
+
+        @Test
+        void runSingleTextWithTokenTypeIds() {
+            InferenceOutput out = model.run(InferenceInput.of("hello world"));
+            assertThat(out.values()).hasSize(3);
+        }
+
+        @Test
+        void runTextPairWithTokenTypeIds() {
+            InferenceOutput out = model.run(InferenceInput.pair("premise", "hypothesis"));
+            assertThat(out.values()).hasSize(3);
+        }
+
+        @Test
+        void runBatchWithTokenTypeIds() {
+            List<InferenceInput> inputs = List.of(
+                InferenceInput.of("first"),
+                InferenceInput.of("second"),
+                InferenceInput.pair("query", "document")
+            );
+            List<InferenceOutput> outputs = model.runBatch(inputs);
+            assertThat(outputs).hasSize(3);
+            for (InferenceOutput out : outputs) {
+                assertThat(out.values()).hasSize(3);
+            }
+        }
+
+        @Test
+        void batchSingleEquivalenceWithTokenTypeIds() {
+            InferenceInput input = InferenceInput.of("test equivalence");
+            InferenceOutput single = model.run(input);
+            List<InferenceOutput> batch = model.runBatch(List.of(input));
+
+            assertThat(batch).hasSize(1);
+            float[] singleValues = single.values();
+            float[] batchValues = batch.get(0).values();
+            assertThat(batchValues).hasSize(singleValues.length);
+            for (int i = 0; i < singleValues.length; i++) {
+                assertThat(batchValues[i]).isCloseTo(singleValues[i], within(1e-5f));
+            }
         }
     }
 

@@ -16,6 +16,7 @@ import io.casehub.inference.InferenceOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +35,7 @@ public final class OnnxInferenceModel implements InferenceModel {
     private final OrtEnvironment env;
     private final OrtSession session;
     private final HuggingFaceTokenizer tokenizer;
+    private final boolean requiresTokenTypeIds;
     private final OptionalInt outputSize;
     private volatile boolean closed;
 
@@ -74,6 +76,7 @@ public final class OnnxInferenceModel implements InferenceModel {
                 throw new ModelLoadException(
                     "Model must have 'attention_mask' input, found: " + inputNames);
             }
+            this.requiresTokenTypeIds = inputNames.contains("token_type_ids");
 
             // Validate outputs: at least one, rank 2
             Map<String, NodeInfo> outputInfo = session.getOutputInfo();
@@ -134,16 +137,34 @@ public final class OnnxInferenceModel implements InferenceModel {
         long[][] inputIds2d = {inputIds};
         long[][] attentionMask2d = {attentionMask};
 
-        try (OnnxTensor idsTensor = OnnxTensor.createTensor(env, inputIds2d);
-             OnnxTensor maskTensor = OnnxTensor.createTensor(env, attentionMask2d);
-             OrtSession.Result result = session.run(
-                 Map.of("input_ids", idsTensor, "attention_mask", maskTensor))) {
+        List<OnnxTensor> tensors = new ArrayList<>();
+        try {
+            OnnxTensor idsTensor = OnnxTensor.createTensor(env, inputIds2d);
+            tensors.add(idsTensor);
+            OnnxTensor maskTensor = OnnxTensor.createTensor(env, attentionMask2d);
+            tensors.add(maskTensor);
 
-            float[][] logits = (float[][]) result.get(0).getValue();
-            return new InferenceOutput(logits[0]);
+            Map<String, OnnxTensor> inputMap = new HashMap<>();
+            inputMap.put("input_ids", idsTensor);
+            inputMap.put("attention_mask", maskTensor);
 
+            if (requiresTokenTypeIds) {
+                long[][] typeIds2d = {encoding.getTypeIds()};
+                OnnxTensor typeIdsTensor = OnnxTensor.createTensor(env, typeIds2d);
+                tensors.add(typeIdsTensor);
+                inputMap.put("token_type_ids", typeIdsTensor);
+            }
+
+            try (OrtSession.Result result = session.run(inputMap)) {
+                float[][] logits = (float[][]) result.get(0).getValue();
+                return new InferenceOutput(logits[0]);
+            }
         } catch (OrtException e) {
             throw new InferenceException("Inference failed: " + e.getMessage(), e);
+        } finally {
+            for (OnnxTensor t : tensors) {
+                t.close();
+            }
         }
     }
 
@@ -176,31 +197,53 @@ public final class OnnxInferenceModel implements InferenceModel {
         }
 
         // Pad to batch-max length and stack into 2D arrays
-        // Zero-fill is correct: [PAD]=0 for BERT family, attention_mask=0 means "don't attend"
+        // Zero-fill is correct: [PAD]=0 for BERT family, attention_mask=0 means "don't attend",
+        // token_type_ids=0 means segment A
         long[][] batchIds = new long[batchSize][maxLen];
         long[][] batchMask = new long[batchSize][maxLen];
+        long[][] batchTypeIds = requiresTokenTypeIds ? new long[batchSize][maxLen] : null;
         for (int i = 0; i < batchSize; i++) {
             long[] ids = encodings[i].getIds();
             long[] mask = encodings[i].getAttentionMask();
             System.arraycopy(ids, 0, batchIds[i], 0, ids.length);
             System.arraycopy(mask, 0, batchMask[i], 0, mask.length);
-            // remaining positions are already 0 (long[] default)
+            if (batchTypeIds != null) {
+                long[] typeIds = encodings[i].getTypeIds();
+                System.arraycopy(typeIds, 0, batchTypeIds[i], 0, typeIds.length);
+            }
         }
 
-        try (OnnxTensor idsTensor = OnnxTensor.createTensor(env, batchIds);
-             OnnxTensor maskTensor = OnnxTensor.createTensor(env, batchMask);
-             OrtSession.Result result = session.run(
-                 Map.of("input_ids", idsTensor, "attention_mask", maskTensor))) {
+        List<OnnxTensor> tensors = new ArrayList<>();
+        try {
+            OnnxTensor idsTensor = OnnxTensor.createTensor(env, batchIds);
+            tensors.add(idsTensor);
+            OnnxTensor maskTensor = OnnxTensor.createTensor(env, batchMask);
+            tensors.add(maskTensor);
 
-            float[][] logits = (float[][]) result.get(0).getValue();
-            List<InferenceOutput> outputs = new ArrayList<>(batchSize);
-            for (int i = 0; i < batchSize; i++) {
-                outputs.add(new InferenceOutput(logits[i]));
+            Map<String, OnnxTensor> inputMap = new HashMap<>();
+            inputMap.put("input_ids", idsTensor);
+            inputMap.put("attention_mask", maskTensor);
+
+            if (batchTypeIds != null) {
+                OnnxTensor typeIdsTensor = OnnxTensor.createTensor(env, batchTypeIds);
+                tensors.add(typeIdsTensor);
+                inputMap.put("token_type_ids", typeIdsTensor);
             }
-            return Collections.unmodifiableList(outputs);
 
+            try (OrtSession.Result result = session.run(inputMap)) {
+                float[][] logits = (float[][]) result.get(0).getValue();
+                List<InferenceOutput> outputs = new ArrayList<>(batchSize);
+                for (int i = 0; i < batchSize; i++) {
+                    outputs.add(new InferenceOutput(logits[i]));
+                }
+                return Collections.unmodifiableList(outputs);
+            }
         } catch (OrtException e) {
             throw new InferenceException("Batch inference failed: " + e.getMessage(), e);
+        } finally {
+            for (OnnxTensor t : tensors) {
+                t.close();
+            }
         }
     }
 
