@@ -96,6 +96,14 @@ https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-neura
 
 ---
 
+## Reference Documents
+
+| Document | What it covers |
+|----------|---------------|
+| `../garden/docs/protocols/universal/INDEX.md` | Universal Java/Quarkus protocols |
+
+---
+
 ## Project Type
 
 type: java
