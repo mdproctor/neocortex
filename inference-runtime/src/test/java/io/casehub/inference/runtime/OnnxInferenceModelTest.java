@@ -14,6 +14,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -255,7 +260,6 @@ class OnnxInferenceModelTest {
         void runBatchEmptyAfterCloseThrows() {
             var model = new OnnxInferenceModel(new ModelConfig(MODEL_PATH, TOKENIZER_PATH));
             model.close();
-            // closed check MUST precede the empty-list early return
             assertThatThrownBy(() -> model.runBatch(List.of()))
                 .isInstanceOf(InferenceException.class)
                 .hasMessageContaining("closed");
@@ -265,8 +269,158 @@ class OnnxInferenceModelTest {
         void closeIsIdempotent() {
             var model = new OnnxInferenceModel(new ModelConfig(MODEL_PATH, TOKENIZER_PATH));
             model.close();
-            model.close(); // second close is a no-op
-            model.close(); // third close is a no-op
+            model.close();
+            model.close();
+        }
+
+        @Test
+        void closeReleasesAllResources() {
+            var model = new OnnxInferenceModel(new ModelConfig(MODEL_PATH, TOKENIZER_PATH));
+            model.run(InferenceInput.of("warm up"));
+            model.close();
+
+            assertThatThrownBy(() -> model.run(InferenceInput.of("after close")))
+                .isInstanceOf(InferenceException.class)
+                .hasMessageContaining("closed");
+            assertThatThrownBy(() -> model.runBatch(List.of(InferenceInput.of("after close"))))
+                .isInstanceOf(InferenceException.class)
+                .hasMessageContaining("closed");
+        }
+    }
+
+    // ── thread safety ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("thread safety")
+    class ThreadSafety {
+
+        @Test
+        void concurrentRunCallsProduceCorrectResults() throws Exception {
+            var model = new OnnxInferenceModel(new ModelConfig(MODEL_PATH, TOKENIZER_PATH));
+            try {
+                int threadCount = 8;
+                int iterationsPerThread = 10;
+                CountDownLatch startLatch = new CountDownLatch(1);
+                ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+                List<Future<List<InferenceOutput>>> futures = new ArrayList<>();
+                for (int t = 0; t < threadCount; t++) {
+                    futures.add(executor.submit(() -> {
+                        startLatch.await();
+                        List<InferenceOutput> results = new ArrayList<>();
+                        for (int i = 0; i < iterationsPerThread; i++) {
+                            results.add(model.run(InferenceInput.of("hello world")));
+                        }
+                        return results;
+                    }));
+                }
+
+                startLatch.countDown();
+
+                InferenceOutput baseline = model.run(InferenceInput.of("hello world"));
+
+                for (Future<List<InferenceOutput>> future : futures) {
+                    List<InferenceOutput> results = future.get(10, TimeUnit.SECONDS);
+                    assertThat(results).hasSize(iterationsPerThread);
+                    for (InferenceOutput out : results) {
+                        assertThat(out.values()).hasSize(baseline.values().length);
+                        for (int i = 0; i < baseline.values().length; i++) {
+                            assertThat(out.values()[i])
+                                .isCloseTo(baseline.values()[i], within(1e-5f));
+                        }
+                    }
+                }
+
+                executor.shutdown();
+                assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                model.close();
+            }
+        }
+
+        @Test
+        void concurrentRunBatchCallsProduceCorrectResults() throws Exception {
+            var model = new OnnxInferenceModel(new ModelConfig(MODEL_PATH, TOKENIZER_PATH));
+            try {
+                int threadCount = 4;
+                CountDownLatch startLatch = new CountDownLatch(1);
+                ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+                List<InferenceInput> batchInputs = List.of(
+                    InferenceInput.of("first"),
+                    InferenceInput.of("second")
+                );
+
+                List<InferenceOutput> baseline = model.runBatch(batchInputs);
+
+                List<Future<List<InferenceOutput>>> futures = new ArrayList<>();
+                for (int t = 0; t < threadCount; t++) {
+                    futures.add(executor.submit(() -> {
+                        startLatch.await();
+                        return model.runBatch(batchInputs);
+                    }));
+                }
+
+                startLatch.countDown();
+
+                for (Future<List<InferenceOutput>> future : futures) {
+                    List<InferenceOutput> results = future.get(10, TimeUnit.SECONDS);
+                    assertThat(results).hasSize(baseline.size());
+                    for (int i = 0; i < baseline.size(); i++) {
+                        float[] expected = baseline.get(i).values();
+                        float[] actual = results.get(i).values();
+                        assertThat(actual).hasSize(expected.length);
+                        for (int j = 0; j < expected.length; j++) {
+                            assertThat(actual[j]).isCloseTo(expected[j], within(1e-5f));
+                        }
+                    }
+                }
+
+                executor.shutdown();
+                assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                model.close();
+            }
+        }
+
+        @Test
+        void concurrentMixedRunAndRunBatch() throws Exception {
+            var model = new OnnxInferenceModel(new ModelConfig(MODEL_PATH, TOKENIZER_PATH));
+            try {
+                int threadCount = 6;
+                CountDownLatch startLatch = new CountDownLatch(1);
+                ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+                List<Future<?>> futures = new ArrayList<>();
+                for (int t = 0; t < threadCount; t++) {
+                    int thread = t;
+                    futures.add(executor.submit(() -> {
+                        startLatch.await();
+                        if (thread % 2 == 0) {
+                            InferenceOutput out = model.run(InferenceInput.of("text " + thread));
+                            assertThat(out.values()).hasSize(3);
+                        } else {
+                            List<InferenceOutput> outs = model.runBatch(List.of(
+                                InferenceInput.of("a"),
+                                InferenceInput.pair("b", "c")
+                            ));
+                            assertThat(outs).hasSize(2);
+                        }
+                        return null;
+                    }));
+                }
+
+                startLatch.countDown();
+
+                for (Future<?> future : futures) {
+                    future.get(10, TimeUnit.SECONDS);
+                }
+
+                executor.shutdown();
+                assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                model.close();
+            }
         }
     }
 }
