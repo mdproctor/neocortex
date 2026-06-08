@@ -323,7 +323,7 @@ noClasses().that().resideInAPackage("io.casehub.inference..")
 | Journey | Description | Chapters | Status |
 |---|---|---|---|
 | J1 Neural Inference | Deliver the standalone ONNX inference layer — SPI, runtime, adapters, SPLADE, Quarkus wiring | C1–C6 | 🚧 In progress (C1–C4 complete) |
-| J2 RAG Integration | Deliver casehub-specific LangChain4j RAG pipeline with hybrid search | C7 | 🔲 Pending (blocked on C6) |
+| J2 RAG Integration | Deliver casehub-specific LangChain4j RAG pipeline with hybrid search | C7 | 🔲 Pending (C6 done — unblocked) |
 
 ### §9.2 Chapter Index
 
@@ -353,8 +353,8 @@ flowchart LR
 | 2 | Native Image Gate | J1 | (cross-cutting) | Risk validation | ✅ |
 | 3 | SPI Foundation + Runtime Core | J1 | L1, L2 | High, High | ✅ |
 | 4 | Task Adapters | J1 | L3 | High | ✅ |
-| 5 | Quarkus Integration | J1 | L5 | High | 🔲 |
-| 6 | Sparse Embeddings (SPLADE) | J1 | L4 | High | 🔲 |
+| 5 | Quarkus Integration | J1 | L5 | High | ✅ |
+| 6 | Sparse Embeddings (SPLADE) | J1 | L4 | High | ✅ |
 | 7 | RAG Pipeline | J2 | L6, L7 | High, High | 🔲 |
 
 **Layer × Chapter matrix**
@@ -457,11 +457,11 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 #### Chapter 5 — Quarkus Integration
 
-**Journey:** J1 | **Sequence:** 5 of 7 | **Status:** 🔲 Pending  
+**Journey:** J1 | **Sequence:** 5 of 7 | **Status:** ✅ Done  
 **Issues:** #5 | **Blocked by:** C3, C4; conditional on C2 for native image
 
 **What this delivers**  
-`inference-quarkus` published. Quarkus applications configure ONNX models via `application.properties` and inject them with `@InferenceModel("name")`. Dev Services make models available in development without manual setup. `@QuarkusTest` uses `inference-inmem` stubs automatically.
+`inference-quarkus` published. Quarkus applications configure ONNX models via `application.properties` and inject them with `@Inference("name")`. `@QuarkusTest` uses `inference-inmem` stubs via `@Alternative` test producers overriding the `@DefaultBean` production producer.
 
 **Accountability gaps closed**  
 - Quarkus-native model configuration → CDI-managed model lifecycle
@@ -476,7 +476,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 #### Chapter 6 — Sparse Embeddings (SPLADE)
 
-**Journey:** J1 | **Sequence:** 6 of 7 | **Status:** 🔲 Pending  
+**Journey:** J1 | **Sequence:** 6 of 7 | **Status:** ✅ Done  
 **Issues:** #6 | **Blocked by:** C2 (ONNX native image validation), C4 (adapter pattern established)
 
 **What this delivers**  
@@ -686,7 +686,7 @@ Adapter construction pattern: validate null model → validate `outputSize()` wh
 **Architectural patterns:** Adapter (wraps InferenceModel; post-processes to sparse format)  
 **Design refs:** `docs/specs/2026-06-03-standalone-rag-retrieval-brief.md` §SPLADE  
 **Issues:** #6 | parent#158  
-**Completed:** 🔲
+**Completed:** ✅
 
 #### What it adds
 
@@ -701,10 +701,18 @@ Log-saturation applied before threshold: `log(1 + relu(w))` for each raw weight 
 Candidate for upstream LangChain4j contribution (issue #1600) once stable.
 
 #### Gotchas
-🔲 — populated at C6 close (JNI native image issues likely here too)
+
+No JNI issues — `SparseEmbedder` is pure Java, depends only on `inference-api`. No native library involvement.
+
+#### Key files
+
+- `inference-splade/src/main/java/io/casehub/inference/splade/SparseEmbedder.java` — single class, embed + embedBatch
+- `inference-splade/src/test/java/io/casehub/inference/splade/SparseEmbedderTest.java` — 17 tests
+- `inference-splade/src/test/java/io/casehub/inference/splade/DependencyConstraintTest.java` — ArchUnit enforced
 
 #### Pattern to replicate
-🔲 — populated at C6 close
+
+Same adapter pattern as inference-tasks: constructor takes `InferenceModel`, validates at construction, typed method calls `model.run()` and post-processes. Add ArchUnit `DependencyConstraintTest` with the casehub domain exclusion rule.
 
 ---
 
@@ -713,25 +721,33 @@ Candidate for upstream LangChain4j contribution (issue #1600) once stable.
 **Participates in chapters:** C5  
 **Architectural patterns:** CDI SPI Registration, `@Qualifier`-based disambiguation  
 **Issues:** #5  
-**Completed:** 🔲
+**Completed:** ✅
 
 #### What it adds
 
-Quarkus applications declare ONNX models in `application.properties` and inject them with `@InferenceModel("name")`. `@ApplicationScoped` CDI lifecycle manages model sessions. `@QuarkusTest` receives `inference-inmem` stubs automatically via the `@DefaultBean` displacement pattern.
+Quarkus applications declare ONNX models in `application.properties` and inject them with `@Inference("name")`. `InferenceModelProducer` (`@ApplicationScoped @DefaultBean`) creates `OnnxInferenceModel` instances lazily from `@ConfigMapping` properties. `@QuarkusTest` overrides via `@Alternative` test producers returning `InMemoryInferenceModel`.
 
 #### Architectural decisions
 
-`@InferenceModel` is a custom CDI qualifier, not `@Named`. This enforces type safety at injection points — a `TextClassifier` bean cannot be accidentally injected with a mismatched model config.
+`@Inference` qualifier, not `@InferenceModel` — avoids import collision with the `io.casehub.inference.InferenceModel` SPI interface. `@Nonbinding String value()` means CDI treats all `@Inference` qualifiers identically; the producer inspects `InjectionPoint` to resolve the specific model name at runtime.
 
-Each model config produces one `InferenceModel` bean. Beans are `@ApplicationScoped` (not `@Singleton`) because Quarkus CDI treats `@ApplicationScoped` as the correct scope for application-lifetime beans.
+CDI-only, no Quarkus extension (no deployment/runtime split). Full extension deferred to native image gate. `@DefaultBean` on the production producer means any `@Produces @Inference` method in test code wins automatically.
 
-Native image mode conditional on C2: if JNI validation passes, `inference-quarkus` produces a native-image-capable build. If not, JVM mode only.
+`reuseForks=false` in surefire — required because the module mixes `@QuarkusTest` (augmented classloader) with plain JUnit tests that load JNI libraries. See GE-20260608-564065.
 
 #### Gotchas
-🔲 — populated at C5 close
+
+JNI classloader conflict: `@QuarkusTest` loads ONNX Runtime JNI via Quarkus augmented classloader. A plain JUnit test in the same JVM fork tries to reload the same native library via the system classloader — JNI refuses with `UnsatisfiedLinkError: Native Library already loaded in another classloader`. Fix: `reuseForks=false`. Captured in garden: GE-20260608-564065.
+
+#### Key files
+
+- `inference-quarkus/src/main/java/io/casehub/inference/quarkus/Inference.java` — CDI qualifier
+- `inference-quarkus/src/main/java/io/casehub/inference/quarkus/InferenceModelConfig.java` — `@ConfigMapping`
+- `inference-quarkus/src/main/java/io/casehub/inference/quarkus/InferenceModelProducer.java` — producer + lifecycle
 
 #### Pattern to replicate
-🔲 — populated at C5 close
+
+For new inference model consumers: inject `@Inference("name") InferenceModel model`. Configure in `application.properties` under `casehub.inference.models.<name>.*`. For tests: provide an `@Alternative @ApplicationScoped` producer class, enable via `QuarkusTestProfile.getEnabledAlternatives()`.
 
 ---
 
