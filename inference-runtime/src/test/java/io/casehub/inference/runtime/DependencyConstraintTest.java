@@ -1,5 +1,7 @@
 package io.casehub.inference.runtime;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -22,4 +24,12 @@ class DependencyConstraintTest {
         .dependOnClassesThat().resideInAnyPackage("dev.langchain4j..");
 
     // ONNX Runtime and DJL ARE allowed — this module wraps them
+
+    @ArchTest
+    static final ArchRule noCasehubDomain = noClasses()
+        .that().resideInAPackage("io.casehub.inference.runtime..")
+        .should().dependOnClassesThat(
+            DescribedPredicate.describe("casehub domain classes",
+                (JavaClass cls) -> cls.getPackageName().startsWith("io.casehub.")
+                    && !cls.getPackageName().startsWith("io.casehub.inference")));
 }
