@@ -29,12 +29,8 @@
       <groupId>io.casehub</groupId>
       <artifactId>casehub-inference-tasks</artifactId>
     </dependency>
-    <dependency>
-      <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-quarkus</artifactId>
-    </dependency>
 
-    <!-- casehub platform — tenancy isolation -->
+    <!-- casehub platform — tenancy validation -->
     <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-platform-api</artifactId>
@@ -46,25 +42,13 @@
       <artifactId>quarkus-arc</artifactId>
     </dependency>
 
-    <!-- LangChain4j — RAG pipeline -->
+    <!-- LangChain4j — EmbeddingModel, Embedding, TextSegment types only -->
     <dependency>
       <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-document-parser-apache-tika</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-embeddings</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-qdrant</artifactId>
+      <artifactId>langchain4j-core</artifactId>
     </dependency>
 
-    <!-- Qdrant Java client — direct REST for sparse vector leg (until LangChain4j #4994 ships) -->
+    <!-- Qdrant Java client — gRPC, both dense and sparse legs -->
     <dependency>
       <groupId>io.qdrant</groupId>
       <artifactId>client</artifactId>
@@ -82,6 +66,11 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-rag-testing</artifactId>
       <scope>test</scope>
@@ -89,6 +78,16 @@
     <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-inference-inmem</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
 
