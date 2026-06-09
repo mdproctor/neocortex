@@ -790,7 +790,7 @@ Reactive SPI co-location in Tier 1 api modules with Mutiny `provided` scope — 
 
 #### What it adds
 
-Implements `CorpusStore` and `CaseRetriever` using LangChain4j `EmbeddingModel` (dense embeddings) + `inference-splade` `SparseEmbedder` (sparse) + Qdrant Java client (gRPC) for hybrid search with RRF fusion. Optional `CrossEncoderReranker` for precision-mode top-N. Configurable tenancy isolation — separate collections per tenant (default) or shared collection with payload filtering. `@DefaultBean` bridges (`BlockingToReactiveCorpusStore`, `BlockingToReactiveCaseRetriever`) wrap blocking implementations with `runSubscriptionOn(workerPool)` for consumers that inject reactive SPIs without native reactive Qdrant impls (#13).
+Implements `CorpusStore` and `CaseRetriever` using LangChain4j `EmbeddingModel` (dense embeddings) + `inference-splade` `SparseEmbedder` (sparse) + Qdrant Java client (gRPC) for hybrid search with RRF fusion. Optional `CrossEncoderReranker` for precision-mode top-N. Configurable tenancy isolation — separate collections per tenant (default) or shared collection with payload filtering. `@DefaultBean` bridges (`BlockingToReactiveCorpusStore`, `BlockingToReactiveCaseRetriever`) wrap blocking implementations with `runSubscriptionOn(workerPool)` as the default reactive path. Native reactive Qdrant implementations (`ReactiveQdrantCorpusStore`, `ReactiveHybridCaseRetriever`) activate via `casehub.rag.reactive.enabled=true` — use `QdrantFutures.toUni()` (`ListenableFuture` → Mutiny `Uni` via `Futures.addCallback` + `directExecutor`) for natively async Qdrant I/O, with blocking ONNX embedding offloaded to the worker pool. `ReactiveRagBeanProducer` (`@IfBuildProperty` + `@Startup`) produces both; `@DefaultBean` bridges are removed from the bean graph when active (#13).
 
 `langchain4j-qdrant` not used — LangChain4j does not support Qdrant named vector spaces or hybrid search ([langchain4j#4994](https://github.com/langchain4j/langchain4j/issues/4994), open, no timeline). Both dense and sparse legs use the Qdrant Java gRPC client directly for unified architecture. LangChain4j used only for `EmbeddingModel`, `DocumentSplitter`, and Tika parser (in `rag-tika`).
 
@@ -804,11 +804,11 @@ RRF (Reciprocal Rank Fusion) used to merge dense and sparse result lists. Scores
 
 #### Gotchas
 
-`langchain4j-qdrant` does not support named vector spaces or hybrid search (langchain4j#4994). Must use the Qdrant Java gRPC client directly for both legs. Qdrant client 1.18.1 returns `ListenableFuture`, not `CompletionStage` — needs Guava bridge or `Uni.createFrom().emitter()` for native reactive impls (#13).
+`langchain4j-qdrant` does not support named vector spaces or hybrid search (langchain4j#4994). Must use the Qdrant Java gRPC client directly for both legs. Qdrant client 1.18.1 returns `ListenableFuture`, not `CompletionStage` — bridged via `QdrantFutures.toUni()` using `Futures.addCallback` + `directExecutor()` (#13 resolved). `memoize().indefinitely()` caches failures (verified from Mutiny `UniMemoizeOp` source) — `ensureCollection` evicts from the memoization map on failure to allow retry.
 
 #### Pattern to replicate
 
-Unified Qdrant gRPC client for both dense and sparse legs — one client, one code path. `TenancyStrategy` enum for configurable collection isolation. `@DefaultBean` bridges for reactive SPIs that wrap blocking delegates on the worker pool.
+Unified Qdrant gRPC client for both dense and sparse legs — one client, one code path. `TenancyStrategy` enum for configurable collection isolation. `@DefaultBean` bridges for reactive SPIs that wrap blocking delegates on the worker pool. `QdrantFutures.toUni()` for `ListenableFuture` → `Uni` bridging with cancellation propagation. `@IfBuildProperty` on a dedicated producer class gates all produced beans behind a single property. `ConcurrentHashMap<String, Uni<Void>>` + `computeIfAbsent` + `.memoize().indefinitely()` for concurrent-safe lazy collection creation with failure eviction.
 
 ---
 
