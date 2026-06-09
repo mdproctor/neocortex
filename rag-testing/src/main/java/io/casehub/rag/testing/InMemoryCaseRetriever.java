@@ -5,6 +5,7 @@ import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.RetrievedChunk;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.List;
 
 @Alternative
 @Priority(1)
+@ApplicationScoped
 public class InMemoryCaseRetriever implements CaseRetriever {
 
     private final InMemoryCorpusStore store;

@@ -4,6 +4,7 @@ import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.CorpusStore;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
 
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Alternative
 @Priority(1)
+@ApplicationScoped
 public class InMemoryCorpusStore implements CorpusStore {
 
     private final Map<CorpusRef, Map<String, List<ChunkInput>>> data = new ConcurrentHashMap<>();
