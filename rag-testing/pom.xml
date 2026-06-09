@@ -22,6 +22,12 @@
     </dependency>
 
     <dependency>
+      <groupId>io.smallrye.reactive</groupId>
+      <artifactId>mutiny</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
       <groupId>jakarta.enterprise</groupId>
       <artifactId>jakarta.enterprise.cdi-api</artifactId>
       <version>4.0.1</version>
