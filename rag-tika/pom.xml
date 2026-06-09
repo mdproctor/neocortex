@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.casehub</groupId>
+    <artifactId>casehub-neural-text-parent</artifactId>
+    <version>0.2-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>casehub-rag-tika</artifactId>
+  <name>CaseHub Neural Text - RAG Tika</name>
+  <description>Optional Apache Tika document parsing for CorpusStore ingestion</description>
+
+  <dependencies>
+
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-rag-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j</artifactId>
+    </dependency>
+    <!-- Apache Tika for document parsing (PDF, DOCX, HTML, etc.) -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>2.9.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parsers-standard-package</artifactId>
+      <version>2.9.2</version>
+      <exclusions>
+        <!-- Exclude transitive deps that conflict or aren't needed -->
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.smallrye</groupId>
+        <artifactId>jandex-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>make-index</id>
+            <goals><goal>jandex</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
