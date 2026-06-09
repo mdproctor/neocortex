@@ -1,7 +1,7 @@
 # ARC42STORIES — casehub-neural-text
 
 **Version:** 0.1  
-**Status:** C4 complete — Task Adapters delivered  
+**Status:** All chapters complete (C1–C7) — J1 + J2 ✅  
 **Spec:** [arc42stories-spec.md](https://raw.githubusercontent.com/casehubio/parent/main/docs/arc42stories-spec.md)  
 **Last updated:** 2026-06-08
 
@@ -322,8 +322,8 @@ noClasses().that().resideInAPackage("io.casehub.inference..")
 
 | Journey | Description | Chapters | Status |
 |---|---|---|---|
-| J1 Neural Inference | Deliver the standalone ONNX inference layer — SPI, runtime, adapters, SPLADE, Quarkus wiring | C1–C6 | 🚧 In progress (C1–C4 complete) |
-| J2 RAG Integration | Deliver casehub-specific LangChain4j RAG pipeline with hybrid search | C7 | 🔲 Pending (C6 done — unblocked) |
+| J1 Neural Inference | Deliver the standalone ONNX inference layer — SPI, runtime, adapters, SPLADE, Quarkus wiring | C1–C6 | ✅ Complete |
+| J2 RAG Integration | Deliver casehub-specific LangChain4j RAG pipeline with hybrid search | C7 | ✅ Complete |
 
 ### §9.2 Chapter Index
 
@@ -342,9 +342,9 @@ flowchart LR
   style C2 fill:#90EE90,color:#000
   style C3 fill:#90EE90,color:#000
   style C4 fill:#90EE90,color:#000
-  style C5 fill:#D3D3D3,color:#000
-  style C6 fill:#D3D3D3,color:#000
-  style C7 fill:#D3D3D3,color:#000
+  style C5 fill:#90EE90,color:#000
+  style C6 fill:#90EE90,color:#000
+  style C7 fill:#90EE90,color:#000
 ```
 
 | # | Chapter | Journey | Layers touched | Delta summary | Status |
@@ -355,7 +355,7 @@ flowchart LR
 | 4 | Task Adapters | J1 | L3 | High | ✅ |
 | 5 | Quarkus Integration | J1 | L5 | High | ✅ |
 | 6 | Sparse Embeddings (SPLADE) | J1 | L4 | High | ✅ |
-| 7 | RAG Pipeline | J2 | L6, L7 | High, High | 🔲 |
+| 7 | RAG Pipeline | J2 | L6, L7 | High, High | ✅ |
 
 **Layer × Chapter matrix**
 
@@ -495,7 +495,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 #### Chapter 7 — RAG Pipeline
 
-**Journey:** J2 | **Sequence:** 7 of 7 | **Status:** 🔲 Pending  
+**Journey:** J2 | **Sequence:** 7 of 7 | **Status:** ✅ Complete  
 **Issues:** #7 | **Blocked by:** C6 (SparseEmbedder for sparse search leg)
 
 **What this delivers**  
@@ -756,7 +756,7 @@ For new inference model consumers: inject `@Inference("name") InferenceModel mod
 **Participates in chapters:** C7  
 **Architectural patterns:** Hexagonal (Ports and Adapters)  
 **Issues:** #7, #11 | parent#164  
-**Completed:** 🔲
+**Completed:** ✅
 
 #### What it adds
 
@@ -771,10 +771,12 @@ Defines the contract for knowledge corpus management and retrieval within casehu
 `RetrievedChunk` carries `sourceDocumentId`, `content`, `relevanceScore`, and `metadata`. No per-chunk `embeddingStrategy` field — after RRF fusion, every result is hybrid. The fused score is what matters for ranking; per-leg provenance is not recoverable from the fused result and would be architecturally misleading.
 
 #### Gotchas
-🔲 — populated at C7 close
+
+Qdrant `Common.Filter` is not `Points.Filter` — the import is `io.qdrant.client.grpc.Common.Filter`, not the Points variant. Using the wrong one compiles but produces empty results at runtime (GE-20260609-521cca).
 
 #### Pattern to replicate
-🔲 — populated at C7 close
+
+Reactive SPI co-location in Tier 1 api modules with Mutiny `provided` scope — same pattern as casehub-ledger-api and casehub-eidos-api. `@DefaultBean` bridge wraps blocking delegate with `runSubscriptionOn(workerPool)`. In-memory stubs use `@Alternative @Priority(1) @ApplicationScoped` with no `@IfBuildProperty` gate (no Hibernate Reactive dep).
 
 ---
 
@@ -783,8 +785,8 @@ Defines the contract for knowledge corpus management and retrieval within casehu
 **Participates in chapters:** C7  
 **Architectural patterns:** Pipeline (ingest → chunk → embed → store; query → embed → retrieve → rerank → assemble)  
 **Key protocols:** `flyway-extension-migration-registration.md` (no migrations — Qdrant managed externally)  
-**Issues:** #7 | parent#164  
-**Completed:** 🔲
+**Issues:** #7, #11, #13 | parent#164  
+**Completed:** ✅
 
 #### What it adds
 
@@ -801,10 +803,12 @@ RRF (Reciprocal Rank Fusion) used to merge dense and sparse result lists. Scores
 `casehub-platform-api` is the only casehub dependency in `rag` — `CurrentPrincipal` and `TenancyConstants` for tenancy isolation. No engine, ledger, or qhorus types.
 
 #### Gotchas
-🔲 — populated at C7 close
+
+`langchain4j-qdrant` does not support named vector spaces or hybrid search (langchain4j#4994). Must use the Qdrant Java gRPC client directly for both legs. Qdrant client 1.18.1 returns `ListenableFuture`, not `CompletionStage` — needs Guava bridge or `Uni.createFrom().emitter()` for native reactive impls (#13).
 
 #### Pattern to replicate
-🔲 — populated at C7 close
+
+Unified Qdrant gRPC client for both dense and sparse legs — one client, one code path. `TenancyStrategy` enum for configurable collection isolation. `@DefaultBean` bridges for reactive SPIs that wrap blocking delegates on the worker pool.
 
 ---
 
