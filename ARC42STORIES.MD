@@ -499,7 +499,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 **Issues:** #7 | **Blocked by:** C6 (SparseEmbedder for sparse search leg)
 
 **What this delivers**  
-`rag-api`, `rag`, and `rag-testing` published. casehub application repos can define named corpora in configuration, ingest documents via `CorpusStore`, and retrieve grounded context via `CaseRetriever`. Hybrid dense+sparse search operates across tenancy-isolated Qdrant collections. The fact space prompt compiler in casehub-engine can inject retrieved context into LLM worker prompts.
+`rag-api`, `rag`, `rag-tika`, and `rag-testing` published. casehub application repos can define named corpora in configuration, ingest documents via `CorpusStore`, and retrieve grounded context via `CaseRetriever`. Hybrid dense+sparse search operates across tenancy-isolated Qdrant collections. `rag-tika` provides optional Apache Tika document parsing → chunked `ChunkInput`. The fact space prompt compiler in casehub-engine can inject retrieved context into LLM worker prompts.
 
 **Accountability gaps closed**  
 - Knowledge-grounded LLM reasoning → CaseRetriever available for engine case steps
@@ -768,7 +768,7 @@ Defines the contract for knowledge corpus management and retrieval within casehu
 
 `CorpusStore` and `CaseRetriever` are separate SPIs. `CorpusStore` is write-oriented (ingest, delete, list). `CaseRetriever` is read-oriented (retrieve). This separation allows different implementations and different CDI beans for admin vs. runtime contexts.
 
-`RetrievedChunk` carries `sourceDocumentId`, `content`, `relevanceScore`, and `embeddingStrategy` (DENSE, SPARSE, HYBRID). Callers know how each chunk was retrieved — relevant for epistemic metadata in the typed fact space.
+`RetrievedChunk` carries `sourceDocumentId`, `content`, `relevanceScore`, and `metadata`. No per-chunk `embeddingStrategy` field — after RRF fusion, every result is hybrid. The fused score is what matters for ranking; per-leg provenance is not recoverable from the fused result and would be architecturally misleading.
 
 #### Gotchas
 🔲 — populated at C7 close
@@ -788,13 +788,13 @@ Defines the contract for knowledge corpus management and retrieval within casehu
 
 #### What it adds
 
-Implements `CorpusStore` and `CaseRetriever` using LangChain4j's RAG pipeline backed by Qdrant. Hybrid search: LangChain4j `OnnxEmbeddingModel` (dense) + `inference-splade` `SparseEmbedder` (sparse), fused via RRF. Optional `CrossEncoderReranker` for precision-mode top-N. Tenancy isolation via Qdrant payload filtering.
+Implements `CorpusStore` and `CaseRetriever` using LangChain4j `EmbeddingModel` (dense embeddings) + `inference-splade` `SparseEmbedder` (sparse) + Qdrant Java client (gRPC) for hybrid search with RRF fusion. Optional `CrossEncoderReranker` for precision-mode top-N. Configurable tenancy isolation — separate collections per tenant (default) or shared collection with payload filtering.
 
-**Hybrid search until LangChain4j #4994 ships:** Qdrant's native named vector space hybrid search is accessed via the Qdrant REST API directly for the sparse leg. When LangChain4j #4994 (Qdrant hybrid search) ships, migrate to the native LangChain4j integration.
+`langchain4j-qdrant` not used — LangChain4j does not support Qdrant named vector spaces or hybrid search ([langchain4j#4994](https://github.com/langchain4j/langchain4j/issues/4994), open, no timeline). Both dense and sparse legs use the Qdrant Java gRPC client directly for unified architecture. LangChain4j used only for `EmbeddingModel`, `DocumentSplitter`, and Tika parser (in `rag-tika`).
 
 #### Architectural decisions
 
-Qdrant chosen over pgvector for the hybrid leg — pgvector does not natively support named vector spaces for true hybrid search. When LangChain4j #4994 ships, re-evaluate whether pgvector has caught up.
+Qdrant chosen over pgvector for the hybrid leg — pgvector does not natively support named vector spaces for true hybrid search.
 
 RRF (Reciprocal Rank Fusion) used to merge dense and sparse result lists. Scores are not comparable across embedding types; rank is. RRF is parameter-free and well-studied. Weighted combination rejected — requires tuning per domain.
 
@@ -827,7 +827,7 @@ LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dens
 | Domain isolation | Hortora builds against `inference-*` without casehub on classpath | ArchUnit: zero casehub/Quarkus/LangChain4j deps in inference-api, runtime, tasks, splade |
 | Testability | All task adapters and rag pipeline unit-testable | 100% test coverage possible without ONNX Runtime native libs via `inference-inmem` |
 | Local inference | Hallucination detection runs without API call | `NliClassifier.classify()` returns in <100ms for standard NLI model |
-| Tenancy isolation | Tenant A cannot retrieve Tenant B's corpus | Every Qdrant query includes payload filter on tenantId; enforced by CorpusRef type |
+| Tenancy isolation | Tenant A cannot retrieve Tenant B's corpus | Configurable TenancyStrategy: separate Qdrant collections per tenant (default, hard isolation) or shared collection with payload filter on tenantId; enforced by CorpusRef type |
 
 ---
 
@@ -837,12 +837,11 @@ LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dens
 |---|---|---|---|
 | ONNX Runtime JNI fails in Quarkus native image | Medium | High | C2 prototype is mandatory first deliverable; fallback to JVM-only mode documented |
 | HuggingFace Tokenizers JNI fails in native image | Medium | High | Same — C2 validates both JNI layers together |
-| LangChain4j #4994 (Qdrant hybrid) never ships | Low | Low | Direct Qdrant REST API for sparse leg as interim; fully functional without LangChain4j support |
+| LangChain4j #4994 (Qdrant hybrid) ships | Low | Low | Unified Qdrant gRPC client used for both legs — no migration needed; evaluate langchain4j-qdrant adoption opportunistically if it simplifies code |
 | Hortora's usage pattern conflicts with SPI design | Medium | Medium | Hortora/spec#15 validation required before C3 implementation begins |
 | ArchUnit rule drift | Low | High | ArchUnit tests run in CI on every build; fail-fast |
 
 **Technical debt:**
-- SPLADE hybrid leg via direct Qdrant REST API until LangChain4j #4994 ships — migration required when it lands
 - `CrossEncoderReranker` in `rag` is optional (precision mode) — default path is RRF without reranking; reranking adds latency
 
 ---
