@@ -14,8 +14,11 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -92,6 +95,7 @@ public final class ZipCorpusStore implements CorpusStore, CorpusReader {
             index.put(path, location);
 
             saveManifest();
+            checkRollover();
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to append entry: " + path, e);
         }
@@ -178,6 +182,85 @@ public final class ZipCorpusStore implements CorpusStore, CorpusReader {
     @Override
     public boolean exists(String path) {
         return index.exists(path);
+    }
+
+    // ── rollover ────────────────────────────────────────────────────────
+
+    private void checkRollover() {
+        long size = activeZipPath.toFile().length();
+        if (size >= config.maxZipSize()) {
+            rollover();
+        }
+    }
+
+    private void rollover() {
+        ChainEntry active = manifest.activeEntry()
+                .orElseThrow(() -> new IllegalStateException("No active entry during rollover"));
+
+        int entryCount = countDocumentEntries(activeZipPath);
+        writeInternalMeta(active, null);
+        String contentHash = computeHash(activeZipPath);
+
+        manifest.closeEntry(active.uuid(), contentHash, entryCount);
+        createNewActiveZip(nextSequence());
+    }
+
+    private String computeHash(Path zipPath) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] fileBytes = Files.readAllBytes(zipPath);
+            byte[] hash = digest.digest(fileBytes);
+            return "sha256:" + HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to compute hash of " + zipPath, e);
+        }
+    }
+
+    private void writeInternalMeta(ChainEntry entry, String contentHash) {
+        try {
+            String metaJson = buildMetaJson(entry, contentHash);
+            ZipFile zipFile = new ZipFile(activeZipPath.toFile());
+            ZipParameters params = new ZipParameters();
+            params.setFileNameInZip(CHAIN_PREFIX + "meta.json");
+            params.setCompressionMethod(CompressionMethod.DEFLATE);
+            zipFile.addStream(
+                    new ByteArrayInputStream(metaJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    params);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to write internal meta.json", e);
+        }
+    }
+
+    private String buildMetaJson(ChainEntry entry, String contentHash) {
+        var sb = new StringBuilder(256);
+        sb.append("{\n");
+        sb.append("  \"uuid\": \"").append(entry.uuid()).append("\",\n");
+        sb.append("  \"file\": \"").append(entry.file()).append("\",\n");
+        sb.append("  \"sequence\": ").append(entry.sequence()).append(",\n");
+        sb.append("  \"status\": \"").append(entry.status()).append("\"");
+        if (contentHash != null) {
+            sb.append(",\n  \"contentHash\": \"").append(contentHash).append("\"");
+        }
+        sb.append("\n}\n");
+        return sb.toString();
+    }
+
+    private int countDocumentEntries(Path zipPath) {
+        try {
+            ZipFile zipFile = new ZipFile(zipPath.toFile());
+            int count = 0;
+            for (FileHeader header : zipFile.getFileHeaders()) {
+                String name = header.getFileName();
+                if (!name.startsWith(CHAIN_PREFIX) && !name.startsWith(TOMBSTONE_PREFIX)) {
+                    count++;
+                }
+            }
+            return count;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to count entries in " + zipPath, e);
+        }
     }
 
     // ── internal ────────────────────────────────────────────────────────
