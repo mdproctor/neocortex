@@ -1,5 +1,7 @@
 # casehub-neural-text
 
+[![Open PRs](https://img.shields.io/github/issues-pr/casehubio/neural-text)](https://github.com/casehubio/neural-text/pulls)
+
 [![casehub-neural-text](https://github.com/casehubio/neural-text/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/casehubio/neural-text/actions/workflows/publish.yml)
 
 Local ONNX text inference and LangChain4j RAG wiring for the [casehubio](https://github.com/casehubio) platform. Two module sets: `inference-*` covers the scoring and classification tasks LangChain4j doesn't handle; `rag-*` wires the retrieval pipeline with casehub tenancy and hybrid dense+sparse search.
