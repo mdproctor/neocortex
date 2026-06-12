@@ -80,23 +80,25 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
 
     @Override
     public Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+        return Uni.createFrom().deferred(() -> {
+            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
 
-        String collection = tenancyStrategy.collectionName(corpus);
-        Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+            String collection = tenancyStrategy.collectionName(corpus);
+            Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
 
-        return QdrantFutures.<Boolean>toUni(client.collectionExistsAsync(collection))
-            .chain(exists -> {
-                if (!exists) {
-                    return Uni.createFrom().item(List.<RetrievedChunk>of());
-                }
-                return Uni.createFrom().item(() -> embedQuery(query))
-                    .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                    .chain(embeddings -> executeQuery(collection, tenantFilter,
-                        embeddings, maxResults))
-                    .map(this::mapToChunks)
-                    .chain(chunks -> maybeRerank(query, chunks, maxResults));
-            });
+            return QdrantFutures.<Boolean>toUni(client.collectionExistsAsync(collection))
+                .chain(exists -> {
+                    if (!exists) {
+                        return Uni.createFrom().item(List.<RetrievedChunk>of());
+                    }
+                    return Uni.createFrom().item(() -> embedQuery(query))
+                        .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                        .chain(embeddings -> executeQuery(collection, tenantFilter,
+                            embeddings, maxResults))
+                        .map(this::mapToChunks)
+                        .chain(chunks -> maybeRerank(query, chunks, maxResults));
+                });
+        });
     }
 
     private QueryEmbeddings embedQuery(String query) {

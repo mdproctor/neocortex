@@ -78,10 +78,11 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
 
     @Override
     public Uni<Void> ingest(CorpusRef corpus, List<ChunkInput> chunks) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
-        String collection = tenancyStrategy.collectionName(corpus);
+        return Uni.createFrom().deferred(() -> {
+            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+            String collection = tenancyStrategy.collectionName(corpus);
 
-        return ensureCollection(collection)
+            return ensureCollection(collection)
             .chain(() -> Uni.createFrom().item(() -> {
                 List<TextSegment> segments = new ArrayList<>(chunks.size());
                 List<String> texts = new ArrayList<>(chunks.size());
@@ -102,48 +103,54 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
                 return QdrantFutures.toUni(client.upsertAsync(collection, points))
                     .replaceWithVoid();
             });
+        });
     }
 
     @Override
     public Uni<Void> deleteDocument(CorpusRef corpus, String sourceDocumentId) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
-        String collection = tenancyStrategy.collectionName(corpus);
+        return Uni.createFrom().deferred(() -> {
+            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+            String collection = tenancyStrategy.collectionName(corpus);
 
-        Filter.Builder filterBuilder = Filter.newBuilder()
-            .addMust(ConditionFactory.matchKeyword("sourceDocumentId", sourceDocumentId));
-        tenancyStrategy.tenantFilter(corpus)
-            .ifPresent(tf -> tf.getMustList().forEach(filterBuilder::addMust));
+            Filter.Builder filterBuilder = Filter.newBuilder()
+                .addMust(ConditionFactory.matchKeyword("sourceDocumentId", sourceDocumentId));
+            tenancyStrategy.tenantFilter(corpus)
+                .ifPresent(tf -> tf.getMustList().forEach(filterBuilder::addMust));
 
-        return QdrantFutures.toUni(client.deleteAsync(collection, filterBuilder.build()))
-            .replaceWithVoid();
+            return QdrantFutures.toUni(client.deleteAsync(collection, filterBuilder.build()))
+                .replaceWithVoid();
+        });
     }
 
     @Override
     public Uni<Void> deleteCorpus(CorpusRef corpus) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
-        String collection = tenancyStrategy.collectionName(corpus);
+        return Uni.createFrom().deferred(() -> {
+            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+            String collection = tenancyStrategy.collectionName(corpus);
 
-        if (tenancyStrategy == TenancyStrategy.SEPARATE_COLLECTIONS) {
-            return QdrantFutures.toUni(client.deleteCollectionAsync(collection))
-                .invoke(() -> ensuredCollections.remove(collection))
-                .replaceWithVoid();
-        } else {
-            Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
-            if (tenantFilter.isPresent()) {
-                return QdrantFutures.toUni(client.deleteAsync(collection, tenantFilter.get()))
+            if (tenancyStrategy == TenancyStrategy.SEPARATE_COLLECTIONS) {
+                return QdrantFutures.toUni(client.deleteCollectionAsync(collection))
+                    .invoke(() -> ensuredCollections.remove(collection))
                     .replaceWithVoid();
+            } else {
+                Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+                if (tenantFilter.isPresent()) {
+                    return QdrantFutures.toUni(client.deleteAsync(collection, tenantFilter.get()))
+                        .replaceWithVoid();
+                }
+                return Uni.createFrom().voidItem();
             }
-            return Uni.createFrom().voidItem();
-        }
+        });
     }
 
     @Override
     public Uni<List<String>> listDocuments(CorpusRef corpus) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
-        String collection = tenancyStrategy.collectionName(corpus);
-        Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+        return Uni.createFrom().deferred(() -> {
+            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+            String collection = tenancyStrategy.collectionName(corpus);
+            Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
 
-        return QdrantFutures.<Boolean>toUni(client.collectionExistsAsync(collection))
+            return QdrantFutures.<Boolean>toUni(client.collectionExistsAsync(collection))
             .chain(exists -> {
                 if (!exists) {
                     return Uni.createFrom().item(List.<String>of());
@@ -151,6 +158,7 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
                 return scrollPage(collection, tenantFilter, null, new LinkedHashSet<>())
                     .map(List::copyOf);
             });
+        });
     }
 
     private Uni<Void> ensureCollection(String collection) {
