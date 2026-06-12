@@ -378,4 +378,13 @@ public final class ZipCorpusStore implements CorpusStore, CorpusReader {
             throw new UncheckedIOException("Failed to save chain.json", e);
         }
     }
+
+    // ── package-private for ZipChangeSource ─────────────────────────────
+
+    /**
+     * Returns the master index. Package-private for use by {@link ZipChangeSource}.
+     */
+    MasterIndex masterIndex() {
+        return index;
+    }
 }
