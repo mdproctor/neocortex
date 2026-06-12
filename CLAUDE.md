@@ -148,6 +148,8 @@ inference-quarkus/  — CDI wiring, @InferenceModel qualifier, Dev Services, @Qu
 rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, CaseRetriever + ReactiveCaseRetriever SPIs, value types — Mutiny provided
 rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, @DefaultBean blocking-to-reactive bridges
 rag-testing/        — in-memory stubs for both blocking and reactive SPIs (@Alternative @Priority(1) @ApplicationScoped)
+corpus-api/         — CorpusStore + CorpusReader + ChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
+corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
 ```
 
 ## Maven Coordinates
@@ -166,8 +168,11 @@ rag-testing/        — in-memory stubs for both blocking and reactive SPIs (@Al
 | RAG API | `casehub-rag-api` |
 | RAG | `casehub-rag` |
 | RAG testing | `casehub-rag-testing` |
+| Corpus API | `casehub-corpus-api` |
+| Corpus | `casehub-corpus` |
 | Root Java package (inference) | `io.casehub.inference` |
 | Root Java package (rag) | `io.casehub.rag` |
+| Root Java package (corpus) | `io.casehub.corpus` |
 
 ## Build Commands
 
