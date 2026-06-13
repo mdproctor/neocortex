@@ -8,6 +8,7 @@ import io.casehub.inference.splade.SparseEmbedder;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.ChunkInput;
+import io.quarkus.arc.Arc;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.EmbeddingIngestor;
 import io.qdrant.client.ConditionFactory;
@@ -68,9 +69,14 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         this.currentPrincipal = currentPrincipal;
     }
 
+    private boolean requestContextActive() {
+        var c = Arc.container();
+        return c == null || c.requestContext().isActive();
+    }
+
     @Override
     public void ingest(CorpusRef corpus, List<ChunkInput> chunks) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, requestContextActive());
 
         String collection = tenancyStrategy.collectionName(corpus);
         ensureCollection(collection);
@@ -109,7 +115,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     @Override
     public void deleteDocument(CorpusRef corpus, String sourceDocumentId) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, requestContextActive());
 
         String collection = tenancyStrategy.collectionName(corpus);
 
@@ -130,7 +136,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     @Override
     public void deleteCorpus(CorpusRef corpus) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, requestContextActive());
 
         String collection = tenancyStrategy.collectionName(corpus);
 
@@ -155,7 +161,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     @Override
     public List<String> listDocuments(CorpusRef corpus) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, requestContextActive());
 
         String collection = tenancyStrategy.collectionName(corpus);
 

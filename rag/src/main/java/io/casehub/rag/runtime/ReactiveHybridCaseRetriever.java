@@ -9,6 +9,7 @@ import io.casehub.inference.tasks.RankedResult;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.CorpusRef;
+import io.quarkus.arc.Arc;
 import io.casehub.rag.ReactiveCaseRetriever;
 import io.casehub.rag.RetrievedChunk;
 import io.qdrant.client.QueryFactory;
@@ -78,10 +79,15 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
         this.currentPrincipal = currentPrincipal;
     }
 
+    private boolean requestContextActive() {
+        var c = Arc.container();
+        return c == null || c.requestContext().isActive();
+    }
+
     @Override
     public Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults) {
         return Uni.createFrom().deferred(() -> {
-            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal);
+            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, requestContextActive());
 
             String collection = tenancyStrategy.collectionName(corpus);
             Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
