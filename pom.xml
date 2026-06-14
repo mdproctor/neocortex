@@ -263,4 +263,21 @@
     </pluginManagement>
   </build>
 
+  <profiles>
+    <profile>
+      <id>examples-smoke</id>
+      <modules>
+        <module>examples/example-text-analysis</module>
+        <module>examples/example-rag-pipeline</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>examples</id>
+      <modules>
+        <module>examples/example-text-analysis</module>
+        <module>examples/example-rag-pipeline</module>
+      </modules>
+    </profile>
+  </profiles>
+
 </project>

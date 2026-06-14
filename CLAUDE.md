@@ -150,7 +150,12 @@ rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, @DefaultB
 rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore (@Alternative @Priority(1) @ApplicationScoped)
 corpus-api/         — CorpusStore + CorpusReader + ChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
 corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
+examples/
+  example-text-analysis/  — standalone demos: NLI, zero-shot classification, scoring, reranking, SPLADE — no Quarkus
+  example-rag-pipeline/   — Quarkus demos: corpus ingestion (flat + zip), hybrid search, CDI wiring — requires Qdrant
 ```
+
+Examples are excluded from the default build. Activate with `-Pexamples-smoke` (in-memory stubs) or `-Pexamples` (real ONNX models + Testcontainers Qdrant).
 
 ## Maven Coordinates
 
@@ -170,8 +175,11 @@ corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, 
 | RAG testing | `casehub-rag-testing` |
 | Corpus API | `casehub-corpus-api` |
 | Corpus | `casehub-corpus` |
+| Example Text Analysis | `casehub-example-text-analysis` |
+| Example RAG Pipeline | `casehub-example-rag-pipeline` |
 | Root Java package (inference) | `io.casehub.inference` |
 | Root Java package (rag) | `io.casehub.rag` |
+| Root Java package (examples) | `io.casehub.examples.analysis`, `io.casehub.examples.rag` |
 | Root Java package (corpus) | `io.casehub.corpus` |
 
 ## Build Commands
@@ -185,6 +193,12 @@ JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean install -DskipTests
 
 # Build specific module
 JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean install -pl inference-api
+
+# Examples — smoke tests (no models, no Docker, seconds)
+JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean test -Pexamples-smoke
+
+# Examples — full tests (downloads ONNX models, Testcontainers Qdrant)
+JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean test -Pexamples
 ```
 
 **Use `mvn` not `./mvnw`** — maven wrapper not configured on this machine.

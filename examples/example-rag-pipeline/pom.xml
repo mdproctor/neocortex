@@ -1,0 +1,252 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.casehub</groupId>
+    <artifactId>casehub-neural-text-parent</artifactId>
+    <version>0.2-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>casehub-example-rag-pipeline</artifactId>
+  <name>CaseHub Neural Text - Example: RAG Pipeline</name>
+  <description>Demonstration of corpus ingestion, hybrid search, and RAG retrieval</description>
+
+  <dependencies>
+    <!-- Inference modules -->
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-inference-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-inference-runtime</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-inference-tasks</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-inference-splade</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-inference-quarkus</artifactId>
+    </dependency>
+
+    <!-- RAG modules -->
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-rag-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-rag</artifactId>
+    </dependency>
+
+    <!-- Corpus modules -->
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-corpus-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-corpus</artifactId>
+    </dependency>
+
+    <!-- LangChain4j dense embeddings -->
+    <!-- TODO(#24): Enable for integration tests (Task 18) — not needed for smoke tests -->
+    <!--
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-embeddings</artifactId>
+    </dependency>
+    -->
+
+    <!-- Quarkus -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
+
+    <!-- Test -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-inference-inmem</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-rag-testing</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.smallrye</groupId>
+        <artifactId>jandex-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>make-index</id>
+            <goals>
+              <goal>jandex</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <reuseForks>false</reuseForks>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>examples-smoke</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>smoke</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>examples</id>
+      <build>
+        <plugins>
+          <!-- Download dense embedding model -->
+          <plugin>
+            <groupId>com.googlecode.maven-download-plugin</groupId>
+            <artifactId>download-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>download-embedding-model</id>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>wget</goal>
+                </goals>
+                <configuration>
+                  <url>https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model_quantized.onnx</url>
+                  <outputDirectory>${project.build.directory}/models/all-MiniLM-L6-v2</outputDirectory>
+                  <outputFileName>model.onnx</outputFileName>
+                  <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+                </configuration>
+              </execution>
+              <execution>
+                <id>download-embedding-tokenizer</id>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>wget</goal>
+                </goals>
+                <configuration>
+                  <url>https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json</url>
+                  <outputDirectory>${project.build.directory}/models/all-MiniLM-L6-v2</outputDirectory>
+                  <outputFileName>tokenizer.json</outputFileName>
+                  <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+                </configuration>
+              </execution>
+
+              <!-- Download SPLADE model -->
+              <execution>
+                <id>download-splade-model</id>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>wget</goal>
+                </goals>
+                <configuration>
+                  <url>https://huggingface.co/onnx-models/Splade_PP_en_v1-onnx/resolve/main/model.onnx</url>
+                  <outputDirectory>${project.build.directory}/models/splade</outputDirectory>
+                  <outputFileName>model.onnx</outputFileName>
+                  <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+                </configuration>
+              </execution>
+              <execution>
+                <id>download-splade-tokenizer</id>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>wget</goal>
+                </goals>
+                <configuration>
+                  <url>https://huggingface.co/onnx-models/Splade_PP_en_v1-onnx/resolve/main/tokenizer.json</url>
+                  <outputDirectory>${project.build.directory}/models/splade</outputDirectory>
+                  <outputFileName>tokenizer.json</outputFileName>
+                  <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+                </configuration>
+              </execution>
+
+              <!-- Download reranker model -->
+              <execution>
+                <id>download-reranker-model</id>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>wget</goal>
+                </goals>
+                <configuration>
+                  <url>https://huggingface.co/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/onnx/model_quantized.onnx</url>
+                  <outputDirectory>${project.build.directory}/models/ms-marco-MiniLM-L-6-v2</outputDirectory>
+                  <outputFileName>model.onnx</outputFileName>
+                  <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+                </configuration>
+              </execution>
+              <execution>
+                <id>download-reranker-tokenizer</id>
+                <phase>generate-test-resources</phase>
+                <goals>
+                  <goal>wget</goal>
+                </goals>
+                <configuration>
+                  <url>https://huggingface.co/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/tokenizer.json</url>
+                  <outputDirectory>${project.build.directory}/models/ms-marco-MiniLM-L-6-v2</outputDirectory>
+                  <outputFileName>tokenizer.json</outputFileName>
+                  <cacheDirectory>${user.home}/.cache/maven-download</cacheDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+</project>
