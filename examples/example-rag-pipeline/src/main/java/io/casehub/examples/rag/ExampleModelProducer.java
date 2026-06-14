@@ -1,5 +1,8 @@
 package io.casehub.examples.rag;
 
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.OnnxEmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.PoolingMode;
 import io.casehub.inference.InferenceModel;
 import io.casehub.inference.quarkus.Inference;
 import io.casehub.inference.splade.SparseEmbedder;
@@ -7,9 +10,18 @@ import io.casehub.inference.tasks.CrossEncoderReranker;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class ExampleModelProducer {
+
+    @Produces
+    @ApplicationScoped
+    EmbeddingModel embeddingModel(
+            @ConfigProperty(name = "casehub.examples.embedding.model-path") String modelPath,
+            @ConfigProperty(name = "casehub.examples.embedding.tokenizer-path") String tokenizerPath) {
+        return new OnnxEmbeddingModel(modelPath, tokenizerPath, PoolingMode.MEAN);
+    }
 
     @Produces
     @ApplicationScoped

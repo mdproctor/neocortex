@@ -58,14 +58,11 @@
       <artifactId>casehub-corpus</artifactId>
     </dependency>
 
-    <!-- LangChain4j dense embeddings -->
-    <!-- TODO(#24): Enable for integration tests (Task 18) — not needed for smoke tests -->
-    <!--
+    <!-- LangChain4j dense embeddings (OnnxEmbeddingModel for all-MiniLM-L6-v2) -->
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-embeddings</artifactId>
     </dependency>
-    -->
 
     <!-- Quarkus -->
     <dependency>

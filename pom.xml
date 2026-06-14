@@ -66,6 +66,7 @@
   <properties>
     <quarkus.version>3.32.2</quarkus.version>
     <langchain4j.version>1.14.1</langchain4j.version>
+    <langchain4j-embeddings.version>1.0.0-beta5</langchain4j-embeddings.version>
     <onnxruntime.version>1.26.0</onnxruntime.version>
     <djl.tokenizers.version>0.36.0</djl.tokenizers.version>
     <qdrant.client.version>1.18.1</qdrant.client.version>
@@ -187,7 +188,7 @@
       <dependency>
         <groupId>dev.langchain4j</groupId>
         <artifactId>langchain4j-embeddings</artifactId>
-        <version>${langchain4j.version}</version>
+        <version>${langchain4j-embeddings.version}</version>
       </dependency>
       <dependency>
         <groupId>dev.langchain4j</groupId>
