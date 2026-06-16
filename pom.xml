@@ -26,6 +26,8 @@
     <module>rag-testing</module>
     <module>corpus-api</module>
     <module>corpus</module>
+    <module>examples/example-text-analysis</module>
+    <module>examples/example-rag-pipeline</module>
   </modules>
 
   <distributionManagement>
@@ -76,6 +78,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <surefire-plugin.version>3.2.5</surefire-plugin.version>
     <download-maven-plugin.version>1.9.0</download-maven-plugin.version>
+    <directory-watcher.version>0.19.1</directory-watcher.version>
     <casehub-platform-api.version>0.2-SNAPSHOT</casehub-platform-api.version>
   </properties>
 
@@ -159,6 +162,11 @@
         <artifactId>zip4j</artifactId>
         <version>${zip4j.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.methvin</groupId>
+        <artifactId>directory-watcher</artifactId>
+        <version>${directory-watcher.version}</version>
+      </dependency>
 
       <!-- ONNX Runtime JVM — model execution via JNI -->
       <dependency>
@@ -217,6 +225,12 @@
         <groupId>org.assertj</groupId>
         <artifactId>assertj-core</artifactId>
         <version>3.26.3</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.awaitility</groupId>
+        <artifactId>awaitility</artifactId>
+        <version>4.3.0</version>
         <scope>test</scope>
       </dependency>
       <dependency>

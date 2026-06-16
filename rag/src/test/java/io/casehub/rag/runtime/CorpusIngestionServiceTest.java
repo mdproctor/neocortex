@@ -1,11 +1,13 @@
 package io.casehub.rag.runtime;
 
 import dev.langchain4j.data.document.splitter.DocumentSplitters;
+import io.casehub.corpus.ChangeListener;
 import io.casehub.corpus.ChangedEntry;
 import io.casehub.corpus.ChangeSet;
 import io.casehub.corpus.ChangeSource;
 import io.casehub.corpus.ChangeType;
 import io.casehub.corpus.CorpusReader;
+import io.casehub.corpus.WatchableChangeSource;
 import io.casehub.corpus.VersionInfo;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
@@ -346,6 +348,39 @@ class CorpusIngestionServiceTest {
         assertThat(cursorStore.load("garden")).contains("cursor-blank");
     }
 
+    // --- Test 14: watchableSourceWorksWithPullBasedProcessing ---
+
+    @Test
+    void watchableSourceWorksWithPullBasedProcessing() {
+        var changes = new ChangeSet(
+                List.of(new ChangedEntry("docs/live.md", ChangeType.ADDED)),
+                "cursor-watchable"
+        );
+        var watchable = new TestWatchableSource(changes);
+
+        var binding = binding(watchable, stubReader(Map.of("docs/live.md", "live content")));
+
+        service().processBinding(binding);
+
+        assertThat(ingestor.getChunks(CORPUS)).hasSize(1);
+        assertThat(ingestor.getChunks(CORPUS).getFirst().content()).isEqualTo("live content");
+        assertThat(cursorStore.load("garden")).contains("cursor-watchable");
+    }
+
+    // --- Test 15: watchableSourceCurrentCursorUsedAfterSuccess ---
+
+    @Test
+    void watchableSourceCurrentCursorUsedAfterSuccess() {
+        var changes = new ChangeSet(List.of(), "cursor-initial");
+        var watchable = new TestWatchableSource(changes);
+
+        var binding = binding(watchable, stubReader(Map.of()));
+
+        service().processBinding(binding);
+
+        assertThat(watchable.currentCursor()).isEqualTo("cursor-initial");
+    }
+
     // --- Helper methods ---
 
     private CorpusIngestionBinding binding(ChangeSource changeSource, CorpusReader reader) {
@@ -384,5 +419,25 @@ class CorpusIngestionServiceTest {
 
     private CorpusIngestionService service() {
         return new CorpusIngestionService(ingestor, cursorStore);
+    }
+
+    private static class TestWatchableSource implements WatchableChangeSource {
+        private final ChangeSet catchUp;
+        private ChangeListener listener;
+        private boolean closed = false;
+
+        TestWatchableSource(ChangeSet catchUp) {
+            this.catchUp = catchUp;
+        }
+
+        @Override public void watch(ChangeListener l) { this.listener = l; }
+        @Override public String currentCursor() { return catchUp.newCursor(); }
+        @Override public void close() { closed = true; }
+        @Override public ChangeSet changesSince(String cursor) { return catchUp; }
+        @Override public ChangeSet fullScan() { return catchUp; }
+
+        void fireEvent(List<ChangedEntry> entries) {
+            if (listener != null) listener.onChange(entries);
+        }
     }
 }
