@@ -86,7 +86,7 @@ class ReactiveHybridCaseRetrieverTest {
                 Map.of("category", "tech"))
         ));
 
-        List<RetrievedChunk> results = retriever.retrieve("brown fox", corpus, 10)
+        List<RetrievedChunk> results = retriever.retrieve("brown fox", corpus, 10, null)
             .await().indefinitely();
 
         assertThat(results).isNotEmpty();
@@ -109,7 +109,7 @@ class ReactiveHybridCaseRetrieverTest {
             new ChunkInput("chunk three about birds", "doc-3", Map.of())
         ));
 
-        List<RetrievedChunk> results = retriever.retrieve("animals", corpus, 1)
+        List<RetrievedChunk> results = retriever.retrieve("animals", corpus, 1, null)
             .await().indefinitely();
 
         assertThat(results).hasSizeLessThanOrEqualTo(1);
@@ -119,7 +119,7 @@ class ReactiveHybridCaseRetrieverTest {
     void retrieveEmptyCorpus() {
         CorpusRef corpus = uniqueCorpus();
 
-        List<RetrievedChunk> results = retriever.retrieve("anything", corpus, 10)
+        List<RetrievedChunk> results = retriever.retrieve("anything", corpus, 10, null)
             .await().indefinitely();
 
         assertThat(results).isEmpty();
@@ -129,7 +129,7 @@ class ReactiveHybridCaseRetrieverTest {
     void tenancyMismatchThrows() {
         CorpusRef wrongTenant = new CorpusRef("other-tenant", "corpus");
 
-        assertThatThrownBy(() -> retriever.retrieve("query", wrongTenant, 10)
+        assertThatThrownBy(() -> retriever.retrieve("query", wrongTenant, 10, null)
             .await().indefinitely())
             .isInstanceOf(SecurityException.class);
     }

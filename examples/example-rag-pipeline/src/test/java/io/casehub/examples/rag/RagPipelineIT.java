@@ -67,7 +67,7 @@ class RagPipelineIT {
     @Order(2)
     void techQueryReturnsTechDocs() {
         List<RetrievedChunk> results = retriever.retrieve(
-            "How does dependency injection work?", CORPUS, 5);
+            "How does dependency injection work?", CORPUS, 5, null);
         assertThat(results).isNotEmpty();
         boolean hasTechDoc = results.stream()
             .anyMatch(c -> c.metadata().getOrDefault("domain", "").equals("tech"));
@@ -78,7 +78,7 @@ class RagPipelineIT {
     @Order(2)
     void legalQueryReturnsLegalDocs() {
         List<RetrievedChunk> results = retriever.retrieve(
-            "Can I end my lease early?", CORPUS, 5);
+            "Can I end my lease early?", CORPUS, 5, null);
         assertThat(results).isNotEmpty();
         var topDomain = results.get(0).metadata().getOrDefault("domain", "");
         assertThat(topDomain).isEqualTo("legal");
@@ -88,7 +88,7 @@ class RagPipelineIT {
     @Order(2)
     void metadataRoundTrips() {
         List<RetrievedChunk> results = retriever.retrieve(
-            "data protection GDPR", CORPUS, 5);
+            "data protection GDPR", CORPUS, 5, null);
         assertThat(results).isNotEmpty();
         var chunkWithMetadata = results.stream()
             .filter(c -> c.metadata().containsKey("domain"))
@@ -100,7 +100,7 @@ class RagPipelineIT {
     @Order(2)
     void newsQueryReturnsNewsDocs() {
         List<RetrievedChunk> results = retriever.retrieve(
-            "What happened with interest rates?", CORPUS, 5);
+            "What happened with interest rates?", CORPUS, 5, null);
         assertThat(results).isNotEmpty();
         boolean hasNewsDoc = results.stream()
             .anyMatch(c -> c.metadata().getOrDefault("domain", "").equals("news"));

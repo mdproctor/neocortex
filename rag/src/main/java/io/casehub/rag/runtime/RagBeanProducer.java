@@ -16,13 +16,15 @@ public class RagBeanProducer {
     @Inject RagConfig config;
     @Inject QdrantClient client;
     @Inject EmbeddingModel embeddingModel;
-    @Inject SparseEmbedder sparseEmbedder;
+    @Inject Instance<SparseEmbedder> sparseEmbedderInstance;
     @Inject Instance<CrossEncoderReranker> rerankerInstance;
     @Inject CurrentPrincipal currentPrincipal;
 
     @Produces
     @ApplicationScoped
     QdrantEmbeddingIngestor corpusStore() {
+        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
+            ? sparseEmbedderInstance.get() : null;
         return new QdrantEmbeddingIngestor(
             client,
             embeddingModel,
@@ -36,6 +38,8 @@ public class RagBeanProducer {
     @Produces
     @ApplicationScoped
     HybridCaseRetriever caseRetriever() {
+        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
+            ? sparseEmbedderInstance.get() : null;
         CrossEncoderReranker reranker = rerankerInstance.isResolvable()
             ? rerankerInstance.get() : null;
         return new HybridCaseRetriever(

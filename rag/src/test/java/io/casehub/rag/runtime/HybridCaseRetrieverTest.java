@@ -6,6 +6,7 @@ import io.casehub.inference.splade.SparseEmbedder;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
+import io.casehub.rag.PayloadFilter;
 import io.casehub.rag.RetrievedChunk;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
@@ -89,7 +90,7 @@ class HybridCaseRetrieverTest {
                 Map.of("category", "tech"))
         ));
 
-        List<RetrievedChunk> results = retriever.retrieve("brown fox", corpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("brown fox", corpus, 10, null);
 
         assertThat(results).isNotEmpty();
         assertThat(results).allSatisfy(chunk -> {
@@ -111,7 +112,7 @@ class HybridCaseRetrieverTest {
             new ChunkInput("chunk three about birds", "doc-3", Map.of())
         ));
 
-        List<RetrievedChunk> results = retriever.retrieve("animals", corpus, 1);
+        List<RetrievedChunk> results = retriever.retrieve("animals", corpus, 1, null);
 
         assertThat(results).hasSizeLessThanOrEqualTo(1);
     }
@@ -120,7 +121,7 @@ class HybridCaseRetrieverTest {
     void retrieveEmptyCorpus() {
         CorpusRef corpus = uniqueCorpus(); // never ingested — collection does not exist
 
-        List<RetrievedChunk> results = retriever.retrieve("anything", corpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("anything", corpus, 10, null);
 
         assertThat(results).isEmpty();
     }
@@ -129,8 +130,66 @@ class HybridCaseRetrieverTest {
     void tenancyMismatchThrows() {
         CorpusRef wrongTenant = new CorpusRef("other-tenant", "corpus");
 
-        assertThatThrownBy(() -> retriever.retrieve("query", wrongTenant, 10))
+        assertThatThrownBy(() -> retriever.retrieve("query", wrongTenant, 10, null))
             .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void denseOnlyModeIngestAndRetrieve() {
+        // Create ingestor and retriever with null SparseEmbedder — dense-only mode
+        EmbeddingModel denseOnlyModel = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
+
+        QdrantEmbeddingIngestor denseOnlyStore = new QdrantEmbeddingIngestor(
+            client, denseOnlyModel, null, // no sparse embedder
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
+            principal
+        );
+
+        HybridCaseRetriever denseOnlyRetriever = new HybridCaseRetriever(
+            client, denseOnlyModel, null, // no sparse embedder
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
+            64, 64, 60,
+            false, 10, null,
+            principal
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        denseOnlyStore.ingest(corpus, List.of(
+            new ChunkInput("Dense-only retrieval works", "doc-1",
+                Map.of("category", "test")),
+            new ChunkInput("Another chunk for dense search", "doc-2",
+                Map.of("category", "test"))
+        ));
+
+        List<RetrievedChunk> results = denseOnlyRetriever.retrieve(
+            "dense retrieval", corpus, 10, null);
+
+        assertThat(results).isNotEmpty();
+        assertThat(results).allSatisfy(chunk -> {
+            assertThat(chunk.content()).isNotBlank();
+            assertThat(chunk.sourceDocumentId()).isNotBlank();
+            assertThat(chunk.relevanceScore()).isGreaterThan(0.0);
+        });
+    }
+
+    @Test
+    void retrieveWithPayloadFilterNarrowsResults() {
+        CorpusRef corpus = uniqueCorpus();
+        store.ingest(corpus, List.of(
+            new ChunkInput("Java CDI injection", "doc-1", Map.of("domain", "jvm")),
+            new ChunkInput("Python pip install", "doc-2", Map.of("domain", "python")),
+            new ChunkInput("Java Spring Boot", "doc-3", Map.of("domain", "jvm"))
+        ));
+
+        List<RetrievedChunk> allResults = retriever.retrieve("programming", corpus, 10, null);
+        List<RetrievedChunk> jvmOnly = retriever.retrieve("programming", corpus, 10,
+            PayloadFilter.eq("domain", "jvm"));
+
+        assertThat(allResults.size()).isGreaterThanOrEqualTo(jvmOnly.size());
+        assertThat(jvmOnly).allSatisfy(chunk ->
+            assertThat(chunk.metadata().get("domain")).isEqualTo("jvm"));
     }
 
     // --- helpers ---

@@ -166,6 +166,67 @@ class QdrantEmbeddingIngestorTest {
         assertThat(store.listDocuments(corpus)).isEmpty();
     }
 
+    @Test
+    void ingestDenseOnlyMode() throws Exception {
+        // Create ingestor with null SparseEmbedder — dense-only mode
+        QdrantEmbeddingIngestor denseOnlyStore = new QdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null, // no sparse embedder
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse",
+            RagTestFixtures.stubPrincipal(TENANT)
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        denseOnlyStore.ingest(corpus, List.of(
+            new ChunkInput("dense-only chunk", "doc-1", Map.of("key", "val"))
+        ));
+
+        // Collection should exist
+        assertThat(client.collectionExistsAsync(
+            TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus)).get())
+            .isTrue();
+
+        // Document should be listed
+        assertThat(denseOnlyStore.listDocuments(corpus)).containsExactly("doc-1");
+    }
+
+    @Test
+    void reingestSameDocumentProducesIdempotentUpsert() {
+        CorpusRef corpus = uniqueCorpus();
+        store.ingest(corpus, List.of(
+            new ChunkInput("original text", "doc-1", Map.of())
+        ));
+        assertThat(store.listDocuments(corpus)).containsExactly("doc-1");
+
+        // Re-ingest same document — should overwrite, not duplicate
+        store.ingest(corpus, List.of(
+            new ChunkInput("updated text", "doc-1", Map.of())
+        ));
+        assertThat(store.listDocuments(corpus)).containsExactly("doc-1");
+    }
+
+    @Test
+    void multiDocBatchProducesStableIds() {
+        CorpusRef corpus = uniqueCorpus();
+
+        // Ingest A and B together in a batch
+        store.ingest(corpus, List.of(
+            new ChunkInput("chunk A", "doc-A", Map.of()),
+            new ChunkInput("chunk B", "doc-B", Map.of())
+        ));
+
+        // Delete B and re-ingest B alone
+        store.deleteDocument(corpus, "doc-B");
+        store.ingest(corpus, List.of(
+            new ChunkInput("chunk B", "doc-B", Map.of())
+        ));
+
+        // B should still be exactly 1 document (same deterministic ID regardless of batch)
+        assertThat(store.listDocuments(corpus)).containsExactlyInAnyOrder("doc-A", "doc-B");
+    }
+
     // --- helpers ---
 
     private CorpusRef uniqueCorpus() {

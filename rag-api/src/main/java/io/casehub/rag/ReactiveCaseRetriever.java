@@ -5,5 +5,5 @@ import java.util.List;
 
 /** Non-blocking counterpart of {@link CaseRetriever}. Safe to subscribe to from the Vert.x event loop. */
 public interface ReactiveCaseRetriever {
-    Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults);
+    Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults, PayloadFilter filter);
 }

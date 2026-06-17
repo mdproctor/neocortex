@@ -67,7 +67,7 @@ class AssertTenantReactiveTest {
     void retrieverDeliversSecurityExceptionThroughUniFailureChannel() {
         ReactiveCaseRetriever retriever = createRetriever();
 
-        Uni<?> uni = retriever.retrieve("query", WRONG_TENANT_CORPUS, 10);
+        Uni<?> uni = retriever.retrieve("query", WRONG_TENANT_CORPUS, 10, null);
 
         uni.subscribe().withSubscriber(UniAssertSubscriber.create())
             .awaitFailure()

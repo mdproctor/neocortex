@@ -10,6 +10,7 @@ import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.CaseRetriever;
 import io.casehub.rag.CorpusRef;
+import io.casehub.rag.PayloadFilter;
 import io.casehub.rag.RetrievedChunk;
 import io.qdrant.client.QueryFactory;
 import io.qdrant.client.QdrantClient;
@@ -78,57 +79,74 @@ public class HybridCaseRetriever implements CaseRetriever {
     }
 
     @Override
-    public List<RetrievedChunk> retrieve(String query, CorpusRef corpus, int maxResults) {
+    public List<RetrievedChunk> retrieve(String query, CorpusRef corpus, int maxResults, PayloadFilter filter) {
         MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
 
         String collection = tenancyStrategy.collectionName(corpus);
         Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+        Optional<Filter> payloadFilter = PayloadFilterTranslator.toQdrantFilter(filter);
+
+        Filter.Builder combined = Filter.newBuilder();
+        tenantFilter.ifPresent(tf -> combined.addAllMust(tf.getMustList()));
+        payloadFilter.ifPresent(pf -> combined.addAllMust(pf.getMustList()));
+        Optional<Filter> mergedFilter = combined.getMustCount() > 0
+            ? Optional.of(combined.build()) : Optional.empty();
 
         // Check collection exists — return empty if not
         if (!collectionExists(collection)) {
             return List.of();
         }
 
-        // Embed query: dense + sparse
+        // Embed query: dense (always) + sparse (when available)
         Embedding denseEmbedding = embeddingModel.embed(TextSegment.from(query)).content();
-        Map<Integer, Float> sparseMap = sparseEmbedder.embed(query);
-
-        // Build sparse indices and values lists
-        List<Float> sparseValues = new ArrayList<>(sparseMap.size());
-        List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
-        for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
-            sparseIndices.add(entry.getKey());
-            sparseValues.add(entry.getValue());
-        }
-
-        // Build prefetch: dense nearest-neighbor
-        PrefetchQuery.Builder densePrefetch = PrefetchQuery.newBuilder()
-            .setQuery(QueryFactory.nearest(denseEmbedding.vectorAsList()))
-            .setUsing(denseVectorName)
-            .setLimit(denseTopK);
-        tenantFilter.ifPresent(densePrefetch::setFilter);
-
-        // Build prefetch: sparse nearest-neighbor
-        PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
-            .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
-            .setUsing(sparseVectorName)
-            .setLimit(sparseTopK);
-        tenantFilter.ifPresent(sparsePrefetch::setFilter);
 
         // Determine query limit: fetch more candidates if reranking
         int queryLimit = rerankEnabled && reranker != null
             ? Math.max(maxResults, rerankTopN)
             : maxResults;
 
-        // Build the Query API request with prefetch + RRF fusion
-        QueryPoints queryPoints = QueryPoints.newBuilder()
-            .setCollectionName(collection)
-            .addPrefetch(densePrefetch)
-            .addPrefetch(sparsePrefetch)
-            .setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(rrfK).build()))
-            .setLimit(queryLimit)
-            .setWithPayload(WithPayloadSelectorFactory.enable(true))
-            .build();
+        QueryPoints queryPoints;
+        if (sparseEmbedder != null) {
+            // Hybrid mode: dense + sparse prefetch with RRF fusion
+            Map<Integer, Float> sparseMap = sparseEmbedder.embed(query);
+            List<Float> sparseValues = new ArrayList<>(sparseMap.size());
+            List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
+            for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
+                sparseIndices.add(entry.getKey());
+                sparseValues.add(entry.getValue());
+            }
+
+            PrefetchQuery.Builder densePrefetch = PrefetchQuery.newBuilder()
+                .setQuery(QueryFactory.nearest(denseEmbedding.vectorAsList()))
+                .setUsing(denseVectorName)
+                .setLimit(denseTopK);
+            mergedFilter.ifPresent(densePrefetch::setFilter);
+
+            PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
+                .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
+                .setUsing(sparseVectorName)
+                .setLimit(sparseTopK);
+            mergedFilter.ifPresent(sparsePrefetch::setFilter);
+
+            queryPoints = QueryPoints.newBuilder()
+                .setCollectionName(collection)
+                .addPrefetch(densePrefetch)
+                .addPrefetch(sparsePrefetch)
+                .setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(rrfK).build()))
+                .setLimit(queryLimit)
+                .setWithPayload(WithPayloadSelectorFactory.enable(true))
+                .build();
+        } else {
+            // Dense-only mode: direct nearest-neighbor query
+            QueryPoints.Builder builder = QueryPoints.newBuilder()
+                .setCollectionName(collection)
+                .setQuery(QueryFactory.nearest(denseEmbedding.vectorAsList()))
+                .setUsing(denseVectorName)
+                .setLimit(queryLimit)
+                .setWithPayload(WithPayloadSelectorFactory.enable(true));
+            mergedFilter.ifPresent(builder::setFilter);
+            queryPoints = builder.build();
+        }
 
         // Execute query
         List<ScoredPoint> scoredPoints = executeQuery(queryPoints);

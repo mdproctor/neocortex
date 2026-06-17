@@ -35,6 +35,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -85,15 +87,21 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         Response<List<Embedding>> denseResponse = embeddingModel.embedAll(segments);
         List<Embedding> denseEmbeddings = denseResponse.content();
 
-        // Batch embed sparse
-        List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder.embedBatch(texts);
+        // Batch embed sparse (only if sparse embedder is available)
+        List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder != null
+            ? sparseEmbedder.embedBatch(texts) : null;
 
-        // Build points
+        // Build points with per-document chunk counters for deterministic IDs
+        Map<String, Integer> counters = new HashMap<>();
         List<PointStruct> points = new ArrayList<>(chunks.size());
         for (int i = 0; i < chunks.size(); i++) {
-            points.add(buildPoint(
-                chunks.get(i), corpus,
-                denseEmbeddings.get(i), sparseEmbeddings.get(i)));
+            ChunkInput chunk = chunks.get(i);
+            int chunkIndex = counters.merge(chunk.sourceDocumentId(), 0, Integer::sum);
+            counters.put(chunk.sourceDocumentId(), chunkIndex + 1);
+            points.add(buildPoint(chunk, corpus,
+                denseEmbeddings.get(i),
+                sparseEmbeddings != null ? sparseEmbeddings.get(i) : null,
+                chunkIndex));
         }
 
         // Upsert
@@ -232,17 +240,20 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                 .putMap(denseVectorName, denseParams)
                 .build();
 
-            SparseVectorConfig sparseConfig = SparseVectorConfig.newBuilder()
-                .putMap(sparseVectorName, SparseVectorParams.getDefaultInstance())
-                .build();
-
-            CreateCollection createRequest = CreateCollection.newBuilder()
+            CreateCollection.Builder createBuilder = CreateCollection.newBuilder()
                 .setCollectionName(collection)
                 .setVectorsConfig(VectorsConfig.newBuilder()
                     .setParamsMap(paramsMap)
-                    .build())
-                .setSparseVectorsConfig(sparseConfig)
-                .build();
+                    .build());
+
+            if (sparseEmbedder != null) {
+                SparseVectorConfig sparseConfig = SparseVectorConfig.newBuilder()
+                    .putMap(sparseVectorName, SparseVectorParams.getDefaultInstance())
+                    .build();
+                createBuilder.setSparseVectorsConfig(sparseConfig);
+            }
+
+            CreateCollection createRequest = createBuilder.build();
 
             client.createCollectionAsync(createRequest).get();
             knownCollections.add(collection);
@@ -257,28 +268,36 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     private PointStruct buildPoint(
             ChunkInput chunk, CorpusRef corpus,
-            Embedding denseEmbedding, Map<Integer, Float> sparseMap) {
+            Embedding denseEmbedding, Map<Integer, Float> sparseMap,
+            int chunkIndex) {
+
+        // Deterministic point ID from sourceDocumentId + per-document chunk index
+        String idInput = chunk.sourceDocumentId() + "#" + chunkIndex;
+        UUID pointId = UUID.nameUUIDFromBytes(idInput.getBytes(StandardCharsets.UTF_8));
 
         // Dense vector
         Vector denseVector = VectorFactory.vector(denseEmbedding.vectorAsList());
 
-        // Sparse vector: convert Map<Integer,Float> to indices + values lists
-        List<Float> sparseValues = new ArrayList<>(sparseMap.size());
-        List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
-        for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
-            sparseIndices.add(entry.getKey());
-            sparseValues.add(entry.getValue());
+        // Named vectors — include sparse only when available
+        Map<String, Vector> namedVectors;
+        if (sparseMap != null) {
+            List<Float> sparseValues = new ArrayList<>(sparseMap.size());
+            List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
+            for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
+                sparseIndices.add(entry.getKey());
+                sparseValues.add(entry.getValue());
+            }
+            Vector sparseVector = VectorFactory.vector(sparseValues, sparseIndices);
+            namedVectors = Map.of(
+                denseVectorName, denseVector,
+                sparseVectorName, sparseVector
+            );
+        } else {
+            namedVectors = Map.of(denseVectorName, denseVector);
         }
-        Vector sparseVector = VectorFactory.vector(sparseValues, sparseIndices);
-
-        // Named vectors
-        Map<String, Vector> namedVectors = Map.of(
-            denseVectorName, denseVector,
-            sparseVectorName, sparseVector
-        );
 
         // Payload
-        Map<String, Value> payload = new java.util.HashMap<>();
+        Map<String, Value> payload = new HashMap<>();
         payload.put("content", ValueFactory.value(chunk.content()));
         payload.put("sourceDocumentId", ValueFactory.value(chunk.sourceDocumentId()));
         payload.put("tenantId", ValueFactory.value(corpus.tenantId()));
@@ -287,7 +306,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         }
 
         return PointStruct.newBuilder()
-            .setId(PointIdFactory.id(UUID.randomUUID()))
+            .setId(PointIdFactory.id(pointId))
             .setVectors(VectorsFactory.namedVectors(namedVectors))
             .putAllPayload(payload)
             .build();

@@ -29,7 +29,7 @@ class InMemoryReactiveCaseRetrieverTest {
         store.ingest(corpus, List.of(
             new ChunkInput("first", "d1", Map.of()),
             new ChunkInput("second", "d2", Map.of())));
-        List<RetrievedChunk> chunks = reactive.retrieve("query", corpus, 10)
+        List<RetrievedChunk> chunks = reactive.retrieve("query", corpus, 10, null)
             .await().indefinitely();
         assertThat(chunks).hasSize(2);
         assertThat(chunks.get(0).content()).isEqualTo("first");
@@ -43,7 +43,7 @@ class InMemoryReactiveCaseRetrieverTest {
             new ChunkInput("a", "d1", Map.of()),
             new ChunkInput("b", "d2", Map.of()),
             new ChunkInput("c", "d3", Map.of())));
-        List<RetrievedChunk> chunks = reactive.retrieve("q", corpus, 2)
+        List<RetrievedChunk> chunks = reactive.retrieve("q", corpus, 2, null)
             .await().indefinitely();
         assertThat(chunks).hasSize(2);
     }
@@ -51,7 +51,7 @@ class InMemoryReactiveCaseRetrieverTest {
     @Test
     void retrieveFromEmptyCorpusReturnsEmpty() {
         var corpus = new CorpusRef("t1", "docs");
-        List<RetrievedChunk> chunks = reactive.retrieve("q", corpus, 10)
+        List<RetrievedChunk> chunks = reactive.retrieve("q", corpus, 10, null)
             .await().indefinitely();
         assertThat(chunks).isEmpty();
     }

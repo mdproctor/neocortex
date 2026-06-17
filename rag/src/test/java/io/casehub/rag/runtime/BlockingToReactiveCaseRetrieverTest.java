@@ -19,7 +19,7 @@ class BlockingToReactiveCaseRetrieverTest {
 
     @BeforeEach
     void setUp() {
-        CaseRetriever blocking = (query, corpus, maxResults) ->
+        CaseRetriever blocking = (query, corpus, maxResults, filter) ->
             List.of(new RetrievedChunk("result for " + query, "d1", 0.95, Map.of()));
         bridge = new BlockingToReactiveCaseRetriever(blocking);
     }
@@ -27,7 +27,7 @@ class BlockingToReactiveCaseRetrieverTest {
     @Test
     void retrieveDelegatesToBlocking() {
         var corpus = new CorpusRef("t1", "docs");
-        List<RetrievedChunk> result = bridge.retrieve("test query", corpus, 5)
+        List<RetrievedChunk> result = bridge.retrieve("test query", corpus, 5, null)
             .await().indefinitely();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).content()).isEqualTo("result for test query");
@@ -37,22 +37,22 @@ class BlockingToReactiveCaseRetrieverTest {
     @Test
     void retrieve_executesOnWorkerThread() {
         var capturedId = new AtomicLong(Thread.currentThread().getId());
-        CaseRetriever spy = (query, corpus, maxResults) -> {
+        CaseRetriever spy = (query, corpus, maxResults, filter) -> {
             capturedId.set(Thread.currentThread().getId());
             return List.of();
         };
         var b = new BlockingToReactiveCaseRetriever(spy);
-        b.retrieve("q", new CorpusRef("t", "c"), 5).await().indefinitely();
+        b.retrieve("q", new CorpusRef("t", "c"), 5, null).await().indefinitely();
         assertNotEquals(Thread.currentThread().getId(), capturedId.get(),
             "retrieve() must offload to a worker thread");
     }
 
     @Test
     void retrieveEmptyFromBlockingReturnsEmpty() {
-        CaseRetriever empty = (query, corpus, maxResults) -> List.of();
+        CaseRetriever empty = (query, corpus, maxResults, filter) -> List.of();
         bridge = new BlockingToReactiveCaseRetriever(empty);
         var corpus = new CorpusRef("t1", "docs");
-        List<RetrievedChunk> result = bridge.retrieve("q", corpus, 10)
+        List<RetrievedChunk> result = bridge.retrieve("q", corpus, 10, null)
             .await().indefinitely();
         assertThat(result).isEmpty();
     }

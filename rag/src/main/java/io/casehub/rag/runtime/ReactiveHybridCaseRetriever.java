@@ -9,6 +9,7 @@ import io.casehub.inference.tasks.RankedResult;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.CorpusRef;
+import io.casehub.rag.PayloadFilter;
 import io.casehub.rag.ReactiveCaseRetriever;
 import io.casehub.rag.RetrievedChunk;
 import io.qdrant.client.QueryFactory;
@@ -79,12 +80,19 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
     }
 
     @Override
-    public Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults) {
+    public Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults, PayloadFilter filter) {
         return Uni.createFrom().deferred(() -> {
             MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
 
             String collection = tenancyStrategy.collectionName(corpus);
             Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+            Optional<Filter> payloadFilter = PayloadFilterTranslator.toQdrantFilter(filter);
+
+            Filter.Builder combined = Filter.newBuilder();
+            tenantFilter.ifPresent(tf -> combined.addAllMust(tf.getMustList()));
+            payloadFilter.ifPresent(pf -> combined.addAllMust(pf.getMustList()));
+            Optional<Filter> mergedFilter = combined.getMustCount() > 0
+                ? Optional.of(combined.build()) : Optional.empty();
 
             return QdrantFutures.<Boolean>toUni(client.collectionExistsAsync(collection))
                 .chain(exists -> {
@@ -93,7 +101,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                     }
                     return Uni.createFrom().item(() -> embedQuery(query))
                         .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                        .chain(embeddings -> executeQuery(collection, tenantFilter,
+                        .chain(embeddings -> executeQuery(collection, mergedFilter,
                             embeddings, maxResults))
                         .map(this::mapToChunks)
                         .chain(chunks -> maybeRerank(query, chunks, maxResults));
@@ -103,43 +111,58 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
 
     private QueryEmbeddings embedQuery(String query) {
         Embedding denseEmbedding = embeddingModel.embed(TextSegment.from(query)).content();
-        Map<Integer, Float> sparseMap = sparseEmbedder.embed(query);
+        Map<Integer, Float> sparseMap = sparseEmbedder != null
+            ? sparseEmbedder.embed(query) : null;
         return new QueryEmbeddings(denseEmbedding, sparseMap);
     }
 
     private Uni<List<ScoredPoint>> executeQuery(String collection,
             Optional<Filter> tenantFilter, QueryEmbeddings embeddings, int maxResults) {
-        List<Float> sparseValues = new ArrayList<>(embeddings.sparse.size());
-        List<Integer> sparseIndices = new ArrayList<>(embeddings.sparse.size());
-        for (Map.Entry<Integer, Float> entry : embeddings.sparse.entrySet()) {
-            sparseIndices.add(entry.getKey());
-            sparseValues.add(entry.getValue());
-        }
-
-        PrefetchQuery.Builder densePrefetch = PrefetchQuery.newBuilder()
-            .setQuery(QueryFactory.nearest(embeddings.dense.vectorAsList()))
-            .setUsing(denseVectorName)
-            .setLimit(denseTopK);
-        tenantFilter.ifPresent(densePrefetch::setFilter);
-
-        PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
-            .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
-            .setUsing(sparseVectorName)
-            .setLimit(sparseTopK);
-        tenantFilter.ifPresent(sparsePrefetch::setFilter);
-
         int queryLimit = rerankEnabled && reranker != null
             ? Math.max(maxResults, rerankTopN)
             : maxResults;
 
-        QueryPoints queryPoints = QueryPoints.newBuilder()
-            .setCollectionName(collection)
-            .addPrefetch(densePrefetch)
-            .addPrefetch(sparsePrefetch)
-            .setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(rrfK).build()))
-            .setLimit(queryLimit)
-            .setWithPayload(WithPayloadSelectorFactory.enable(true))
-            .build();
+        QueryPoints queryPoints;
+        if (embeddings.sparse != null) {
+            // Hybrid mode: dense + sparse prefetch with RRF fusion
+            List<Float> sparseValues = new ArrayList<>(embeddings.sparse.size());
+            List<Integer> sparseIndices = new ArrayList<>(embeddings.sparse.size());
+            for (Map.Entry<Integer, Float> entry : embeddings.sparse.entrySet()) {
+                sparseIndices.add(entry.getKey());
+                sparseValues.add(entry.getValue());
+            }
+
+            PrefetchQuery.Builder densePrefetch = PrefetchQuery.newBuilder()
+                .setQuery(QueryFactory.nearest(embeddings.dense.vectorAsList()))
+                .setUsing(denseVectorName)
+                .setLimit(denseTopK);
+            tenantFilter.ifPresent(densePrefetch::setFilter);
+
+            PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
+                .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
+                .setUsing(sparseVectorName)
+                .setLimit(sparseTopK);
+            tenantFilter.ifPresent(sparsePrefetch::setFilter);
+
+            queryPoints = QueryPoints.newBuilder()
+                .setCollectionName(collection)
+                .addPrefetch(densePrefetch)
+                .addPrefetch(sparsePrefetch)
+                .setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(rrfK).build()))
+                .setLimit(queryLimit)
+                .setWithPayload(WithPayloadSelectorFactory.enable(true))
+                .build();
+        } else {
+            // Dense-only mode: direct nearest-neighbor query
+            QueryPoints.Builder builder = QueryPoints.newBuilder()
+                .setCollectionName(collection)
+                .setQuery(QueryFactory.nearest(embeddings.dense.vectorAsList()))
+                .setUsing(denseVectorName)
+                .setLimit(queryLimit)
+                .setWithPayload(WithPayloadSelectorFactory.enable(true));
+            tenantFilter.ifPresent(builder::setFilter);
+            queryPoints = builder.build();
+        }
 
         return QdrantFutures.toUni(client.queryAsync(queryPoints));
     }

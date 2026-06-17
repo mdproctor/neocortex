@@ -20,7 +20,7 @@ public final class HybridSearchDemo {
     public static List<SearchResult> run(CaseRetriever retriever, CorpusRef corpus) {
         List<SearchResult> results = new ArrayList<>();
         for (String query : QUERIES) {
-            List<RetrievedChunk> chunks = retriever.retrieve(query, corpus, 5);
+            List<RetrievedChunk> chunks = retriever.retrieve(query, corpus, 5, null);
             results.add(new SearchResult(query, chunks));
         }
         return results;

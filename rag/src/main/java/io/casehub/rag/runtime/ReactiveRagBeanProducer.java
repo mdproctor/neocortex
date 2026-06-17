@@ -21,7 +21,7 @@ public class ReactiveRagBeanProducer {
     @Inject RagConfig config;
     @Inject QdrantClient client;
     @Inject EmbeddingModel embeddingModel;
-    @Inject SparseEmbedder sparseEmbedder;
+    @Inject Instance<SparseEmbedder> sparseEmbedderInstance;
     @Inject Instance<CrossEncoderReranker> rerankerInstance;
     @Inject CurrentPrincipal currentPrincipal;
 
@@ -35,6 +35,8 @@ public class ReactiveRagBeanProducer {
     @Produces
     @ApplicationScoped
     ReactiveQdrantEmbeddingIngestor corpusStore() {
+        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
+            ? sparseEmbedderInstance.get() : null;
         return new ReactiveQdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
             config.tenancyStrategy(),
@@ -45,6 +47,8 @@ public class ReactiveRagBeanProducer {
     @Produces
     @ApplicationScoped
     ReactiveHybridCaseRetriever caseRetriever() {
+        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
+            ? sparseEmbedderInstance.get() : null;
         CrossEncoderReranker reranker = rerankerInstance.isResolvable()
             ? rerankerInstance.get() : null;
         return new ReactiveHybridCaseRetriever(

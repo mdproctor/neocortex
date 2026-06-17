@@ -2,6 +2,7 @@ package io.casehub.rag.testing;
 
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
+import io.casehub.rag.PayloadFilter;
 import io.casehub.rag.RetrievedChunk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ class InMemoryCaseRetrieverTest {
         store.ingest(corpus, List.of(chunk1, chunk2, chunk3));
 
         InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
-        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10, null);
 
         assertThat(results).hasSize(3);
         assertThat(results.get(0).content()).isEqualTo("content1");
@@ -59,7 +60,7 @@ class InMemoryCaseRetrieverTest {
         store.ingest(corpus, List.of(chunk1, chunk2, chunk3));
 
         InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
-        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 2);
+        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 2, null);
 
         assertThat(results).hasSize(2);
         assertThat(results.get(0).content()).isEqualTo("content1");
@@ -70,7 +71,7 @@ class InMemoryCaseRetrieverTest {
     void storeBacked_unknown_corpus_returns_empty() {
         InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
         CorpusRef unknownCorpus = new CorpusRef("tenant2", "corpus2");
-        List<RetrievedChunk> results = retriever.retrieve("any query", unknownCorpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("any query", unknownCorpus, 10, null);
 
         assertThat(results).isEmpty();
     }
@@ -78,7 +79,7 @@ class InMemoryCaseRetrieverTest {
     @Test
     void storeBacked_empty_corpus_returns_empty() {
         InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
-        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10, null);
 
         assertThat(results).isEmpty();
     }
@@ -89,7 +90,7 @@ class InMemoryCaseRetrieverTest {
         RetrievedChunk chunk2 = new RetrievedChunk("content2", "doc2", 0.8, null);
 
         InMemoryCaseRetriever retriever = InMemoryCaseRetriever.returning(List.of(chunk1, chunk2));
-        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10, null);
 
         assertThat(results).hasSize(2);
         assertThat(results.get(0).content()).isEqualTo("content1");
@@ -108,7 +109,7 @@ class InMemoryCaseRetrieverTest {
         RetrievedChunk chunk3 = new RetrievedChunk("content3", "doc3", 0.7, null);
 
         InMemoryCaseRetriever retriever = InMemoryCaseRetriever.returning(List.of(chunk1, chunk2, chunk3));
-        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 1);
+        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 1, null);
 
         // Should return all 3 chunks, ignoring maxResults=1
         assertThat(results).hasSize(3);
@@ -123,7 +124,7 @@ class InMemoryCaseRetrieverTest {
 
         InMemoryCaseRetriever retriever = InMemoryCaseRetriever.returning(List.of(chunk1));
         CorpusRef otherCorpus = new CorpusRef("other-tenant", "other-corpus");
-        List<RetrievedChunk> results = retriever.retrieve("any query", otherCorpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("any query", otherCorpus, 10, null);
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).content()).isEqualTo("fixed");
@@ -134,8 +135,110 @@ class InMemoryCaseRetrieverTest {
         RetrievedChunk chunk1 = new RetrievedChunk("content1", "doc1", 1.0, null);
 
         InMemoryCaseRetriever retriever = InMemoryCaseRetriever.returning(List.of(chunk1));
-        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10);
+        List<RetrievedChunk> results = retriever.retrieve("any query", corpus, 10, null);
 
         assertThat(results).isUnmodifiable();
+    }
+
+    // ── PayloadFilter matching tests ───────────────────────────────────
+
+    @Test
+    void filterEqMatchesMetadata() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("jvm content", "doc1", Map.of("domain", "jvm")),
+                new ChunkInput("python content", "doc2", Map.of("domain", "python"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10,
+                PayloadFilter.eq("domain", "jvm"));
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).content()).isEqualTo("jvm content");
+    }
+
+    @Test
+    void filterInMatchesMultipleValues() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("jvm content", "doc1", Map.of("domain", "jvm")),
+                new ChunkInput("python content", "doc2", Map.of("domain", "python")),
+                new ChunkInput("rust content", "doc3", Map.of("domain", "rust"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10,
+                PayloadFilter.in("domain", List.of("jvm", "rust")));
+
+        assertThat(results).hasSize(2);
+        assertThat(results).extracting(RetrievedChunk::content)
+                .containsExactlyInAnyOrder("jvm content", "rust content");
+    }
+
+    @Test
+    void filterNotInvertsMatch() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("jvm content", "doc1", Map.of("domain", "jvm")),
+                new ChunkInput("python content", "doc2", Map.of("domain", "python"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10,
+                PayloadFilter.not(PayloadFilter.eq("domain", "jvm")));
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).content()).isEqualTo("python content");
+    }
+
+    @Test
+    void filterAndRequiresAllConditions() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("jvm gotcha", "doc1", Map.of("domain", "jvm", "type", "gotcha")),
+                new ChunkInput("jvm technique", "doc2", Map.of("domain", "jvm", "type", "technique")),
+                new ChunkInput("python gotcha", "doc3", Map.of("domain", "python", "type", "gotcha"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10,
+                PayloadFilter.and(PayloadFilter.eq("domain", "jvm"), PayloadFilter.eq("type", "gotcha")));
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).content()).isEqualTo("jvm gotcha");
+    }
+
+    @Test
+    void filterOrMatchesAnyCondition() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("jvm content", "doc1", Map.of("domain", "jvm")),
+                new ChunkInput("python content", "doc2", Map.of("domain", "python")),
+                new ChunkInput("rust content", "doc3", Map.of("domain", "rust"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10,
+                PayloadFilter.or(PayloadFilter.eq("domain", "jvm"), PayloadFilter.eq("domain", "python")));
+
+        assertThat(results).hasSize(2);
+        assertThat(results).extracting(RetrievedChunk::content)
+                .containsExactlyInAnyOrder("jvm content", "python content");
+    }
+
+    @Test
+    void filterNullReturnsUnfiltered() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("content1", "doc1", Map.of("domain", "jvm")),
+                new ChunkInput("content2", "doc2", Map.of("domain", "python"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10, null);
+
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
+    void filterOnMissingFieldReturnsNoMatch() {
+        store.ingest(corpus, List.of(
+                new ChunkInput("content1", "doc1", Map.of("domain", "jvm")),
+                new ChunkInput("content2", "doc2", Map.of("domain", "python"))));
+
+        InMemoryCaseRetriever retriever = new InMemoryCaseRetriever(store);
+        List<RetrievedChunk> results = retriever.retrieve("query", corpus, 10,
+                PayloadFilter.eq("nonexistent", "value"));
+
+        assertThat(results).isEmpty();
     }
 }

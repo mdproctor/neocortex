@@ -62,7 +62,7 @@ class RagEdgeCaseTest {
     @Test
     void searchOnEmptyRetrieverReturnsEmptyList() {
         var retriever = InMemoryCaseRetriever.returning(List.of());
-        var results = retriever.retrieve("anything", CORPUS, 5);
+        var results = retriever.retrieve("anything", CORPUS, 5, null);
         assertThat(results).isEmpty();
     }
 }
