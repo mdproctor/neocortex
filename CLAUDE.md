@@ -148,7 +148,8 @@ inference-quarkus/  — CDI wiring, @InferenceModel qualifier, Dev Services, @Qu
 rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, CaseRetriever + ReactiveCaseRetriever SPIs, MetadataExtractor + CursorStore SPIs, value types — Mutiny provided
 rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
 rag-tika/           — optional Apache Tika document parsing → chunked ChunkInput
-rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore (@Alternative @Priority(1) @ApplicationScoped)
+rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped)
+rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath-activated. CrossEncoderRelevanceEvaluator default.
 corpus-api/         — CorpusStore + CorpusReader + ChangeSource + WatchableChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
 corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
 examples/
@@ -175,6 +176,7 @@ Examples are excluded from the default build. Activate with `-Pexamples-smoke` (
 | RAG | `casehub-rag` |
 | RAG Tika | `casehub-rag-tika` |
 | RAG testing | `casehub-rag-testing` |
+| RAG CRAG | `casehub-rag-crag` |
 | Corpus API | `casehub-corpus-api` |
 | Corpus | `casehub-corpus` |
 | Example Text Analysis | `casehub-example-text-analysis` |

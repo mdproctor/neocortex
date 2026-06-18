@@ -79,4 +79,45 @@ class RetrievedChunkTest {
         var chunk = new RetrievedChunk("", "doc-1", 0.5, Map.of());
         assertThat(chunk.content()).isEmpty();
     }
+
+    @Test
+    void fourArgConstructorDefaultsToUngraded() {
+        var chunk = new RetrievedChunk("content", "doc-1", 0.9, Map.of("k", "v"));
+        assertThat(chunk.grade()).isEqualTo(RelevanceGrade.UNGRADED);
+    }
+
+    @Test
+    void fiveArgConstructorSetsGrade() {
+        var chunk = new RetrievedChunk("content", "doc-1", 0.9, Map.of(), RelevanceGrade.CORRECT);
+        assertThat(chunk.grade()).isEqualTo(RelevanceGrade.CORRECT);
+    }
+
+    @Test
+    void withGradeProducesNewChunkPreservingAllFields() {
+        var original = new RetrievedChunk("content", "doc-1", 0.9, Map.of("k", "v"));
+        var graded = original.withGrade(RelevanceGrade.INCORRECT);
+        assertThat(graded.content()).isEqualTo("content");
+        assertThat(graded.sourceDocumentId()).isEqualTo("doc-1");
+        assertThat(graded.relevanceScore()).isEqualTo(0.9);
+        assertThat(graded.metadata()).containsEntry("k", "v");
+        assertThat(graded.grade()).isEqualTo(RelevanceGrade.INCORRECT);
+        assertThat(original.grade()).isEqualTo(RelevanceGrade.UNGRADED);
+    }
+
+    @Test
+    void canonicalConstructorValidatesNulls() {
+        assertThatThrownBy(() -> new RetrievedChunk(null, "doc", 0.5, Map.of(), RelevanceGrade.UNGRADED))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RetrievedChunk("c", null, 0.5, Map.of(), RelevanceGrade.UNGRADED))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RetrievedChunk("c", "doc", 0.5, Map.of(), null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void metadataNullDefaultsToEmptyMapWithGrade() {
+        var chunk = new RetrievedChunk("content", "doc-1", 0.9, null);
+        assertThat(chunk.metadata()).isEmpty();
+        assertThat(chunk.grade()).isEqualTo(RelevanceGrade.UNGRADED);
+    }
 }

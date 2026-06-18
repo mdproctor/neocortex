@@ -1,9 +1,9 @@
 # ARC42STORIES — casehub-neural-text
 
-**Version:** 0.2  
-**Status:** All chapters complete (C1–C9) — J1 + J2 + J3 ✅  
+**Version:** 0.3  
+**Status:** All chapters complete (C1–C9) — J1 + J2 + J3 ✅ | J4 pending (C10) 🔲  
 **Spec:** [arc42stories-spec.md](https://raw.githubusercontent.com/casehubio/parent/main/docs/arc42stories-spec.md)  
-**Last updated:** 2026-06-15
+**Last updated:** 2026-06-18
 
 ---
 
@@ -143,6 +143,7 @@ This module sits **below** LangChain4j for inference and **above** LangChain4j f
 - C3 and C5 independent: C5 (Quarkus CDI wiring) wraps C3 (runtime), but C3 ships first as a usable JVM-only artifact; C5 adds the Quarkus layer separately.
 - C7 before C8: **hard** — corpus storage feeds the RAG pipeline; the pipeline must exist first.
 - C8 before C9: **hard** — `CorpusIngestionService` reads `ChangeSource` + `CorpusReader` from `corpus-api`; corpus modules must exist before the bridge.
+- C10 after C7 and C4: **hard** — CRAG decorates CaseRetriever (C7) using CrossEncoderReranker (C4); both must exist first.
 
 ---
 
@@ -187,6 +188,10 @@ C4Container
     Container(corpus, "corpus", "Zip4j", "ZipCorpusStore, FlatCorpusStore, CompositeCorpusStore, compaction, migration")
   }
 
+  Container_Boundary(b_rag_crag, "Layer: CRAG") {
+    Container(rag_crag, "rag-crag", "CDI library", "CorrectiveCaseRetriever @Decorator, CrossEncoderRelevanceEvaluator, RelevanceEvaluator SPI consumer")
+  }
+
   Rel(inference_tasks, inference_api, "wraps InferenceModel")
   Rel(inference_splade, inference_api, "wraps InferenceModel")
   Rel(inference_rt, inference_api, "implements InferenceModel")
@@ -197,6 +202,8 @@ C4Container
   Rel(rag, corpus_api, "CorpusIngestionService reads ChangeSource + CorpusReader")
   Rel(rag_testing, rag_api, "implements stubs")
   Rel(corpus, corpus_api, "implements CorpusStore, CorpusReader, ChangeSource")
+  Rel(rag_crag, rag_api, "decorates CaseRetriever")
+  Rel(rag_crag, inference_tasks, "uses CrossEncoderReranker")
 ```
 
 ### Layers
@@ -212,6 +219,7 @@ C4Container
 | L7 RAG Runtime | `rag` | Quarkus + LangChain4j | ✅ yes |
 | L8 Corpus SPI | `corpus-api` | Pure Java, zero deps | ✅ yes |
 | L9 Corpus Runtime | `corpus` | Zip4j | ✅ yes |
+| L10 CRAG | `rag-crag` | CDI library, classpath-activated | ✅ yes |
 
 ---
 
@@ -340,6 +348,7 @@ noClasses().that().resideInAPackage("io.casehub.inference..")
 | J1 Neural Inference | Deliver the standalone ONNX inference layer — SPI, runtime, adapters, SPLADE, Quarkus wiring | C1–C6 | ✅ Complete |
 | J2 RAG Integration | Deliver casehub-specific LangChain4j RAG pipeline with hybrid search | C7 | ✅ Complete |
 | J3 Corpus Storage | ZIP-backed document storage and ingestion bridge to RAG pipeline | C8–C9 | ✅ Complete |
+| J4 Retrieval Quality | Self-healing retrieval — evaluate, filter, and correct poor retrieval results | C10 | 🔲 pending |
 
 ### §9.2 Chapter Index
 
@@ -355,6 +364,8 @@ flowchart LR
   C6 --> C7["C7: RAG\n+ L6, L7"]
   C7 --> C8["C8: Corpus Storage\n+ L8, L9"]
   C8 --> C9["C9: Ingestion Bridge\n+ L7 (extended)"]
+  C7 --> C10["C10: CRAG\n+ L10, L6 (enriched)"]
+  C4 --> C10
 
   style C1 fill:#90EE90,color:#000
   style C2 fill:#90EE90,color:#000
@@ -365,6 +376,7 @@ flowchart LR
   style C7 fill:#90EE90,color:#000
   style C8 fill:#90EE90,color:#000
   style C9 fill:#90EE90,color:#000
+  style C10 fill:#FFD700,color:#000
 ```
 
 | # | Chapter | Journey | Layers touched | Delta summary | Status |
@@ -378,20 +390,22 @@ flowchart LR
 | 7 | RAG Pipeline | J2 | L6, L7 | High, High | ✅ |
 | 8 | Corpus Storage | J3 | L8, L9 | High, High | ✅ |
 | 9 | Ingestion Bridge | J3 | L6, L7 | Low, Med | ✅ |
+| 10 | Corrective RAG (CRAG) | J4 | L6, L7, L10 | L6: Low, L7: Low, L10: High | 🔲 pending (#33) |
 
 **Layer × Chapter matrix**
 
-| Layer | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 |
-|---|---|---|---|---|---|---|---|---|---|
-| L1 SPI Foundation | — | — | High | — | — | — | — | — | — |
-| L2 Runtime Core | — | Low* | High | — | — | — | — | — | — |
-| L3 Task Adapters | — | — | — | High | — | — | — | — | — |
-| L4 Sparse Embeddings | — | — | — | — | — | High | Low | — | — |
-| L5 Quarkus Integration | — | — | — | — | High | — | — | — | — |
-| L6 RAG SPI | — | — | — | — | — | — | High | — | Low |
-| L7 RAG Runtime | — | — | — | — | — | — | High | — | Med |
-| L8 Corpus SPI | — | — | — | — | — | — | — | High | — |
-| L9 Corpus Runtime | — | — | — | — | — | — | — | High | — |
+| Layer | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | C10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| L1 SPI Foundation | — | — | High | — | — | — | — | — | — | — |
+| L2 Runtime Core | — | Low* | High | — | — | — | — | — | — | — |
+| L3 Task Adapters | — | — | — | High | — | — | — | — | — | — |
+| L4 Sparse Embeddings | — | — | — | — | — | High | Low | — | — | — |
+| L5 Quarkus Integration | — | — | — | — | High | — | — | — | — | — |
+| L6 RAG SPI | — | — | — | — | — | — | High | — | Low | Low |
+| L7 RAG Runtime | — | — | — | — | — | — | High | — | Med | Low |
+| L8 Corpus SPI | — | — | — | — | — | — | — | High | — | — |
+| L9 Corpus Runtime | — | — | — | — | — | — | — | High | — | — |
+| L10 CRAG | — | — | — | — | — | — | — | — | — | High |
 
 *C2 validates L2's JNI stack in native image; L2 itself is not built until C3.
 
@@ -577,6 +591,32 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 |---|---|
 | L6 RAG SPI | Low (MetadataExtractor + CursorStore SPIs added) |
 | L7 RAG Runtime | Med (CorpusIngestionService + FileCursorStore + IngestionConfig added) |
+
+---
+
+#### Chapter 10 — Corrective RAG (CRAG)
+
+**Journey:** J4 | **Sequence:** 1 of 1 | **Status:** 🔲 pending
+**Issues:** #33 | **Blocked by:** C7 (CaseRetriever SPI), C4 (CrossEncoderReranker)
+
+**What this delivers**
+`rag-crag` module — a CDI `@Decorator` on `CaseRetriever` that evaluates retrieval quality via `RelevanceEvaluator` SPI, filters INCORRECT chunks, optionally expands search when too few results survive, and fires `RetrievalQuality` CDI events. Default evaluator: `CrossEncoderRelevanceEvaluator` — threshold-based grading reusing the deployed cross-encoder model. Classpath-activated: add `casehub-rag-crag` as a compile dependency to enable. `rag-api` enriched with `RelevanceGrade` on `RetrievedChunk`, `RelevanceEvaluator` SPI, and `RetrievalQuality` event type. `rag-testing` gains `InMemoryRelevanceEvaluator` stub.
+
+**Accountability gaps closed**
+
+| Gap | What breaks without it | Closed by |
+|---|---|---|
+| Silent bad retrieval | Irrelevant chunks reach LLM prompt, degrade output quality | RelevanceEvaluator grades each chunk; INCORRECT filtered |
+| No retrieval quality signal | Consumers (AML, clinical) can't assess confidence in retrieved context | Per-chunk `RelevanceGrade` + `RetrievalQuality` CDI event |
+| No corrective action | Poor initial retrieval is final | Top-K expansion re-retrieves when too few good results survive |
+
+**Layer Impact**
+
+| Layer | Delta |
+|---|---|
+| L6 RAG SPI | Low (RelevanceEvaluator SPI, RelevanceGrade, enriched RetrievedChunk, RetrievalQuality event) |
+| L7 RAG Runtime | Low (no structural change — convenience constructor handles backward compat) |
+| L10 CRAG | High (new module: CorrectiveCaseRetriever decorator, CrossEncoderRelevanceEvaluator, CragBeanProducer, CragConfig) |
 
 ---
 
@@ -961,6 +1001,47 @@ Zip4j does not support in-place entry removal — compaction must rewrite the en
 #### Pattern to replicate
 
 Rolling archive pattern with chain manifest for any append-heavy storage where individual files are small relative to the archive. Tombstone + compaction for soft-delete semantics with change tracking.
+
+---
+
+#### Layer L10 — CRAG
+
+**Participates in chapters:** C10
+**Architectural patterns:** Decorator (CDI @Decorator), SPI consumer (RelevanceEvaluator)
+**Issues:** #33
+**Completed:** 🔲 pending
+
+#### What it adds
+
+Classpath-activated corrective retrieval — when `casehub-rag-crag` is on the classpath, `CorrectiveCaseRetriever` intercepts all `CaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability.
+
+#### Accountability gaps closed
+
+| Gap | What breaks without it | Closed by |
+|---|---|---|
+| Silent bad retrieval | Irrelevant chunks reach LLM prompt | RelevanceEvaluator grades; INCORRECT filtered |
+| No quality signal | Consumers blind to retrieval confidence | Per-chunk grade + RetrievalQuality event |
+
+#### Key files
+
+| File | Role |
+|---|---|
+| `rag-crag/.../CorrectiveCaseRetriever.java` | @Decorator — evaluate, filter, expand, grade-sort, quality event |
+| `rag-crag/.../CrossEncoderRelevanceEvaluator.java` | Default RelevanceEvaluator — cross-encoder threshold grading |
+| `rag-crag/.../CragBeanProducer.java` | Produces RelevanceEvaluator from CrossEncoderReranker + config |
+| `rag-crag/.../CragConfig.java` | @ConfigMapping — thresholds + expansion multiplier |
+
+#### Architectural decisions
+
+CDI `@Decorator` chosen over `@Alternative` to avoid priority collisions with test stubs and circular dependency in CDI resolution. Constructor injection enables pure Java unit tests without a CDI container. Expansion triggers only when quality filtering removed chunks (`surviving.size() < maxResults && incorrect > 0`), not when the corpus is simply small. Grade-first truncation ordering ensures CORRECT chunks survive `limit()` over AMBIGUOUS.
+
+#### Gotchas
+
+Float-to-double comparison: `score >= correctThreshold` fails at boundaries when `score` is `float` and `correctThreshold` is `double` — `0.7f` promotes to `0.699999988...`. Fix: cast thresholds to `float` before comparison.
+
+#### Pattern to replicate
+
+CDI `@Decorator` with constructor injection for classpath-activated pipeline stages. `@Decorator @Priority(N)` + `@Inject` constructor with `@Delegate @Any` — enables both CDI interception and pure Java unit testing. Stub the `Event<T>` interface in tests to capture fired events.
 
 ---
 

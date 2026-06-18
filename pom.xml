@@ -24,6 +24,7 @@
     <module>rag</module>
     <module>rag-tika</module>
     <module>rag-testing</module>
+    <module>rag-crag</module>
     <module>corpus-api</module>
     <module>corpus</module>
     <module>examples/example-text-analysis</module>
@@ -145,6 +146,11 @@
       <dependency>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-rag-testing</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-rag-crag</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
