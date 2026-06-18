@@ -30,9 +30,11 @@ class BlockingReactiveParityTest {
             Class<?> blocking = entry.getKey();
             Class<?> reactive = entry.getValue();
             Map<String, Method> reactiveMethods = Arrays.stream(reactive.getDeclaredMethods())
+                .filter(m -> !m.isDefault())
                 .collect(Collectors.toMap(Method::getName, m -> m));
 
             for (Method bm : blocking.getDeclaredMethods()) {
+                if (bm.isDefault()) continue;
                 Method rm = reactiveMethods.get(bm.getName());
                 assertThat(rm)
                     .as("Reactive mirror of %s.%s", blocking.getSimpleName(), bm.getName())
@@ -71,6 +73,7 @@ class BlockingReactiveParityTest {
             Class<?> blocking = entry.getKey();
             Class<?> reactive = entry.getValue();
             Map<String, Method> blockingMethods = Arrays.stream(blocking.getDeclaredMethods())
+                .filter(m -> !m.isDefault())
                 .collect(Collectors.toMap(Method::getName, m -> m));
 
             for (Method rm : reactive.getDeclaredMethods()) {

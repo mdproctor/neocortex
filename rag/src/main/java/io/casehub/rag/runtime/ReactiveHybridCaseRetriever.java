@@ -115,7 +115,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
     }
 
     private Uni<List<ScoredPoint>> executeQuery(String collection,
-            Optional<Filter> tenantFilter, QueryEmbeddings embeddings, int maxResults) {
+            Optional<Filter> mergedFilter, QueryEmbeddings embeddings, int maxResults) {
         int queryLimit = rerankEnabled && reranker != null
             ? Math.max(maxResults, rerankTopN)
             : maxResults;
@@ -134,13 +134,13 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                 .setQuery(QueryFactory.nearest(embeddings.dense.vectorAsList()))
                 .setUsing(denseVectorName)
                 .setLimit(denseTopK);
-            tenantFilter.ifPresent(densePrefetch::setFilter);
+            mergedFilter.ifPresent(densePrefetch::setFilter);
 
             PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
                 .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
                 .setUsing(sparseVectorName)
                 .setLimit(sparseTopK);
-            tenantFilter.ifPresent(sparsePrefetch::setFilter);
+            mergedFilter.ifPresent(sparsePrefetch::setFilter);
 
             queryPoints = QueryPoints.newBuilder()
                 .setCollectionName(collection)
@@ -158,7 +158,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                 .setUsing(denseVectorName)
                 .setLimit(queryLimit)
                 .setWithPayload(WithPayloadSelectorFactory.enable(true));
-            tenantFilter.ifPresent(builder::setFilter);
+            mergedFilter.ifPresent(builder::setFilter);
             queryPoints = builder.build();
         }
 

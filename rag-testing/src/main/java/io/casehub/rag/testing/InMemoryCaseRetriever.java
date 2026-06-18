@@ -58,7 +58,7 @@ public class InMemoryCaseRetriever implements CaseRetriever {
     private static boolean matches(Map<String, String> metadata, PayloadFilter filter) {
         return switch (filter) {
             case PayloadFilter.Eq eq -> eq.value().equals(metadata.get(eq.field()));
-            case PayloadFilter.In in -> in.values().contains(metadata.get(in.field()));
+            case PayloadFilter.In in -> metadata.containsKey(in.field()) && in.values().contains(metadata.get(in.field()));
             case PayloadFilter.Not not -> !matches(metadata, not.inner());
             case PayloadFilter.And and -> and.filters().stream().allMatch(f -> matches(metadata, f));
             case PayloadFilter.Or or -> or.filters().stream().anyMatch(f -> matches(metadata, f));
