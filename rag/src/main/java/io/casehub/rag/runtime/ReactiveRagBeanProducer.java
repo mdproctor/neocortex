@@ -23,7 +23,7 @@ public class ReactiveRagBeanProducer {
     @Inject EmbeddingModel embeddingModel;
     @Inject Instance<SparseEmbedder> sparseEmbedderInstance;
     @Inject Instance<CrossEncoderReranker> rerankerInstance;
-    @Inject CurrentPrincipal currentPrincipal;
+    @Inject Instance<CurrentPrincipal> currentPrincipalInstance;
 
     private int denseDimension;
 
@@ -37,11 +37,14 @@ public class ReactiveRagBeanProducer {
     ReactiveQdrantEmbeddingIngestor corpusStore() {
         SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
             ? sparseEmbedderInstance.get() : null;
+        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
+            ? currentPrincipalInstance.get() : null;
+        TenantGuard tenantGuard = TenantGuard.of(principal);
         return new ReactiveQdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
             config.tenancyStrategy(),
             config.denseVectorName(), config.sparseVectorName(),
-            denseDimension, currentPrincipal);
+            denseDimension, tenantGuard);
     }
 
     @Produces
@@ -51,12 +54,15 @@ public class ReactiveRagBeanProducer {
             ? sparseEmbedderInstance.get() : null;
         CrossEncoderReranker reranker = rerankerInstance.isResolvable()
             ? rerankerInstance.get() : null;
+        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
+            ? currentPrincipalInstance.get() : null;
+        TenantGuard tenantGuard = TenantGuard.of(principal);
         return new ReactiveHybridCaseRetriever(
             client, embeddingModel, sparseEmbedder,
             config.tenancyStrategy(),
             config.denseVectorName(), config.sparseVectorName(),
             config.retrieval().denseTopK(), config.retrieval().sparseTopK(),
             config.retrieval().rrfK(), config.retrieval().rerankEnabled(),
-            config.retrieval().rerankTopN(), reranker, currentPrincipal);
+            config.retrieval().rerankTopN(), reranker, tenantGuard);
     }
 }

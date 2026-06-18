@@ -18,13 +18,16 @@ public class RagBeanProducer {
     @Inject EmbeddingModel embeddingModel;
     @Inject Instance<SparseEmbedder> sparseEmbedderInstance;
     @Inject Instance<CrossEncoderReranker> rerankerInstance;
-    @Inject CurrentPrincipal currentPrincipal;
+    @Inject Instance<CurrentPrincipal> currentPrincipalInstance;
 
     @Produces
     @ApplicationScoped
     QdrantEmbeddingIngestor corpusStore() {
         SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
             ? sparseEmbedderInstance.get() : null;
+        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
+            ? currentPrincipalInstance.get() : null;
+        TenantGuard tenantGuard = TenantGuard.of(principal);
         return new QdrantEmbeddingIngestor(
             client,
             embeddingModel,
@@ -32,7 +35,7 @@ public class RagBeanProducer {
             config.tenancyStrategy(),
             config.denseVectorName(),
             config.sparseVectorName(),
-            currentPrincipal);
+            tenantGuard);
     }
 
     @Produces
@@ -42,6 +45,9 @@ public class RagBeanProducer {
             ? sparseEmbedderInstance.get() : null;
         CrossEncoderReranker reranker = rerankerInstance.isResolvable()
             ? rerankerInstance.get() : null;
+        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
+            ? currentPrincipalInstance.get() : null;
+        TenantGuard tenantGuard = TenantGuard.of(principal);
         return new HybridCaseRetriever(
             client,
             embeddingModel,
@@ -55,6 +61,6 @@ public class RagBeanProducer {
             config.retrieval().rerankEnabled(),
             config.retrieval().rerankTopN(),
             reranker,
-            currentPrincipal);
+            tenantGuard);
     }
 }

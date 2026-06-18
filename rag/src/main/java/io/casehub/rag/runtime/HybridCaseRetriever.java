@@ -6,8 +6,6 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.inference.splade.SparseEmbedder;
 import io.casehub.inference.tasks.CrossEncoderReranker;
 import io.casehub.inference.tasks.RankedResult;
-import io.casehub.platform.api.identity.CurrentPrincipal;
-import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.CaseRetriever;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.PayloadFilter;
@@ -47,9 +45,9 @@ public class HybridCaseRetriever implements CaseRetriever {
     private final boolean rerankEnabled;
     private final int rerankTopN;
     private final CrossEncoderReranker reranker;
-    private final CurrentPrincipal currentPrincipal;
+    private final TenantGuard tenantGuard;
 
-    public HybridCaseRetriever(
+    HybridCaseRetriever(
             QdrantClient client,
             EmbeddingModel embeddingModel,
             SparseEmbedder sparseEmbedder,
@@ -62,7 +60,7 @@ public class HybridCaseRetriever implements CaseRetriever {
             boolean rerankEnabled,
             int rerankTopN,
             CrossEncoderReranker reranker,
-            CurrentPrincipal currentPrincipal) {
+            TenantGuard tenantGuard) {
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
@@ -75,12 +73,12 @@ public class HybridCaseRetriever implements CaseRetriever {
         this.rerankEnabled = rerankEnabled;
         this.rerankTopN = rerankTopN;
         this.reranker = reranker;
-        this.currentPrincipal = currentPrincipal;
+        this.tenantGuard = tenantGuard;
     }
 
     @Override
     public List<RetrievedChunk> retrieve(String query, CorpusRef corpus, int maxResults, PayloadFilter filter) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
+        tenantGuard.assertTenant(corpus.tenantId());
 
         String collection = tenancyStrategy.collectionName(corpus);
         Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);

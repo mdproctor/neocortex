@@ -22,7 +22,7 @@
 | casehub-engine | Hallucination detection hook, fact space prompt compiler via CaseRetriever |
 | casehub-openclaw | ActionRiskClassifier SPI implementation via TextClassifier |
 | casehub-eidos | Dynamic epistemic domain confidence estimation via ScalarRegressor |
-| Hortora | SPLADE sparse embeddings + CrossEncoderReranker — takes inference-* only |
+| Hortora | SPLADE, CrossEncoderReranker (inference-*) + EmbeddingIngestor, CaseRetriever, CorpusIngestionService (rag-*) |
 | Application repos (aml, clinical) | Corpus-grounded LLM reasoning via CaseRetriever |
 
 ### Top Quality Goals
@@ -32,7 +32,7 @@
 | 1 | **Domain isolation** | `inference-api`, `inference-runtime`, `inference-tasks`, `inference-splade` pass ArchUnit: zero casehub/Quarkus/Spring/LangChain4j deps |
 | 2 | **Local inference** | No API call required for any `InferenceModel.run()` — all models run in-process via ONNX Runtime JVM |
 | 3 | **Testability without JNI** | `inference-inmem` stubs allow complete unit testing of all task adapters and rag pipeline without loading ONNX Runtime |
-| 4 | **Tenancy isolation** | Every `CaseRetriever.retrieve()` is tenancy-scoped; cross-tenant retrieval is blocked at the SPI boundary |
+| 4 | **Tenancy isolation** | Every `CaseRetriever.retrieve()` is tenancy-scoped; cross-tenant retrieval is blocked when `CurrentPrincipal` is provided. Single-tenant consumers opt out via `TenantGuard` |
 
 ### Artifact Schema
 
@@ -54,7 +54,7 @@
 
 **LangChain4j for dense RAG** — dense embeddings and the RAG pipeline use LangChain4j (`OnnxEmbeddingModel`, `DocumentSplitter`, Qdrant `EmbeddingStore`). This is not negotiable — casehub already uses LangChain4j (eidos uses langchain4j-core) and rebuilding the dense pipeline would be duplication.
 
-**Hortora shares inference-* only** — `rag-*` modules are casehub-specific. Hortora wires their own LangChain4j RAG stack independently. No code is shared between the two RAG wiring layers.
+**Hortora shares inference-* and rag-*** — `rag-*` modules support optional tenancy for non-casehub consumers (#36). Hortora depends on `rag-api` (SPIs), `rag` (Qdrant implementation), and `rag-testing` (in-memory stubs). Tenancy enforcement is active when a `CurrentPrincipal` bean is provided (all casehub deployments); single-tenant consumers opt out by not providing the bean. `casehub-platform-api` remains a transitive dependency of `rag/` — version coordination required.
 
 **casehub-platform version** — rag/* modules depend on casehub-platform-api for tenancy primitives. Must stay in sync with the platform version pinned in casehub-parent BOM.
 
@@ -66,7 +66,7 @@
 C4Context
   title casehub-neural-text — System Context
 
-  Person(hortora, "Hortora", "Takes inference-* modules; wires own RAG stack")
+  Person(hortora, "Hortora", "Takes inference-* and rag-* modules")
   Person(casehub_eng, "casehub-engine", "Hallucination detection; fact space prompt compiler")
   Person(casehub_oc, "casehub-openclaw", "ActionRiskClassifier via TextClassifier")
   Person(casehub_ei, "casehub-eidos", "Epistemic confidence via ScalarRegressor")
@@ -83,6 +83,7 @@ C4Context
   System_Ext(qdrant, "Qdrant", "Vector store — dense + sparse named vector spaces")
 
   Rel(hortora, inference, "Takes inference-* as dependency")
+  Rel(hortora, rag, "Takes rag-* as dependency")
   Rel(casehub_eng, inference, "NliClassifier for hallucination detection")
   Rel(casehub_eng, rag, "CaseRetriever for prompt compilation")
   Rel(casehub_oc, inference, "TextClassifier for ActionRiskClassifier")
@@ -119,7 +120,7 @@ C4Context
 
 **Hybrid RAG** — two vector representations per document: dense (LangChain4j `OnnxEmbeddingModel`) and sparse (SPLADE via `inference-splade`). Both stored in Qdrant named vector spaces. Retrieval uses either or both, fused via RRF. Dense handles semantic similarity; sparse handles lexical precision for regulatory/clinical text.
 
-**Tenancy isolation at the SPI boundary** — `CaseRetriever.retrieve()` and `EmbeddingIngestor.ingest()` require a `CorpusRef` carrying the tenant ID. No cross-tenant retrieval is possible through the SPI. Qdrant payload filtering enforces isolation at the storage layer.
+**Tenancy isolation at the SPI boundary** — `CaseRetriever.retrieve()` and `EmbeddingIngestor.ingest()` require a `CorpusRef` carrying the tenant ID. No cross-tenant retrieval is possible through the SPI when `CurrentPrincipal` is provided. Single-tenant consumers that do not provide a `CurrentPrincipal` opt out of tenant enforcement by design. Qdrant payload filtering enforces isolation at the storage layer.
 
 ### Relationship to LangChain4j
 
@@ -207,8 +208,8 @@ C4Container
 | L3 Task Adapters | `inference-tasks` | Pure Java | ✅ yes |
 | L4 Sparse Embeddings | `inference-splade` | Pure Java | ✅ yes |
 | L5 Quarkus Integration | `inference-quarkus` | Quarkus extension | casehub only |
-| L6 RAG SPI | `rag-api`, `rag-testing` | Pure Java, zero deps | casehub only |
-| L7 RAG Runtime | `rag` | Quarkus + LangChain4j | casehub only |
+| L6 RAG SPI | `rag-api`, `rag-testing` | Pure Java, zero deps | ✅ yes |
+| L7 RAG Runtime | `rag` | Quarkus + LangChain4j | ✅ yes |
 | L8 Corpus SPI | `corpus-api` | Pure Java, zero deps | ✅ yes |
 | L9 Corpus Runtime | `corpus` | Zip4j | ✅ yes |
 
@@ -310,7 +311,7 @@ noClasses().that().resideInAPackage("io.casehub.inference..")
 
 ### Tenancy isolation
 
-`CorpusRef` carries `tenantId`. `CaseRetriever.retrieve()` passes tenant ID as a Qdrant payload filter on every query. No cross-tenant retrieval is possible through the SPI. Cross-tenant access requires a separate `@CrossTenant`-qualified bean (not yet defined — file issue when needed).
+`CorpusRef` carries `tenantId`. `CaseRetriever.retrieve()` passes tenant ID as a Qdrant payload filter on every query. No cross-tenant retrieval is possible through the SPI when `CurrentPrincipal` is provided (all casehub deployments). Single-tenant consumers that do not provide a `CurrentPrincipal` opt out of tenant enforcement by design — `TenantGuard` no-ops. Cross-tenant access requires a separate `@CrossTenant`-qualified bean (not yet defined — file issue when needed).
 
 ### Testing without JNI
 
@@ -968,7 +969,7 @@ Rolling archive pattern with chain manifest for any append-heavy storage where i
 *(decisions not captured inline in layer or chapter entries)*
 
 **AD-001 — Single repo for inference-* and rag-*** (2026-06-04)  
-inference-* and rag-* are in the same repo (`casehubio/neural-text`). Rationale: rag-* uses `inference-splade` and `CrossEncoderReranker` — they are commonly deployed together in casehub. Hortora ignores `rag-*` by depending only on `inference-*` artifacts. Can be split into separate repos later if Hortora's dependency footprint becomes a concern. Cost of splitting: low (Maven multi-module → separate projects). Cost of premature splitting: one more repo to maintain before any code ships.
+inference-* and rag-* are in the same repo (`casehubio/neural-text`). Rationale: rag-* uses `inference-splade` and `CrossEncoderReranker` — they are commonly deployed together in casehub. Hortora takes both `inference-*` and `rag-*` artifacts (#35). Tenancy enforcement is optional for single-tenant consumers (#36). Can be split into separate repos later if Hortora's dependency footprint becomes a concern. Cost of splitting: low (Maven multi-module → separate projects). Cost of premature splitting: one more repo to maintain before any code ships.
 
 **AD-002 — LangChain4j for dense RAG, not a custom implementation** (2026-06-04)  
 LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dense ONNX embeddings), and 30+ vector store integrations including Qdrant. Building a parallel implementation would duplicate ~80% of what LangChain4j already does. casehub already uses langchain4j-core (in casehub-eidos). The remaining gap (SPLADE, NLI, classification) is precisely what `casehub-neural-text` adds.
@@ -982,7 +983,7 @@ LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dens
 | Domain isolation | Hortora builds against `inference-*` without casehub on classpath | ArchUnit: zero casehub/Quarkus/LangChain4j deps in inference-api, runtime, tasks, splade |
 | Testability | All task adapters and rag pipeline unit-testable | 100% test coverage possible without ONNX Runtime native libs via `inference-inmem` |
 | Local inference | Hallucination detection runs without API call | `NliClassifier.classify()` returns in <100ms for standard NLI model |
-| Tenancy isolation | Tenant A cannot retrieve Tenant B's corpus | Configurable TenancyStrategy: separate Qdrant collections per tenant (default, hard isolation) or shared collection with payload filter on tenantId; enforced by CorpusRef type |
+| Tenancy isolation | Tenant A cannot retrieve Tenant B's corpus when `CurrentPrincipal` is provided | Configurable TenancyStrategy + `TenantGuard`; enforced when `CurrentPrincipal` bean is present |
 
 ---
 
@@ -993,7 +994,7 @@ LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dens
 | ~~ONNX Runtime JNI fails in Quarkus native image~~ | ~~Medium~~ | ~~High~~ | ✅ Resolved — C2 prototype passed; both JNI layers work in native image on macOS ARM |
 | ~~HuggingFace Tokenizers JNI fails in native image~~ | ~~Medium~~ | ~~High~~ | ✅ Resolved — validated together with ONNX Runtime in C2 |
 | LangChain4j #4994 (Qdrant hybrid) ships | Low | Low | Unified Qdrant gRPC client used for both legs — no migration needed; evaluate langchain4j-qdrant adoption opportunistically if it simplifies code |
-| Hortora's usage pattern conflicts with SPI design | Medium | Medium | C3 complete — SPI design validated through implementation; Hortora integration pending their adoption |
+| Hortora's usage pattern conflicts with SPI design | Low | Medium | rag-* consumption enabled (#35); tenancy optionality shipped (#36); Hortora adoption pending |
 | ArchUnit rule drift | Low | High | ArchUnit tests run in CI on every build; fail-fast |
 
 **Technical debt:**

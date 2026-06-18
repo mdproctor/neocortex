@@ -3,7 +3,6 @@ package io.casehub.rag.runtime;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.inference.inmem.InMemoryInferenceModel;
 import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.qdrant.client.QdrantClient;
@@ -57,13 +56,11 @@ class QdrantEmbeddingIngestorTest {
         );
         SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
 
-        CurrentPrincipal principal = RagTestFixtures.stubPrincipal(TENANT);
-
         store = new QdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             "dense", "sparse",
-            principal
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT))
         );
     }
 
@@ -175,7 +172,7 @@ class QdrantEmbeddingIngestorTest {
             null, // no sparse embedder
             TenancyStrategy.SEPARATE_COLLECTIONS,
             "dense", "sparse",
-            RagTestFixtures.stubPrincipal(TENANT)
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT))
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -225,6 +222,27 @@ class QdrantEmbeddingIngestorTest {
 
         // B should still be exactly 1 document (same deterministic ID regardless of batch)
         assertThat(store.listDocuments(corpus)).containsExactlyInAnyOrder("doc-A", "doc-B");
+    }
+
+    @Test
+    void ingestWorksWithoutCurrentPrincipal() throws Exception {
+        QdrantEmbeddingIngestor noTenantStore = new QdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse",
+            TenantGuard.of(null)
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        noTenantStore.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())
+        ));
+        assertThat(noTenantStore.listDocuments(corpus)).containsExactly("doc-1");
+
+        noTenantStore.deleteDocument(corpus, "doc-1");
+        assertThat(noTenantStore.listDocuments(corpus)).isEmpty();
     }
 
     // --- helpers ---

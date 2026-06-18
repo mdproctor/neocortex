@@ -5,8 +5,6 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.platform.api.identity.CurrentPrincipal;
-import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.EmbeddingIngestor;
@@ -49,30 +47,30 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     private final TenancyStrategy tenancyStrategy;
     private final String denseVectorName;
     private final String sparseVectorName;
-    private final CurrentPrincipal currentPrincipal;
+    private final TenantGuard tenantGuard;
 
     private final Set<String> knownCollections = ConcurrentHashMap.newKeySet();
 
-    public QdrantEmbeddingIngestor(
+    QdrantEmbeddingIngestor(
             QdrantClient client,
             EmbeddingModel embeddingModel,
             SparseEmbedder sparseEmbedder,
             TenancyStrategy tenancyStrategy,
             String denseVectorName,
             String sparseVectorName,
-            CurrentPrincipal currentPrincipal) {
+            TenantGuard tenantGuard) {
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
         this.tenancyStrategy = tenancyStrategy;
         this.denseVectorName = denseVectorName;
         this.sparseVectorName = sparseVectorName;
-        this.currentPrincipal = currentPrincipal;
+        this.tenantGuard = tenantGuard;
     }
 
     @Override
     public void ingest(CorpusRef corpus, List<ChunkInput> chunks) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
+        tenantGuard.assertTenant(corpus.tenantId());
 
         String collection = tenancyStrategy.collectionName(corpus);
         ensureCollection(collection);
@@ -117,7 +115,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     @Override
     public void deleteDocument(CorpusRef corpus, String sourceDocumentId) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
+        tenantGuard.assertTenant(corpus.tenantId());
 
         String collection = tenancyStrategy.collectionName(corpus);
 
@@ -138,7 +136,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     @Override
     public void deleteCorpus(CorpusRef corpus) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
+        tenantGuard.assertTenant(corpus.tenantId());
 
         String collection = tenancyStrategy.collectionName(corpus);
 
@@ -163,7 +161,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     @Override
     public List<String> listDocuments(CorpusRef corpus) {
-        MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
+        tenantGuard.assertTenant(corpus.tenantId());
 
         String collection = tenancyStrategy.collectionName(corpus);
 

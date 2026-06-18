@@ -3,7 +3,6 @@ package io.casehub.rag.runtime;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.inference.inmem.InMemoryInferenceModel;
 import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.PayloadFilter;
@@ -41,7 +40,6 @@ class HybridCaseRetrieverTest {
     private QdrantClient            client;
     private QdrantEmbeddingIngestor store;
     private HybridCaseRetriever     retriever;
-    private CurrentPrincipal principal;
 
     @BeforeEach
     void setUp() {
@@ -61,13 +59,13 @@ class HybridCaseRetrieverTest {
         );
         SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
 
-        principal = RagTestFixtures.stubPrincipal(TENANT);
+        TenantGuard guard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
 
         store = new QdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            principal
+            guard
         );
 
         retriever = new HybridCaseRetriever(
@@ -76,7 +74,7 @@ class HybridCaseRetrieverTest {
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
             64, 64, 60,
             false, 10, null,
-            principal
+            guard
         );
     }
 
@@ -139,11 +137,13 @@ class HybridCaseRetrieverTest {
         // Create ingestor and retriever with null SparseEmbedder — dense-only mode
         EmbeddingModel denseOnlyModel = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
 
+        TenantGuard denseOnlyGuard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
+
         QdrantEmbeddingIngestor denseOnlyStore = new QdrantEmbeddingIngestor(
             client, denseOnlyModel, null, // no sparse embedder
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            principal
+            denseOnlyGuard
         );
 
         HybridCaseRetriever denseOnlyRetriever = new HybridCaseRetriever(
@@ -152,7 +152,7 @@ class HybridCaseRetrieverTest {
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
             64, 64, 60,
             false, 10, null,
-            principal
+            denseOnlyGuard
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -190,6 +190,37 @@ class HybridCaseRetrieverTest {
         assertThat(allResults.size()).isGreaterThanOrEqualTo(jvmOnly.size());
         assertThat(jvmOnly).allSatisfy(chunk ->
             assertThat(chunk.metadata().get("domain")).isEqualTo("jvm"));
+    }
+
+    @Test
+    void retrieveWorksWithoutCurrentPrincipal() {
+        TenantGuard noTenantGuard = TenantGuard.of(null);
+        EmbeddingModel model = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
+
+        QdrantEmbeddingIngestor noTenantStore = new QdrantEmbeddingIngestor(
+            client, model, null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
+            noTenantGuard
+        );
+
+        HybridCaseRetriever noTenantRetriever = new HybridCaseRetriever(
+            client, model, null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
+            64, 64, 60,
+            false, 10, null,
+            noTenantGuard
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        noTenantStore.ingest(corpus, List.of(
+            new ChunkInput("searchable content", "doc-1", Map.of())
+        ));
+
+        List<RetrievedChunk> results = noTenantRetriever.retrieve(
+            "searchable", corpus, 10, null);
+        assertThat(results).isNotEmpty();
     }
 
     // --- helpers ---

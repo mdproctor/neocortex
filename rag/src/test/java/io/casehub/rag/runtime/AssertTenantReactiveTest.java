@@ -79,7 +79,7 @@ class AssertTenantReactiveTest {
             null, null, null,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             "dense", "sparse", 4,
-            RagTestFixtures.stubPrincipal(TENANT));
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)));
     }
 
     private ReactiveHybridCaseRetriever createRetriever() {
@@ -89,6 +89,6 @@ class AssertTenantReactiveTest {
             "dense", "sparse",
             64, 64, 60,
             false, 10, null,
-            RagTestFixtures.stubPrincipal(TENANT));
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)));
     }
 }

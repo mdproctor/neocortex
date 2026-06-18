@@ -3,7 +3,6 @@ package io.casehub.rag.runtime;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.inference.inmem.InMemoryInferenceModel;
 import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.qdrant.client.QdrantClient;
@@ -53,13 +52,11 @@ class ReactiveQdrantEmbeddingIngestorTest {
         );
         SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
 
-        CurrentPrincipal principal = RagTestFixtures.stubPrincipal(TENANT);
-
         store = new ReactiveQdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             "dense", "sparse", DENSE_DIM,
-            principal
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT))
         );
     }
 
@@ -168,6 +165,25 @@ class ReactiveQdrantEmbeddingIngestorTest {
         CorpusRef corpus = uniqueCorpus();
         List<String> docs = store.listDocuments(corpus).await().indefinitely();
         assertThat(docs).isEmpty();
+    }
+
+    @Test
+    void ingestWorksWithoutCurrentPrincipal() throws Exception {
+        ReactiveQdrantEmbeddingIngestor noTenantStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse", DENSE_DIM,
+            TenantGuard.of(null)
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        noTenantStore.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())
+        )).await().indefinitely();
+        List<String> docs = noTenantStore.listDocuments(corpus).await().indefinitely();
+        assertThat(docs).containsExactly("doc-1");
     }
 
     // --- helpers ---

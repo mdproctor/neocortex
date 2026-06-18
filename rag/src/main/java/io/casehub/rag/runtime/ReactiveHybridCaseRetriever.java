@@ -6,8 +6,6 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.inference.splade.SparseEmbedder;
 import io.casehub.inference.tasks.CrossEncoderReranker;
 import io.casehub.inference.tasks.RankedResult;
-import io.casehub.platform.api.identity.CurrentPrincipal;
-import io.casehub.platform.api.memory.MemoryPermissions;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.PayloadFilter;
 import io.casehub.rag.ReactiveCaseRetriever;
@@ -48,9 +46,9 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
     private final boolean rerankEnabled;
     private final int rerankTopN;
     private final CrossEncoderReranker reranker;
-    private final CurrentPrincipal currentPrincipal;
+    private final TenantGuard tenantGuard;
 
-    public ReactiveHybridCaseRetriever(
+    ReactiveHybridCaseRetriever(
             QdrantClient client,
             EmbeddingModel embeddingModel,
             SparseEmbedder sparseEmbedder,
@@ -63,7 +61,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
             boolean rerankEnabled,
             int rerankTopN,
             CrossEncoderReranker reranker,
-            CurrentPrincipal currentPrincipal) {
+            TenantGuard tenantGuard) {
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
@@ -76,13 +74,13 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
         this.rerankEnabled = rerankEnabled;
         this.rerankTopN = rerankTopN;
         this.reranker = reranker;
-        this.currentPrincipal = currentPrincipal;
+        this.tenantGuard = tenantGuard;
     }
 
     @Override
     public Uni<List<RetrievedChunk>> retrieve(String query, CorpusRef corpus, int maxResults, PayloadFilter filter) {
         return Uni.createFrom().deferred(() -> {
-            MemoryPermissions.assertTenant(corpus.tenantId(), currentPrincipal, RequestContextCheck.isActive());
+            tenantGuard.assertTenant(corpus.tenantId());
 
             String collection = tenancyStrategy.collectionName(corpus);
             Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);

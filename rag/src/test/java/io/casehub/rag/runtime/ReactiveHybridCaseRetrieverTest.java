@@ -3,7 +3,6 @@ package io.casehub.rag.runtime;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.inference.inmem.InMemoryInferenceModel;
 import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.RetrievedChunk;
@@ -57,13 +56,13 @@ class ReactiveHybridCaseRetrieverTest {
         );
         SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
 
-        CurrentPrincipal principal = RagTestFixtures.stubPrincipal(TENANT);
+        TenantGuard guard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
 
         store = new QdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            principal
+            guard
         );
 
         retriever = new ReactiveHybridCaseRetriever(
@@ -72,7 +71,7 @@ class ReactiveHybridCaseRetrieverTest {
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
             64, 64, 60,
             false, 10, null,
-            principal
+            guard
         );
     }
 
@@ -132,6 +131,37 @@ class ReactiveHybridCaseRetrieverTest {
         assertThatThrownBy(() -> retriever.retrieve("query", wrongTenant, 10, null)
             .await().indefinitely())
             .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void retrieveWorksWithoutCurrentPrincipal() {
+        TenantGuard noTenantGuard = TenantGuard.of(null);
+        EmbeddingModel model = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
+
+        QdrantEmbeddingIngestor noTenantStore = new QdrantEmbeddingIngestor(
+            client, model, null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
+            noTenantGuard
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        noTenantStore.ingest(corpus, List.of(
+            new ChunkInput("searchable content", "doc-1", Map.of())
+        ));
+
+        ReactiveHybridCaseRetriever noTenantRetriever = new ReactiveHybridCaseRetriever(
+            client, model, null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
+            64, 64, 60,
+            false, 10, null,
+            noTenantGuard
+        );
+
+        List<RetrievedChunk> results = noTenantRetriever.retrieve(
+            "searchable", corpus, 10, null).await().indefinitely();
+        assertThat(results).isNotEmpty();
     }
 
     // --- helpers ---
