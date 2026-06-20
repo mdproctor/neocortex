@@ -149,7 +149,7 @@ rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, Case
 rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
 rag-tika/           — optional Apache Tika document parsing → chunked ChunkInput
 rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped)
-rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath-activated. CrossEncoderRelevanceEvaluator default.
+rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever and ReactiveCaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath-activated. CrossEncoderRelevanceEvaluator default. Already-graded guard prevents double-application through blocking-to-reactive bridge.
 corpus-api/         — CorpusStore + CorpusReader + ChangeSource + WatchableChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
 corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
 examples/

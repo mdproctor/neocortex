@@ -390,7 +390,7 @@ flowchart LR
 | 7 | RAG Pipeline | J2 | L6, L7 | High, High | ✅ |
 | 8 | Corpus Storage | J3 | L8, L9 | High, High | ✅ |
 | 9 | Ingestion Bridge | J3 | L6, L7 | Low, Med | ✅ |
-| 10 | Corrective RAG (CRAG) | J4 | L6, L7, L10 | L6: Low, L7: Low, L10: High | 🔲 pending (#33) |
+| 10 | Corrective RAG (CRAG) | J4 | L6, L7, L10 | L6: Low, L7: Low, L10: High | ✅ (#33, #38, #41) |
 
 **Layer × Chapter matrix**
 
@@ -596,8 +596,8 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 #### Chapter 10 — Corrective RAG (CRAG)
 
-**Journey:** J4 | **Sequence:** 1 of 1 | **Status:** 🔲 pending
-**Issues:** #33 | **Blocked by:** C7 (CaseRetriever SPI), C4 (CrossEncoderReranker)
+**Journey:** J4 | **Sequence:** 1 of 1 | **Status:** ✅
+**Issues:** #33, #38, #41 | **Blocked by:** C7 (CaseRetriever SPI), C4 (CrossEncoderReranker)
 
 **What this delivers**
 `rag-crag` module — a CDI `@Decorator` on `CaseRetriever` that evaluates retrieval quality via `RelevanceEvaluator` SPI, filters INCORRECT chunks, optionally expands search when too few results survive, and fires `RetrievalQuality` CDI events. Default evaluator: `CrossEncoderRelevanceEvaluator` — threshold-based grading reusing the deployed cross-encoder model. Classpath-activated: add `casehub-rag-crag` as a compile dependency to enable. `rag-api` enriched with `RelevanceGrade` on `RetrievedChunk`, `RelevanceEvaluator` SPI, and `RetrievalQuality` event type. `rag-testing` gains `InMemoryRelevanceEvaluator` stub.
@@ -1008,12 +1008,12 @@ Rolling archive pattern with chain manifest for any append-heavy storage where i
 
 **Participates in chapters:** C10
 **Architectural patterns:** Decorator (CDI @Decorator), SPI consumer (RelevanceEvaluator)
-**Issues:** #33
-**Completed:** 🔲 pending
+**Issues:** #33, #38, #41
+**Completed:** ✅
 
 #### What it adds
 
-Classpath-activated corrective retrieval — when `casehub-rag-crag` is on the classpath, `CorrectiveCaseRetriever` intercepts all `CaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability.
+Classpath-activated corrective retrieval — when `casehub-rag-crag` is on the classpath, `CorrectiveCaseRetriever` and `ReactiveCorrectiveCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability. Already-graded guard prevents double CRAG application when the blocking-to-reactive bridge is active — uses `RelevanceGrade.UNGRADED` as the idempotency signal. Shared `CragEvaluationLogic` helper provides pure functions consumed by both decorators.
 
 #### Accountability gaps closed
 
@@ -1030,6 +1030,8 @@ Classpath-activated corrective retrieval — when `casehub-rag-crag` is on the c
 | `rag-crag/.../CrossEncoderRelevanceEvaluator.java` | Default RelevanceEvaluator — cross-encoder threshold grading |
 | `rag-crag/.../CragBeanProducer.java` | Produces RelevanceEvaluator from CrossEncoderReranker + config |
 | `rag-crag/.../CragConfig.java` | @ConfigMapping — thresholds + expansion multiplier |
+| `rag-crag/.../ReactiveCorrectiveCaseRetriever.java` | @Decorator on ReactiveCaseRetriever — Uni chains, worker thread offload, fireAsync |
+| `rag-crag/.../CragEvaluationLogic.java` | Shared pure functions — grading, filtering, dedup, sort, quality event construction |
 
 #### Architectural decisions
 

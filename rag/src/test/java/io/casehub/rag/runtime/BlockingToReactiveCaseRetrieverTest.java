@@ -2,6 +2,7 @@ package io.casehub.rag.runtime;
 
 import io.casehub.rag.CaseRetriever;
 import io.casehub.rag.CorpusRef;
+import io.casehub.rag.RelevanceGrade;
 import io.casehub.rag.RetrievedChunk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,8 @@ class BlockingToReactiveCaseRetrieverTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).content()).isEqualTo("result for test query");
         assertThat(result.get(0).relevanceScore()).isEqualTo(0.95);
+        assertThat(result).allSatisfy(chunk ->
+            assertThat(chunk.grade()).isEqualTo(RelevanceGrade.UNGRADED));
     }
 
     @Test

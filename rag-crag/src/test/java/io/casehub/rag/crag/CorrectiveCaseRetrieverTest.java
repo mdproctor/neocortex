@@ -197,6 +197,31 @@ class CorrectiveCaseRetrieverTest {
         assertThat(quality.get().totalRetrieved()).isEqualTo(2);
     }
 
+    @Test
+    void alreadyGradedChunksPassThrough() {
+        var preGraded = List.of(
+            chunk("good", "doc1", 0.9).withGrade(RelevanceGrade.CORRECT),
+            chunk("maybe", "doc2", 0.8).withGrade(RelevanceGrade.AMBIGUOUS));
+        var delegate = InMemoryCaseRetriever.returning(preGraded);
+
+        var evaluatorCalled = new java.util.concurrent.atomic.AtomicBoolean(false);
+        RelevanceEvaluator evaluator = (query, content) -> {
+            evaluatorCalled.set(true);
+            return RelevanceGrade.CORRECT;
+        };
+
+        var quality = new AtomicReference<RetrievalQuality>();
+        var retriever = new CorrectiveCaseRetriever(
+            delegate, evaluator, stubConfig(3), capturingEvent(quality));
+
+        var results = retriever.retrieve("query", CORPUS, 10, null);
+
+        assertThat(results).hasSize(2);
+        assertThat(results).isEqualTo(preGraded);
+        assertThat(evaluatorCalled.get()).isFalse();
+        assertThat(quality.get()).isNull();
+    }
+
     // -- helpers --
 
     private static RetrievedChunk chunk(String content, String docId, double score) {

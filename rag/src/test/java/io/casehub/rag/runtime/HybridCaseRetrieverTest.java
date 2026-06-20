@@ -6,6 +6,7 @@ import io.casehub.inference.splade.SparseEmbedder;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.PayloadFilter;
+import io.casehub.rag.RelevanceGrade;
 import io.casehub.rag.RetrievedChunk;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
@@ -99,6 +100,8 @@ class HybridCaseRetrieverTest {
         // Verify metadata passes through (excluding reserved fields)
         assertThat(results).anyMatch(chunk -> "animals".equals(chunk.metadata().get("category"))
             || "tech".equals(chunk.metadata().get("category")));
+        assertThat(results).allSatisfy(chunk ->
+            assertThat(chunk.grade()).isEqualTo(RelevanceGrade.UNGRADED));
     }
 
     @Test
