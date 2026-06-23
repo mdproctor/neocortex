@@ -210,9 +210,11 @@ JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean test -Pexamples
 
 **Use `mvn` not `./mvnw`** — maven wrapper not configured on this machine.
 
-## Critical: Native Image Gate
+## Native Image — JVM Mode by Design
 
-`inference-quarkus` requires both ONNX Runtime JNI and HuggingFace Tokenizers JNI to work in Quarkus native image on macOS ARM. The prototype must demonstrate this before `inference-quarkus` is built. Until the gate passes, all `inference-*` modules operate in JVM mode only.
+The inference service is long-running — native image's fast startup provides no benefit, and HotSpot's JIT optimisation outperforms AOT for sustained workloads. `inference-*` modules operate in JVM mode.
+
+The C2 native image gate passed (ONNX Runtime JNI + HuggingFace Tokenizers JNI both work in Quarkus native image on macOS ARM). Reachability metadata ships in `inference-quarkus/src/main/resources/META-INF/native-image/` for downstream consumers that distribute as native binaries (e.g. Hortora CLI).
 
 ---
 

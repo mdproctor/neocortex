@@ -1,7 +1,7 @@
 # ARC42STORIES — casehub-neural-text
 
 **Version:** 0.3  
-**Status:** All chapters complete (C1–C9) — J1 + J2 + J3 ✅ | J4 pending (C10, C11) 🔲  
+**Status:** All chapters complete (C1–C11) — J1 + J2 + J3 + J4 ✅  
 **Spec:** [arc42stories-spec.md](https://raw.githubusercontent.com/casehubio/parent/main/docs/arc42stories-spec.md)  
 **Last updated:** 2026-06-18
 
@@ -50,7 +50,7 @@
 
 **Zero domain dependency constraint** — `inference-api`, `inference-runtime`, `inference-tasks`, and `inference-splade` must have zero dependencies on casehub domain artifacts, Quarkus, Spring, or LangChain4j. Enforced by ArchUnit from day one. This constraint exists because Hortora must be able to depend on these modules without importing any casehub runtime.
 
-**Native image gate** — `inference-quarkus` and Hortora's distributable native binary both require ONNX Runtime JNI and HuggingFace Tokenizers JNI to work in Quarkus native image on macOS ARM. This is unproven. Until the prototype (C2) passes, `inference-quarkus` is JVM-only.
+**JVM mode by design** — the inference service is long-running; native image's fast startup provides no benefit, and HotSpot's JIT optimisation outperforms AOT for sustained workloads. `inference-*` modules operate in JVM mode. The C2 native image gate passed (both JNI layers work in Quarkus native image on macOS ARM). Reachability metadata ships in `inference-quarkus` for downstream consumers that distribute as native binaries.
 
 **LangChain4j for dense RAG** — dense embeddings and the RAG pipeline use LangChain4j (`OnnxEmbeddingModel`, `DocumentSplitter`, Qdrant `EmbeddingStore`). This is not negotiable — casehub already uses LangChain4j (eidos uses langchain4j-core) and rebuilding the dense pipeline would be duplication.
 
@@ -136,7 +136,7 @@ This module sits **below** LangChain4j for inference and **above** LangChain4j f
 
 ### Chapter sequencing rationale
 
-- C2 before C5 and C6: **hard** — native image gate must pass before `inference-quarkus` (C5) or `inference-splade` (C6) commit to native image. If gate fails, C5 and C6 continue in JVM-only mode.
+- C2 before C5 and C6: **completed** — native image gate passed; C5 and C6 shipped in JVM mode. Native image not pursued for the service (JVM mode by design for long-running workloads); reachability metadata available for downstream native consumers.
 - C3 before C4: **hard** — `inference-tasks` wraps `InferenceModel` from `inference-runtime`; runtime must exist before adapters can be built.
 - C4 before C6: **soft** — `inference-splade` follows the same adapter pattern as `inference-tasks`; C4 establishes it.
 - C6 before C7: **hard** — `casehub-rag` uses `SparseEmbedder` from `inference-splade` for the sparse search leg.
@@ -278,7 +278,7 @@ C4Dynamic
 
 ```mermaid
 C4Deployment
-  title casehub-neural-text — Deployment (native image gate passed)
+  title casehub-neural-text — Deployment (JVM mode)
 
   Deployment_Node(jvm, "JVM (Java 21+)", "hosting process") {
     Deployment_Node(quarkus, "Quarkus application", "consuming app") {
@@ -302,7 +302,7 @@ C4Deployment
   Rel(rag, qdrant_db, "gRPC — upsert + hybrid query")
 ```
 
-**Native image:** conditional on C2 prototype. Both JNI layers must work in a Quarkus native image binary on macOS ARM before `inference-quarkus` switches to native mode. Until then, JVM mode only.
+**Deployment mode:** JVM. The inference service is long-running — native image's fast startup provides no benefit, and HotSpot's JIT optimisation outperforms AOT for sustained workloads. The C2 native image gate passed (both JNI layers work), and reachability metadata ships in `inference-quarkus` for downstream native consumers, but this project deploys in JVM mode by design.
 
 ---
 
@@ -355,7 +355,7 @@ noClasses().that().resideInAPackage("io.casehub.inference..")
 | J1 Neural Inference | Deliver the standalone ONNX inference layer — SPI, runtime, adapters, SPLADE, Quarkus wiring | C1–C6 | ✅ Complete |
 | J2 RAG Integration | Deliver casehub-specific LangChain4j RAG pipeline with hybrid search | C7 | ✅ Complete |
 | J3 Corpus Storage | ZIP-backed document storage and ingestion bridge to RAG pipeline | C8–C9 | ✅ Complete |
-| J4 Retrieval Quality | Self-healing and expanded retrieval — evaluate, filter, correct, and expand queries | C10, C11 | 🔲 pending |
+| J4 Retrieval Quality | Self-healing and expanded retrieval — evaluate, filter, correct, and expand queries | C10, C11 | ✅ Complete |
 
 ### §9.2 Chapter Index
 
@@ -385,8 +385,8 @@ flowchart LR
   style C7 fill:#90EE90,color:#000
   style C8 fill:#90EE90,color:#000
   style C9 fill:#90EE90,color:#000
-  style C10 fill:#FFD700,color:#000
-  style C11 fill:#87CEEB,color:#000
+  style C10 fill:#90EE90,color:#000
+  style C11 fill:#90EE90,color:#000
 ```
 
 | # | Chapter | Journey | Layers touched | Delta summary | Status |
@@ -401,7 +401,7 @@ flowchart LR
 | 8 | Corpus Storage | J3 | L8, L9 | High, High | ✅ |
 | 9 | Ingestion Bridge | J3 | L6, L7 | Low, Med | ✅ |
 | 10 | Corrective RAG (CRAG) | J4 | L6, L7, L10 | L6: Low, L7: Low, L10: High | ✅ (#33, #38, #41) |
-| 11 | HyDE Query Expansion | J4 | L6, L7, L10, L11 | L6: Med, L7: Med, L10: Low, L11: High | 🔲 (#32) |
+| 11 | HyDE Query Expansion | J4 | L6, L7, L10, L11 | L6: Med, L7: Med, L10: Low, L11: High | ✅ (#32) |
 
 **Layer × Chapter matrix**
 
@@ -508,7 +508,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 #### Chapter 5 — Quarkus Integration
 
 **Journey:** J1 | **Sequence:** 5 of 7 | **Status:** ✅ Done  
-**Issues:** #5 | **Blocked by:** C3, C4; conditional on C2 for native image
+**Issues:** #5 | **Blocked by:** C3, C4
 
 **What this delivers**  
 `inference-quarkus` published. Quarkus applications configure ONNX models via `application.properties` and inject them with `@Inference("name")`. `@QuarkusTest` uses `inference-inmem` stubs via `@Alternative` test producers overriding the `@DefaultBean` production producer.
@@ -527,7 +527,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 #### Chapter 6 — Sparse Embeddings (SPLADE)
 
 **Journey:** J1 | **Sequence:** 6 of 7 | **Status:** ✅ Done  
-**Issues:** #6 | **Blocked by:** C2 (ONNX native image validation), C4 (adapter pattern established)
+**Issues:** #6 | **Blocked by:** C4 (adapter pattern established)
 
 **What this delivers**  
 `inference-splade` published. `SparseEmbedder` produces log-saturated sparse term weight maps from SPLADE models. The sparse leg of casehub-rag's hybrid search is now available. Hortora can use `SparseEmbedder` for their Qdrant hybrid search. Candidate for upstream LangChain4j contribution (#1600).
@@ -634,7 +634,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 #### Chapter 11 — HyDE Query Expansion
 
-**Journey:** J4 | **Sequence:** 2 of 2 | **Status:** 🔲
+**Journey:** J4 | **Sequence:** 2 of 2 | **Status:** ✅
 **Issues:** #32 | **Blocked by:** C7 (CaseRetriever SPI), C10 (CRAG)
 
 **What this delivers**
@@ -876,7 +876,7 @@ Quarkus applications declare ONNX models in `application.properties` and inject 
 
 `@Inference` qualifier, not `@InferenceModel` — avoids import collision with the `io.casehub.inference.InferenceModel` SPI interface. `@Nonbinding String value()` means CDI treats all `@Inference` qualifiers identically; the producer inspects `InjectionPoint` to resolve the specific model name at runtime.
 
-CDI-only, no Quarkus extension (no deployment/runtime split). Full extension deferred to native image gate. `@DefaultBean` on the production producer means any `@Produces @Inference` method in test code wins automatically.
+CDI-only, no Quarkus extension (no deployment/runtime split). Full Quarkus extension not needed — JVM mode by design for long-running services. `@DefaultBean` on the production producer means any `@Produces @Inference` method in test code wins automatically.
 
 `reuseForks=false` in surefire — required because the module mixes `@QuarkusTest` (augmented classloader) with plain JUnit tests that load JNI libraries. See GE-20260608-564065.
 
@@ -1182,4 +1182,4 @@ LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dens
 | InferenceModel | The core SPI — wraps any ONNX model session; accepts `InferenceInput`, returns `InferenceOutput` |
 | CorpusRef | Carries `tenantId` + `corpusName` — mandatory on all RAG SPI calls; enforces tenancy isolation |
 | HuggingFace Tokenizers | Rust-based tokenizer library with JNI bindings — produces token IDs + attention masks from text |
-| Native image gate | The C2 prototype that validates both JNI layers work in a Quarkus native image binary on macOS ARM |
+| Native image gate | The C2 prototype that validated both JNI layers work in a Quarkus native image binary on macOS ARM. Gate passed; service deploys in JVM mode by design. Reachability metadata retained for downstream native consumers. |
