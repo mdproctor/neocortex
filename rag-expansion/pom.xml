@@ -10,9 +10,9 @@
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-rag-hyde</artifactId>
-  <name>CaseHub Neural Text - RAG HyDE</name>
-  <description>HyDE (Hypothetical Document Embeddings) — CDI @Decorator on CaseRetriever that expands queries via QueryExpander SPI before retrieval. Classpath + config activated.</description>
+  <artifactId>casehub-rag-expansion</artifactId>
+  <name>CaseHub Neural Text - RAG Expansion</name>
+  <description>Query expansion — CDI @Decorator on CaseRetriever that expands queries via QueryExpander SPI before retrieval. Supports HyDE, step-back prompting, and multi-query. Classpath + config activated.</description>
 
   <dependencies>
 

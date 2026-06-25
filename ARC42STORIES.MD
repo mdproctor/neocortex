@@ -193,8 +193,8 @@ C4Container
     Container(rag_crag, "rag-crag", "CDI library", "CorrectiveCaseRetriever @Decorator, CrossEncoderRelevanceEvaluator, RelevanceEvaluator SPI consumer")
   }
 
-  Container_Boundary(b_rag_hyde, "Layer: HyDE") {
-    Container(rag_hyde, "rag-hyde", "CDI library", "HydeCaseRetriever @Decorator, LlmQueryExpander, TemplateQueryExpander, QueryExpander SPI consumer")
+  Container_Boundary(b_rag_expansion, "Layer: Query Expansion") {
+    Container(rag_expansion, "rag-expansion", "CDI library", "QueryExpandingCaseRetriever @Decorator, multi-query support, StepBackQueryExpander, LlmQueryExpander, TemplateQueryExpander, QueryExpander SPI consumer, RrfFusion")
   }
 
   Rel(inference_tasks, inference_api, "wraps InferenceModel")
@@ -209,7 +209,7 @@ C4Container
   Rel(corpus, corpus_api, "implements CorpusStore, CorpusReader, ChangeSource")
   Rel(rag_crag, rag_api, "decorates CaseRetriever")
   Rel(rag_crag, inference_tasks, "uses CrossEncoderReranker")
-  Rel(rag_hyde, rag_api, "decorates CaseRetriever")
+  Rel(rag_expansion, rag_api, "decorates CaseRetriever")
 ```
 
 ### Layers
@@ -226,7 +226,7 @@ C4Container
 | L8 Corpus SPI | `corpus-api` | Pure Java, zero deps | ✅ yes |
 | L9 Corpus Runtime | `corpus` | Zip4j | ✅ yes |
 | L10 CRAG | `rag-crag` | CDI library, classpath + config activated | ✅ yes |
-| L11 HyDE | `rag-hyde` | CDI library, classpath + config activated | ✅ yes |
+| L11 Query Expansion | `rag-expansion` | CDI library, classpath + config activated | ✅ yes |
 
 ---
 
@@ -401,7 +401,7 @@ flowchart LR
 | 8 | Corpus Storage | J3 | L8, L9 | High, High | ✅ |
 | 9 | Ingestion Bridge | J3 | L6, L7 | Low, Med | ✅ |
 | 10 | Corrective RAG (CRAG) | J4 | L6, L7, L10 | L6: Low, L7: Low, L10: High | ✅ (#33, #38, #41) |
-| 11 | HyDE Query Expansion | J4 | L6, L7, L10, L11 | L6: Med, L7: Med, L10: Low, L11: High | ✅ (#32) |
+| 11 | Query Expansion | J4 | L6, L7, L10, L11 | L6: Med, L7: Med, L10: Low, L11: High | ✅ (#32, #42, #43) |
 
 **Layer × Chapter matrix**
 
@@ -417,7 +417,7 @@ flowchart LR
 | L8 Corpus SPI | — | — | — | — | — | — | — | High | — | — | — |
 | L9 Corpus Runtime | — | — | — | — | — | — | — | High | — | — | — |
 | L10 CRAG | — | — | — | — | — | — | — | — | — | High | Low |
-| L11 HyDE | — | — | — | — | — | — | — | — | — | — | High |
+| L11 Query Expansion | — | — | — | — | — | — | — | — | — | — | High |
 
 *C2 validates L2's JNI stack in native image; L2 itself is not built until C3.
 
@@ -632,30 +632,32 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 
 ---
 
-#### Chapter 11 — HyDE Query Expansion
+#### Chapter 11 — Query Expansion
 
 **Journey:** J4 | **Sequence:** 2 of 2 | **Status:** ✅
-**Issues:** #32 | **Blocked by:** C7 (CaseRetriever SPI), C10 (CRAG)
+**Issues:** #32, #42, #43 | **Blocked by:** C7 (CaseRetriever SPI), C10 (CRAG)
 
 **What this delivers**
-`rag-hyde` module — a CDI `@Decorator` on `CaseRetriever` and `ReactiveCaseRetriever` that expands queries using HyDE (Hypothetical Document Embeddings) before retrieval. `QueryExpander` SPI in `rag-api` defines the expansion contract. Two implementations: `LlmQueryExpander` (LLM-generated hypothetical documents) and `TemplateQueryExpander` (pattern-based expansion). New `RetrievalQuery` value type replaces raw `String query` in CaseRetriever/ReactiveCaseRetriever — carries original text plus expanded `searchText()` for dense embedding. Sparse embedding and reranking continue to use original `text()`. Classpath + config activated (`casehub.rag.hyde.enabled=true`). CRAG retrofitted to same activation model (`casehub.rag.crag.enabled=true`).
+`rag-expansion` module — a CDI `@Decorator` on `CaseRetriever` and `ReactiveCaseRetriever` that expands queries before retrieval. `QueryExpander` SPI in `rag-api` defines the expansion contract. Three implementations: `LlmQueryExpander` (LLM-generated hypothetical documents for HyDE mode, multi-query support via N hypothetical documents with RRF fusion), `TemplateQueryExpander` (pattern-based expansion), and `StepBackQueryExpander` (step-back prompting — generates abstract reformulation, returns [original, abstract] for multi-query fan-out). New `RetrievalQuery` value type replaces raw `String query` in CaseRetriever/ReactiveCaseRetriever — carries original text plus expanded `searchText()` for dense embedding. Sparse embedding and reranking continue to use original `text()`. Classpath + config activated (`casehub.rag.expansion.enabled=true`). CRAG retrofitted to same activation model (`casehub.rag.crag.enabled=true`). `RrfFusion` utility added to `rag-api` for application-level Reciprocal Rank Fusion (decorator-level multi-query merge).
 
 **Accountability gaps closed**
 
 | Gap | What breaks without it | Closed by |
 |---|---|---|
 | Vocabulary mismatch | Short user queries miss semantically relevant documents due to embedding distance | HyDE generates hypothetical answer, embedding matches document space |
-| No query expansion SPI | Query expansion locked to single strategy | QueryExpander SPI — swap LLM, template, or custom implementations |
-| CRAG always-on | No way to disable CRAG without removing classpath dependency | Config-gated activation for both CRAG and HyDE |
+| Query too specific | Overly specific queries miss conceptually relevant broader content | Step-back prompting generates abstract reformulation |
+| No query expansion SPI | Query expansion locked to single strategy | QueryExpander SPI — swap LLM, template, step-back, or custom implementations |
+| Single query path | One embedding per query — no multi-query diversity | Multi-query fan-out (N hypothetical documents, step-back [original + abstract]) + RRF merge |
+| CRAG always-on | No way to disable CRAG without removing classpath dependency | Config-gated activation for both CRAG and expansion |
 
 **Layer Impact**
 
 | Layer | Delta |
 |---|---|
-| L6 RAG SPI | Med (RetrievalQuery value type, QueryExpander SPI, CaseRetriever/ReactiveCaseRetriever SPI signature change) |
+| L6 RAG SPI | Med (RetrievalQuery value type, QueryExpander SPI signature change from single-query to multi-query, CaseRetriever/ReactiveCaseRetriever SPI signature change, RrfFusion utility) |
 | L7 RAG Runtime | Med (dense/sparse split — dense uses searchText(), sparse uses text(), HybridCaseRetriever updated) |
 | L10 CRAG | Low (activation model retrofit — classpath-only → classpath + config) |
-| L11 HyDE | High (new module: HydeCaseRetriever decorator, ReactiveHydeCaseRetriever, LlmQueryExpander, TemplateQueryExpander, HydeConfig) |
+| L11 Query Expansion | High (new module: QueryExpandingCaseRetriever decorator, ReactiveQueryExpandingCaseRetriever, LlmQueryExpander with multi-query, TemplateQueryExpander, StepBackQueryExpander, ExpansionConfig) |
 
 ---
 
@@ -1086,47 +1088,53 @@ CDI `@Decorator` with constructor injection for classpath-activated pipeline sta
 
 ---
 
-#### Layer L11 — HyDE
+#### Layer L11 — Query Expansion
 
 **Participates in chapters:** C11
-**Architectural patterns:** Decorator (CDI @Decorator), SPI consumer (QueryExpander)
-**Issues:** #32
-**Completed:** 🔲
+**Architectural patterns:** Decorator (CDI @Decorator), SPI consumer (QueryExpander), Multi-query with RRF fusion
+**Issues:** #32, #42, #43
+**Completed:** ✅
 
 #### What it adds
 
-Config-gated HyDE query expansion — when `casehub-rag-hyde` is on the classpath and `casehub.rag.hyde.enabled=true`, `HydeCaseRetriever` and `ReactiveHydeCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Expands the original query through `QueryExpander` SPI before passing to the delegate retriever. Dense embedding uses the expanded `searchText()`; sparse embedding and reranking use the original `text()`. Two bundled expanders: `LlmQueryExpander` (LLM-generated hypothetical documents via LangChain4j `ChatModel`) and `TemplateQueryExpander` (pattern-based string expansion). Each bean carries its own `@IfBuildProperty` annotation — decorators gated by `casehub.rag.hyde.enabled`, expanders gated by `casehub.rag.hyde.mode`.
+Config-gated query expansion — when `casehub-rag-expansion` is on the classpath and `casehub.rag.expansion.enabled=true`, `QueryExpandingCaseRetriever` and `ReactiveQueryExpandingCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Expands the original query through `QueryExpander` SPI before passing to the delegate retriever. Dense embedding uses the expanded `searchText()`; sparse embedding and reranking use the original `text()`. Three bundled expanders: `LlmQueryExpander` (LLM-generated hypothetical documents for HyDE mode, multi-query support via N hypothetical documents with RRF fusion via `casehub.rag.expansion.hypothetical-count`), `TemplateQueryExpander` (pattern-based string expansion), and `StepBackQueryExpander` (step-back prompting — abstract reformulation, returns [original, abstract] for multi-query fan-out). Each bean carries its own `@IfBuildProperty` annotation — decorators gated by `casehub.rag.expansion.enabled`, expanders gated by `casehub.rag.expansion.mode`. `RrfFusion` utility in `rag-api` provides application-level Reciprocal Rank Fusion for decorator-level multi-query merging.
 
 #### Accountability gaps closed
 
 | Gap | What breaks without it | Closed by |
 |---|---|---|
 | Vocabulary mismatch | Short queries produce poor dense embeddings | HyDE-expanded searchText() aligns with document embedding space |
-| Single expansion strategy | No way to swap query expansion approach | QueryExpander SPI with pluggable implementations |
+| Query too specific | Overly specific queries miss broader conceptually relevant content | StepBackQueryExpander generates abstract reformulation |
+| Single expansion strategy | No way to swap query expansion approach | QueryExpander SPI with pluggable implementations (LLM, template, step-back) |
+| Single query path | One embedding per query — no diversity | Multi-query fan-out (N hypothetical docs, step-back [original + abstract]) + RRF merge |
 
 #### Key files
 
 | File | Role |
 |---|---|
-| `rag-hyde/.../HydeCaseRetriever.java` | @Decorator — expand query via QueryExpander, pass RetrievalQuery to delegate |
-| `rag-hyde/.../ReactiveHydeCaseRetriever.java` | @Decorator on ReactiveCaseRetriever — Uni chains, worker thread offload |
-| `rag-hyde/.../LlmQueryExpander.java` | QueryExpander impl — LLM generates hypothetical document |
-| `rag-hyde/.../TemplateQueryExpander.java` | QueryExpander impl — pattern-based string expansion |
-| `rag-hyde/.../HydeConfig.java` | @ConfigMapping — enabled flag, expander selection |
+| `rag-expansion/.../QueryExpandingCaseRetriever.java` | @Decorator — expand query via QueryExpander (multi-query fan-out), RRF merge, pass RetrievalQuery to delegate |
+| `rag-expansion/.../ReactiveQueryExpandingCaseRetriever.java` | @Decorator on ReactiveCaseRetriever — Uni chains, worker thread offload, reactive RRF merge |
+| `rag-expansion/.../LlmQueryExpander.java` | QueryExpander impl — LLM generates N hypothetical documents (configurable via hypothetical-count) |
+| `rag-expansion/.../TemplateQueryExpander.java` | QueryExpander impl — pattern-based string expansion |
+| `rag-expansion/.../StepBackQueryExpander.java` | QueryExpander impl — step-back prompting, returns [original, abstract] for multi-query |
+| `rag-expansion/.../ExpansionConfig.java` | @ConfigMapping — enabled flag, mode selection, hypothetical-count, step-back-prompt-template |
 | `rag-api/.../RetrievalQuery.java` | Value type — text() + searchText(), replaces raw String in CaseRetriever SPI |
-| `rag-api/.../QueryExpander.java` | SPI — expand(RetrievalQuery query) |
+| `rag-api/.../QueryExpander.java` | SPI — expand(RetrievalQuery query) → List<RetrievalQuery> (multi-query support) |
+| `rag-api/.../RrfFusion.java` | Utility — merge(List<List<RetrievedChunk>> results) → List<RetrievedChunk> via Reciprocal Rank Fusion |
 
 #### Architectural decisions
 
-CDI `@Decorator` chosen (same pattern as CRAG L10) for consistency and to avoid priority collisions. Config-gated via `@IfBuildProperty` — classpath alone does not activate the decorator. This same activation model was retrofitted to CRAG. `RetrievalQuery` carries both original `text()` and expanded `searchText()` — dense embedding benefits from expansion while sparse embedding preserves lexical precision of the original query.
+CDI `@Decorator` chosen (same pattern as CRAG L10) for consistency and to avoid priority collisions. Config-gated via `@IfBuildProperty` — classpath alone does not activate the decorator. This same activation model was retrofitted to CRAG. `RetrievalQuery` carries both original `text()` and expanded `searchText()` — dense embedding benefits from expansion while sparse embedding preserves lexical precision of the original query. `QueryExpander` changed from single-query (`expand(RetrievalQuery) → RetrievalQuery`) to multi-query (`expand(RetrievalQuery) → List<RetrievalQuery>`) to enable step-back and multi-HyDE patterns. Decorator fans out, retrieves per expanded query, and RRF-merges results before returning to the caller.
 
 #### Gotchas
 
-Decorator priority ordering: HyDE must run before CRAG in the decorator chain — HyDE expands the query, then CRAG evaluates retrieval quality. `@Priority` values must reflect this ordering.
+Decorator priority ordering: Query expansion must run before CRAG in the decorator chain — expansion transforms the query, then CRAG evaluates retrieval quality. `@Priority` values must reflect this ordering.
+
+Multi-query RRF: Fan-out retrieval multiplies Qdrant queries by N (hypothetical-count or step-back mode [2]). For large N, consider latency impact — each query hits Qdrant independently before RRF merge.
 
 #### Pattern to replicate
 
-Config-gated CDI decorator with `@IfBuildProperty` — same pattern for any future retrieval pipeline stage. `RetrievalQuery` dual-text pattern (original + expanded) for any transformation that should affect some embedding strategies but not others.
+Config-gated CDI decorator with `@IfBuildProperty` — same pattern for any future retrieval pipeline stage. `RetrievalQuery` dual-text pattern (original + expanded) for any transformation that should affect some embedding strategies but not others. Multi-query fan-out + RRF merge pattern for retrieval diversity — replicate for any future multi-path retrieval stage (e.g., multi-model ensemble, multi-corpus fusion).
 
 ---
 

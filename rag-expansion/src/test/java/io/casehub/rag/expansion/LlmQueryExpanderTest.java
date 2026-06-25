@@ -1,4 +1,4 @@
-package io.casehub.rag.hyde;
+package io.casehub.rag.expansion;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -24,8 +24,10 @@ class LlmQueryExpanderTest {
         });
 
         var expander = new LlmQueryExpander(mockModel, stubConfig(Optional.empty()));
-        var result = expander.expand(RetrievalQuery.of("what is diabetes?"));
+        var results = expander.expand(RetrievalQuery.of("what is diabetes?"));
 
+        assertThat(results).hasSize(1);
+        var result = results.get(0);
         assertThat(result.text()).isEqualTo("what is diabetes?");
         assertThat(result.expandedText()).isEqualTo(
             "Diabetes is a chronic condition characterized by elevated blood sugar.");
@@ -38,9 +40,10 @@ class LlmQueryExpanderTest {
         ChatModel mockModel = stubChatModel(prompt -> "custom response");
         var expander = new LlmQueryExpander(mockModel,
             stubConfig(Optional.of("Custom: %s")));
-        var result = expander.expand(RetrievalQuery.of("test query"));
+        var results = expander.expand(RetrievalQuery.of("test query"));
 
-        assertThat(result.expandedText()).isEqualTo("custom response");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).expandedText()).isEqualTo("custom response");
     }
 
     @Test
@@ -49,8 +52,10 @@ class LlmQueryExpanderTest {
         var expander = new LlmQueryExpander(mockModel, stubConfig(Optional.empty()));
 
         var query = RetrievalQuery.of("my question");
-        var result = expander.expand(query);
+        var results = expander.expand(query);
 
+        assertThat(results).hasSize(1);
+        var result = results.get(0);
         assertThat(result.text()).isEqualTo("my question");
         assertThat(result.searchText()).isEqualTo("hypothetical passage");
     }
@@ -72,12 +77,45 @@ class LlmQueryExpanderTest {
         };
     }
 
-    private static HydeConfig stubConfig(Optional<String> promptTemplate) {
-        return new HydeConfig() {
+    @Test
+    void expandReturnsMultipleHypotheticals() {
+        int[] callCount = {0};
+        ChatModel model = stubChatModel(prompt -> {
+            callCount[0]++;
+            return "hypothetical " + callCount[0];
+        });
+        var expander = new LlmQueryExpander(model, stubConfig(Optional.empty(), 3));
+        var result = expander.expand(RetrievalQuery.of("test query"));
+
+        assertThat(result).hasSize(3);
+        assertThat(result.get(0).expandedText()).isEqualTo("hypothetical 1");
+        assertThat(result.get(1).expandedText()).isEqualTo("hypothetical 2");
+        assertThat(result.get(2).expandedText()).isEqualTo("hypothetical 3");
+        assertThat(result.get(0).text()).isEqualTo("test query");
+    }
+
+    @Test
+    void expandDefaultCountIsOne() {
+        ChatModel model = stubChatModel(prompt -> "single hypothetical");
+        var expander = new LlmQueryExpander(model, stubConfig(Optional.empty(), 1));
+        var result = expander.expand(RetrievalQuery.of("test"));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).expandedText()).isEqualTo("single hypothetical");
+    }
+
+    private static ExpansionConfig stubConfig(Optional<String> promptTemplate, int hypotheticalCount) {
+        return new ExpansionConfig() {
             @Override public boolean enabled() { return true; }
             @Override public String mode() { return "llm"; }
+            @Override public int hypotheticalCount() { return hypotheticalCount; }
             @Override public Optional<String> promptTemplate() { return promptTemplate; }
             @Override public Optional<String> template() { return Optional.empty(); }
+            @Override public Optional<String> stepBackPromptTemplate() { return Optional.empty(); }
         };
+    }
+
+    private static ExpansionConfig stubConfig(Optional<String> promptTemplate) {
+        return stubConfig(promptTemplate, 1);
     }
 }

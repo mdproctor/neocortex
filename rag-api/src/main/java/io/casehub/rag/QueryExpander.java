@@ -1,5 +1,7 @@
 package io.casehub.rag;
 
+import java.util.List;
+
 public interface QueryExpander {
-    RetrievalQuery expand(RetrievalQuery query);
+    List<RetrievalQuery> expand(RetrievalQuery query);
 }

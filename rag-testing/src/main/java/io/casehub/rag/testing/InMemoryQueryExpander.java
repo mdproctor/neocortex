@@ -17,10 +17,10 @@ public class InMemoryQueryExpander implements QueryExpander {
     private final List<RetrievalQuery> expandedQueries = new ArrayList<>();
 
     @Override
-    public RetrievalQuery expand(RetrievalQuery query) {
+    public List<RetrievalQuery> expand(RetrievalQuery query) {
         RetrievalQuery expanded = query.withExpansion("hypothetical: " + query.text());
         expandedQueries.add(expanded);
-        return expanded;
+        return List.of(expanded);
     }
 
     public List<RetrievalQuery> expandedQueries() {

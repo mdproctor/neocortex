@@ -150,7 +150,7 @@ rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, @DefaultB
 rag-tika/           — optional Apache Tika document parsing → chunked ChunkInput
 rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped)
 rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever and ReactiveCaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath + config activated. CrossEncoderRelevanceEvaluator default. Already-graded guard prevents double-application through blocking-to-reactive bridge.
-rag-hyde/           — HyDE (Hypothetical Document Embeddings) query expansion; LLM + template expanders; @Decorator on CaseRetriever, classpath + config activated
+rag-expansion/      — Query expansion: HyDE (hypothetical documents), step-back prompting (abstract reformulation), multi-query fan-out with RRF fusion; @Decorator on CaseRetriever + ReactiveCaseRetriever, classpath + config activated
 corpus-api/         — CorpusStore + CorpusReader + ChangeSource + WatchableChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
 corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
 examples/
@@ -178,7 +178,7 @@ Examples are excluded from the default build. Activate with `-Pexamples-smoke` (
 | RAG Tika | `casehub-rag-tika` |
 | RAG testing | `casehub-rag-testing` |
 | RAG CRAG | `casehub-rag-crag` |
-| RAG HyDE | `casehub-rag-hyde` |
+| RAG Expansion | `casehub-rag-expansion` |
 | Corpus API | `casehub-corpus-api` |
 | Corpus | `casehub-corpus` |
 | Example Text Analysis | `casehub-example-text-analysis` |
@@ -186,7 +186,7 @@ Examples are excluded from the default build. Activate with `-Pexamples-smoke` (
 | Root Java package (inference) | `io.casehub.inference` |
 | Root Java package (rag) | `io.casehub.rag` |
 | Root Java package (examples) | `io.casehub.examples.analysis`, `io.casehub.examples.rag` |
-| Root Java package (rag-hyde) | `io.casehub.rag.hyde` |
+| Root Java package (rag-expansion) | `io.casehub.rag.expansion` |
 | Root Java package (corpus) | `io.casehub.corpus` |
 
 ## Build Commands
