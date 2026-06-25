@@ -24,6 +24,7 @@ import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScrollPoints;
+import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 
@@ -34,8 +35,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngestor {
+
+    private static final Logger LOG = Logger.getLogger(ReactiveQdrantEmbeddingIngestor.class.getName());
 
     private final QdrantClient client;
     private final EmbeddingModel embeddingModel;
@@ -45,6 +49,7 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
     private final String sparseVectorName;
     private final int denseDimension;
     private final TenantGuard tenantGuard;
+    private final int batchSize;
 
     private final ConcurrentHashMap<String, Uni<Void>> ensuredCollections = new ConcurrentHashMap<>();
 
@@ -56,7 +61,11 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
             String denseVectorName,
             String sparseVectorName,
             int denseDimension,
-            TenantGuard tenantGuard) {
+            TenantGuard tenantGuard,
+            int batchSize) {
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive, got: " + batchSize);
+        }
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
@@ -65,39 +74,63 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
         this.sparseVectorName = sparseVectorName;
         this.denseDimension = denseDimension;
         this.tenantGuard = tenantGuard;
+        this.batchSize = batchSize;
     }
 
     @Override
     public Uni<Void> ingest(CorpusRef corpus, List<ChunkInput> chunks) {
         return Uni.createFrom().deferred(() -> {
             tenantGuard.assertTenant(corpus.tenantId());
+            if (chunks.isEmpty()) return Uni.createFrom().voidItem();
+
             String collection = tenancyStrategy.collectionName(corpus);
+            int[] chunkIndices = QdrantPointBuilder.computeChunkIndices(chunks);
+            int effectiveBatchSize = Math.min(batchSize, chunks.size());
+            int totalBatches = (chunks.size() + effectiveBatchSize - 1) / effectiveBatchSize;
+
+            List<int[]> batchRanges = new ArrayList<>(totalBatches);
+            for (int b = 0; b < totalBatches; b++) {
+                int start = b * effectiveBatchSize;
+                int end = Math.min(start + effectiveBatchSize, chunks.size());
+                batchRanges.add(new int[]{b, start, end});
+            }
 
             return ensureCollection(collection)
-            .chain(() -> Uni.createFrom().item(() -> {
-                List<TextSegment> segments = new ArrayList<>(chunks.size());
-                List<String> texts = new ArrayList<>(chunks.size());
-                for (ChunkInput chunk : chunks) {
-                    segments.add(TextSegment.from(chunk.content()));
-                    texts.add(chunk.content());
-                }
-                Response<List<Embedding>> denseResponse = embeddingModel.embedAll(segments);
-                List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder != null
-                    ? sparseEmbedder.embedBatch(texts) : null;
-                return new EmbeddingResult(denseResponse.content(), sparseEmbeddings);
-            }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool()))
-            .chain(embeddings -> {
-                int[] chunkIndices = QdrantPointBuilder.computeChunkIndices(chunks);
-                List<PointStruct> points = new ArrayList<>(chunks.size());
-                for (int i = 0; i < chunks.size(); i++) {
-                    points.add(QdrantPointBuilder.buildPoint(chunks.get(i), corpus,
-                        embeddings.dense().get(i),
-                        embeddings.sparse() != null ? embeddings.sparse().get(i) : null,
-                        chunkIndices[i], denseVectorName, sparseVectorName));
-                }
-                return QdrantFutures.toUni(client.upsertAsync(collection, points))
-                    .replaceWithVoid();
-            });
+                .chain(() -> Multi.createFrom().iterable(batchRanges)
+                    .onItem().transformToUniAndConcatenate(range -> {
+                        int batchNum = range[0];
+                        int start = range[1];
+                        int end = range[2];
+                        List<ChunkInput> batch = chunks.subList(start, end);
+
+                        return Uni.createFrom().item(() -> {
+                            List<TextSegment> segments = new ArrayList<>(batch.size());
+                            List<String> texts = new ArrayList<>(batch.size());
+                            for (ChunkInput chunk : batch) {
+                                segments.add(TextSegment.from(chunk.content()));
+                                texts.add(chunk.content());
+                            }
+                            Response<List<Embedding>> denseResponse = embeddingModel.embedAll(segments);
+                            List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder != null
+                                ? sparseEmbedder.embedBatch(texts) : null;
+                            return new EmbeddingResult(denseResponse.content(), sparseEmbeddings);
+                        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                        .chain(embeddings -> {
+                            List<PointStruct> points = new ArrayList<>(batch.size());
+                            for (int i = 0; i < batch.size(); i++) {
+                                points.add(QdrantPointBuilder.buildPoint(batch.get(i), corpus,
+                                    embeddings.dense().get(i),
+                                    embeddings.sparse() != null ? embeddings.sparse().get(i) : null,
+                                    chunkIndices[start + i], denseVectorName, sparseVectorName));
+                            }
+                            return QdrantFutures.toUni(client.upsertAsync(collection, points))
+                                .invoke(() -> LOG.fine(() -> "Ingested batch " + (batchNum + 1) + "/" + totalBatches
+                                    + " (" + end + "/" + chunks.size() + " chunks)"))
+                                .replaceWithVoid();
+                        });
+                    })
+                    .collect().last()
+                    .replaceWithVoid());
         });
     }
 

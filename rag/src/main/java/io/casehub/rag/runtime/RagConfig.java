@@ -20,6 +20,9 @@ public interface RagConfig {
 
     RetrievalConfig retrieval();
 
+    @WithDefault("100")
+    int embeddingBatchSize();
+
     interface QdrantConfig {
         @WithDefault("localhost")
         String host();

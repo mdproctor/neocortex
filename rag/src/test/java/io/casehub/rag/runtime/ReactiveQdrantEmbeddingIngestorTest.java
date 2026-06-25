@@ -56,7 +56,8 @@ class ReactiveQdrantEmbeddingIngestorTest {
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             "dense", "sparse", DENSE_DIM,
-            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT))
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            Integer.MAX_VALUE
         );
     }
 
@@ -175,7 +176,8 @@ class ReactiveQdrantEmbeddingIngestorTest {
             null,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             "dense", "sparse", DENSE_DIM,
-            TenantGuard.of(null)
+            TenantGuard.of(null),
+            Integer.MAX_VALUE
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -184,6 +186,98 @@ class ReactiveQdrantEmbeddingIngestorTest {
         )).await().indefinitely();
         List<String> docs = noTenantStore.listDocuments(corpus).await().indefinitely();
         assertThat(docs).containsExactly("doc-1");
+    }
+
+    @Test
+    void ingestBatchesSplitCorrectly() {
+        ReactiveQdrantEmbeddingIngestor batchedStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            new SparseEmbedder(InMemoryInferenceModel.returning(
+                0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f)),
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse", DENSE_DIM,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            2);
+
+        CorpusRef corpus = uniqueCorpus();
+        batchedStore.ingest(corpus, List.of(
+            new ChunkInput("chunk 1", "doc-1", Map.of()),
+            new ChunkInput("chunk 2", "doc-1", Map.of()),
+            new ChunkInput("chunk 3", "doc-2", Map.of()),
+            new ChunkInput("chunk 4", "doc-2", Map.of()),
+            new ChunkInput("chunk 5", "doc-1", Map.of())))
+            .await().indefinitely();
+
+        List<String> docs = batchedStore.listDocuments(corpus).await().indefinitely();
+        assertThat(docs).containsExactlyInAnyOrder("doc-1", "doc-2");
+    }
+
+    @Test
+    void ingestCrossBatchDocumentContinuity() {
+        ReactiveQdrantEmbeddingIngestor batchedStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse", DENSE_DIM,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            2);
+
+        CorpusRef corpus = uniqueCorpus();
+        batchedStore.ingest(corpus, List.of(
+            new ChunkInput("a0", "doc-A", Map.of()),
+            new ChunkInput("a1", "doc-A", Map.of()),
+            new ChunkInput("a2", "doc-A", Map.of())))
+            .await().indefinitely();
+
+        List<String> docs = batchedStore.listDocuments(corpus).await().indefinitely();
+        assertThat(docs).containsExactly("doc-A");
+
+        batchedStore.ingest(corpus, List.of(
+            new ChunkInput("a0", "doc-A", Map.of()),
+            new ChunkInput("a1", "doc-A", Map.of()),
+            new ChunkInput("a2", "doc-A", Map.of())))
+            .await().indefinitely();
+
+        docs = batchedStore.listDocuments(corpus).await().indefinitely();
+        assertThat(docs).containsExactly("doc-A");
+    }
+
+    @Test
+    void ingestBatchSizeOne() {
+        ReactiveQdrantEmbeddingIngestor batchedStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse", DENSE_DIM,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            1);
+
+        CorpusRef corpus = uniqueCorpus();
+        batchedStore.ingest(corpus, List.of(
+            new ChunkInput("chunk 1", "doc-1", Map.of()),
+            new ChunkInput("chunk 2", "doc-2", Map.of()),
+            new ChunkInput("chunk 3", "doc-1", Map.of())))
+            .await().indefinitely();
+
+        List<String> docs = batchedStore.listDocuments(corpus).await().indefinitely();
+        assertThat(docs).containsExactlyInAnyOrder("doc-1", "doc-2");
+    }
+
+    @Test
+    void constructorRejectsBatchSizeZero() {
+        assertThatThrownBy(() -> new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse", DENSE_DIM,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("batchSize");
     }
 
     // --- helpers ---

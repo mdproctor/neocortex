@@ -63,7 +63,8 @@ class ReactiveHybridCaseRetrieverTest {
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            guard
+            guard,
+            Integer.MAX_VALUE
         );
 
         retriever = new ReactiveHybridCaseRetriever(
@@ -143,7 +144,8 @@ class ReactiveHybridCaseRetrieverTest {
             client, model, null,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            noTenantGuard
+            noTenantGuard,
+            Integer.MAX_VALUE
         );
 
         CorpusRef corpus = uniqueCorpus();

@@ -31,8 +31,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Logger;
 
 public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
+
+    private static final Logger LOG = Logger.getLogger(QdrantEmbeddingIngestor.class.getName());
 
     private final QdrantClient client;
     private final EmbeddingModel embeddingModel;
@@ -41,6 +44,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     private final String denseVectorName;
     private final String sparseVectorName;
     private final TenantGuard tenantGuard;
+    private final int batchSize;
 
     private final Set<String> knownCollections = ConcurrentHashMap.newKeySet();
 
@@ -51,7 +55,11 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             TenancyStrategy tenancyStrategy,
             String denseVectorName,
             String sparseVectorName,
-            TenantGuard tenantGuard) {
+            TenantGuard tenantGuard,
+            int batchSize) {
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive, got: " + batchSize);
+        }
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
@@ -59,43 +67,59 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         this.denseVectorName = denseVectorName;
         this.sparseVectorName = sparseVectorName;
         this.tenantGuard = tenantGuard;
+        this.batchSize = batchSize;
     }
 
     @Override
     public void ingest(CorpusRef corpus, List<ChunkInput> chunks) {
         tenantGuard.assertTenant(corpus.tenantId());
+        if (chunks.isEmpty()) return;
 
         String collection = tenancyStrategy.collectionName(corpus);
         ensureCollection(collection);
 
-        List<TextSegment> segments = new ArrayList<>(chunks.size());
-        List<String> texts = new ArrayList<>(chunks.size());
-        for (ChunkInput chunk : chunks) {
-            segments.add(TextSegment.from(chunk.content()));
-            texts.add(chunk.content());
-        }
-        Response<List<Embedding>> denseResponse = embeddingModel.embedAll(segments);
-        List<Embedding> denseEmbeddings = denseResponse.content();
-
-        List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder != null
-            ? sparseEmbedder.embedBatch(texts) : null;
-
         int[] chunkIndices = QdrantPointBuilder.computeChunkIndices(chunks);
-        List<PointStruct> points = new ArrayList<>(chunks.size());
-        for (int i = 0; i < chunks.size(); i++) {
-            points.add(QdrantPointBuilder.buildPoint(chunks.get(i), corpus,
-                denseEmbeddings.get(i),
-                sparseEmbeddings != null ? sparseEmbeddings.get(i) : null,
-                chunkIndices[i], denseVectorName, sparseVectorName));
-        }
+        int effectiveBatchSize = Math.min(batchSize, chunks.size());
+        int totalBatches = (chunks.size() + effectiveBatchSize - 1) / effectiveBatchSize;
 
-        try {
-            client.upsertAsync(collection, points).get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted during upsert", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Upsert failed", e.getCause());
+        for (int batchNum = 0; batchNum < totalBatches; batchNum++) {
+            int start = batchNum * effectiveBatchSize;
+            int end = Math.min(start + effectiveBatchSize, chunks.size());
+            List<ChunkInput> batch = chunks.subList(start, end);
+
+            List<TextSegment> segments = new ArrayList<>(batch.size());
+            List<String> texts = new ArrayList<>(batch.size());
+            for (ChunkInput chunk : batch) {
+                segments.add(TextSegment.from(chunk.content()));
+                texts.add(chunk.content());
+            }
+            Response<List<Embedding>> denseResponse = embeddingModel.embedAll(segments);
+            List<Embedding> denseEmbeddings = denseResponse.content();
+
+            List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder != null
+                ? sparseEmbedder.embedBatch(texts) : null;
+
+            List<PointStruct> points = new ArrayList<>(batch.size());
+            for (int i = 0; i < batch.size(); i++) {
+                points.add(QdrantPointBuilder.buildPoint(batch.get(i), corpus,
+                    denseEmbeddings.get(i),
+                    sparseEmbeddings != null ? sparseEmbeddings.get(i) : null,
+                    chunkIndices[start + i], denseVectorName, sparseVectorName));
+            }
+
+            try {
+                client.upsertAsync(collection, points).get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted during upsert", e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException("Upsert failed", e.getCause());
+            }
+
+            final int logBatchNum = batchNum + 1;
+            final int logEnd = end;
+            LOG.fine(() -> "Ingested batch " + logBatchNum + "/" + totalBatches
+                + " (" + logEnd + "/" + chunks.size() + " chunks)");
         }
     }
 

@@ -67,7 +67,8 @@ class HybridCaseRetrieverTest {
             client, embeddingModel, sparseEmbedder,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            guard
+            guard,
+            Integer.MAX_VALUE
         );
 
         retriever = new HybridCaseRetriever(
@@ -147,7 +148,8 @@ class HybridCaseRetrieverTest {
             client, denseOnlyModel, null, // no sparse embedder
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            denseOnlyGuard
+            denseOnlyGuard,
+            Integer.MAX_VALUE
         );
 
         HybridCaseRetriever denseOnlyRetriever = new HybridCaseRetriever(
@@ -205,7 +207,8 @@ class HybridCaseRetrieverTest {
             client, model, null,
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            noTenantGuard
+            noTenantGuard,
+            Integer.MAX_VALUE
         );
 
         HybridCaseRetriever noTenantRetriever = new HybridCaseRetriever(
