@@ -63,8 +63,16 @@ Source code commits → project repo (`origin` = mdproctor/neural-text, `upstrea
 | blog       | workspace   | staged here; published to mdproctor.github.io via publish-blog |
 | plans      | workspace   | stay in workspace permanently |
 | design     | workspace   | epic journal stays in workspace |
+| design     | project     | journal in workspace `design/`; merge target is project `ARC42STORIES.MD` |
 | snapshots  | workspace   | stay in workspace permanently |
 | handover   | workspace   | |
+
+Living docs — check for drift after significant changes:
+- `ARC42STORIES.MD` — primary architecture record; check §9–10 after module, SPI, or structural changes
+
+## Writing Style Guide
+
+**The writing style guide at `~/claude-workspace/writing-styles/blog-technical.md` is mandatory for all blog and diary entries.** Load it in full before drafting. Complete the pre-draft voice classification (I / we / Claude-named) before generating any prose. Do not show a draft without verifying it against the style guide.
 
 ## Peer Repos — Hard Boundary
 
@@ -146,7 +154,7 @@ inference-splade/   — sparse SPLADE embeddings (Map<Integer, Float>)
 inference-inmem/    — deterministic stubs; no JNI; safe in all test contexts
 inference-quarkus/  — CDI wiring, @InferenceModel qualifier, Dev Services, @QuarkusTest
 rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, CaseRetriever + ReactiveCaseRetriever SPIs, QueryExpander SPI, RetrievalQuery, MetadataExtractor + CursorStore SPIs, value types — Mutiny provided
-rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
+rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, MatryoshkaEmbeddingModel (truncating decorator), DenseQuantization (binary/scalar), search-time oversampling, @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
 rag-tika/           — optional Apache Tika document parsing → chunked ChunkInput
 rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped)
 rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever and ReactiveCaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath + config activated. CrossEncoderRelevanceEvaluator default. Already-graded guard prevents double-application through blocking-to-reactive bridge.

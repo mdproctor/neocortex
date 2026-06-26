@@ -396,6 +396,9 @@ class QdrantEmbeddingIngestorTest {
             .getParamsMap().getMapMap().get("dense");
         assertThat(denseParams.hasQuantizationConfig()).isTrue();
         assertThat(denseParams.getQuantizationConfig().hasScalar()).isTrue();
+        assertThat(denseParams.getQuantizationConfig().getScalar().getType())
+            .isEqualTo(io.qdrant.client.grpc.Collections.QuantizationType.Int8);
+        assertThat(denseParams.getQuantizationConfig().getScalar().getAlwaysRam()).isTrue();
     }
 
     @Test

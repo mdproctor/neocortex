@@ -7,13 +7,10 @@ import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.qdrant.client.QdrantClient;
 import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.Startup;
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
-
-import java.util.OptionalDouble;
 
 @IfBuildProperty(name = "casehub.rag.reactive.enabled", stringValue = "true")
 @ApplicationScoped
@@ -27,11 +24,11 @@ public class ReactiveRagBeanProducer {
     @Inject Instance<CrossEncoderReranker> rerankerInstance;
     @Inject Instance<CurrentPrincipal> currentPrincipalInstance;
 
-    private int denseDimension;
-
-    @PostConstruct
-    void init() {
-        denseDimension = embeddingModel.dimension();
+    private EmbeddingModel effectiveEmbeddingModel() {
+        return config.matryoshka().dimension().isPresent()
+            ? new MatryoshkaEmbeddingModel(embeddingModel,
+                config.matryoshka().dimension().getAsInt())
+            : embeddingModel;
     }
 
     @Produces
@@ -41,15 +38,14 @@ public class ReactiveRagBeanProducer {
             ? sparseEmbedderInstance.get() : null;
         CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
             ? currentPrincipalInstance.get() : null;
-        TenantGuard tenantGuard = TenantGuard.of(principal);
         return new ReactiveQdrantEmbeddingIngestor(
-            client, embeddingModel, sparseEmbedder,
+            client, effectiveEmbeddingModel(), sparseEmbedder,
             config.tenancyStrategy(),
             config.denseVectorName(), config.sparseVectorName(),
-            tenantGuard,
+            TenantGuard.of(principal),
             config.embeddingBatchSize(),
-            DenseQuantization.NONE,
-            true);
+            config.quantization().type(),
+            config.quantization().alwaysRam());
     }
 
     @Produces
@@ -63,13 +59,13 @@ public class ReactiveRagBeanProducer {
             ? currentPrincipalInstance.get() : null;
         TenantGuard tenantGuard = TenantGuard.of(principal);
         return new ReactiveHybridCaseRetriever(
-            client, embeddingModel, sparseEmbedder,
+            client, effectiveEmbeddingModel(), sparseEmbedder,
             config.tenancyStrategy(),
             config.denseVectorName(), config.sparseVectorName(),
             config.retrieval().denseTopK(), config.retrieval().sparseTopK(),
             config.retrieval().rrfK(), config.retrieval().rerankEnabled(),
             config.retrieval().rerankTopN(), reranker, tenantGuard,
-            DenseQuantization.NONE,
-            OptionalDouble.empty());
+            config.quantization().type(),
+            config.quantization().oversampling());
     }
 }

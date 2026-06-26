@@ -120,6 +120,8 @@ C4Context
 
 **Hybrid RAG** — two vector representations per document: dense (LangChain4j `OnnxEmbeddingModel`) and sparse (SPLADE via `inference-splade`). Both stored in Qdrant named vector spaces. Retrieval uses either or both, fused via RRF. Dense handles semantic similarity; sparse handles lexical precision for regulatory/clinical text.
 
+**Matryoshka embeddings** — `MatryoshkaEmbeddingModel` is a LangChain4j `EmbeddingModel` decorator that truncates embeddings to a target dimension and L2-renormalizes. This makes `dimension()` return the truncated size, which flows transparently to `ensureCollection()` — collection vector dimensions are automatically correct. The alternative (standalone utility + manual dimension tracking) would require coordinating truncation across ingestors, retrievers, and collection creation. The decorator centralises this in one place. Dual-vector tiered search (storing a second truncated+binary-quantized named vector per point) was evaluated and rejected: at CaseHub's per-tenant scale (<1M vectors per collection), binary index RAM savings (~112 bytes/vec) are offset by wasted HNSW graph on the unused full "dense" vector (~128 bytes/vec). Qdrant's native server-side quantization provides tiered search transparently instead.
+
 **Tenancy isolation at the SPI boundary** — `CaseRetriever.retrieve()` and `EmbeddingIngestor.ingest()` require a `CorpusRef` carrying the tenant ID. No cross-tenant retrieval is possible through the SPI when `CurrentPrincipal` is provided. Single-tenant consumers that do not provide a `CurrentPrincipal` opt out of tenant enforcement by design. Qdrant payload filtering enforces isolation at the storage layer.
 
 ### Relationship to LangChain4j
@@ -272,6 +274,10 @@ C4Dynamic
   Rel(retriever, engine, "List<RetrievedChunk> (RRF-fused, reranked)")
 ```
 
+### Search-time oversampling for quantized vectors
+
+When binary or scalar quantization is active, Qdrant's default oversampling (1.0) is insufficient — hamming distance is a coarse approximation. Configurable oversampling is applied via `SearchParams.QuantizationSearchParams` on the dense prefetch leg only. Sparse prefetch is unaffected (sparse vectors are not quantized). `rescore` is hardcoded to `true` because oversampling without rescoring wastes I/O.
+
 ---
 
 ## §7 Deployment View
@@ -303,6 +309,8 @@ C4Deployment
 ```
 
 **Deployment mode:** JVM. The inference service is long-running — native image's fast startup provides no benefit, and HotSpot's JIT optimisation outperforms AOT for sustained workloads. The C2 native image gate passed (both JNI layers work), and reachability metadata ships in `inference-quarkus` for downstream native consumers, but this project deploys in JVM mode by design.
+
+**Embedding dimension consistency** — `ReactiveQdrantEmbeddingIngestor` computes `denseDimension` from its `embeddingModel` argument in the constructor, not from a separate parameter. With `MatryoshkaEmbeddingModel` wrapping active, `dimension()` returns the truncated size. The cached `denseDimension` field is retained (rather than calling `embeddingModel.dimension()` inline) because `buildCreateRequest()` runs on Qdrant's gRPC callback thread via `directExecutor()` — calling a potentially non-trivial method there risks blocking.
 
 ---
 
@@ -343,6 +351,10 @@ noClasses().that().resideInAPackage("io.casehub.inference..")
 **Single Qdrant collection for all tenants** — `Symptom:` tenant A's retrieval returns tenant B's documents. `Cause:` payload filter missing or per-tenant collection not used. `Fix:` CorpusRef carries tenantId; Qdrant query always includes `filter: {must: [{key: "tenantId", match: {value: tenantId}}]}`.
 
 **Using LangChain4j OnnxEmbeddingModel for SPLADE** — `Symptom:` sparse embeddings are dense float[] instead of `Map<Integer,Float>`. `Cause:` LangChain4j's `OnnxEmbeddingModel` is dense-only. `Fix:` SPLADE goes through `inference-splade` `SparseEmbedder`, not LangChain4j.
+
+### Naming conventions
+
+**`DenseQuantization` not `QuantizationType`** — the config enum is named `DenseQuantization` because Qdrant client 1.18.1 already defines `io.qdrant.client.grpc.Collections.QuantizationType` (values: `UnknownQuantization`, `Int8`, `UNRECOGNIZED`). Both enums appear in `ensureCollection()` and `buildCreateRequest()` — sharing the name would create ambiguous unqualified usage.
 
 ---
 
