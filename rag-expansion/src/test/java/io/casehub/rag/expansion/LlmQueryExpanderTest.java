@@ -9,6 +9,10 @@ import io.casehub.rag.RetrievalQuery;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -79,19 +83,18 @@ class LlmQueryExpanderTest {
 
     @Test
     void expandReturnsMultipleHypotheticals() {
-        int[] callCount = {0};
-        ChatModel model = stubChatModel(prompt -> {
-            callCount[0]++;
-            return "hypothetical " + callCount[0];
-        });
+        var callCount = new AtomicInteger();
+        ChatModel model = stubChatModel(prompt -> "hypothetical " + callCount.incrementAndGet());
         var expander = new LlmQueryExpander(model, stubConfig(Optional.empty(), 3));
         var result = expander.expand(RetrievalQuery.of("test query"));
 
         assertThat(result).hasSize(3);
-        assertThat(result.get(0).expandedText()).isEqualTo("hypothetical 1");
-        assertThat(result.get(1).expandedText()).isEqualTo("hypothetical 2");
-        assertThat(result.get(2).expandedText()).isEqualTo("hypothetical 3");
-        assertThat(result.get(0).text()).isEqualTo("test query");
+        assertThat(result).allSatisfy(q -> {
+            assertThat(q.text()).isEqualTo("test query");
+            assertThat(q.expandedText()).startsWith("hypothetical ");
+        });
+        assertThat(result).extracting(r -> r.expandedText())
+            .containsExactlyInAnyOrder("hypothetical 1", "hypothetical 2", "hypothetical 3");
     }
 
     @Test
@@ -102,6 +105,39 @@ class LlmQueryExpanderTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).expandedText()).isEqualTo("single hypothetical");
+    }
+
+    @Test
+    void expandRunsConcurrentlyWhenCountGreaterThanOne() throws Exception {
+        final int n = 3;
+        var allStarted = new CountDownLatch(n);
+        var proceed = new CountDownLatch(1);
+
+        ChatModel model = stubChatModel(prompt -> {
+            allStarted.countDown();
+            try {
+                proceed.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return "hypothetical";
+        });
+
+        var expander = new LlmQueryExpander(model, stubConfig(Optional.empty(), n));
+
+        var future = CompletableFuture.supplyAsync(() ->
+            expander.expand(RetrievalQuery.of("test")));
+
+        assertThat(allStarted.await(5, TimeUnit.SECONDS))
+            .as("All %d calls should start concurrently", n)
+            .isTrue();
+
+        proceed.countDown();
+
+        var result = future.get(5, TimeUnit.SECONDS);
+        assertThat(result).hasSize(n);
+        assertThat(result).allSatisfy(q ->
+            assertThat(q.expandedText()).isEqualTo("hypothetical"));
     }
 
     private static ExpansionConfig stubConfig(Optional<String> promptTemplate, int hypotheticalCount) {

@@ -9,6 +9,9 @@ import jakarta.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @ApplicationScoped
 @IfBuildProperty(name = "casehub.rag.expansion.mode", stringValue = "llm", enableIfMissing = true)
@@ -30,16 +33,38 @@ public class LlmQueryExpander implements QueryExpander {
     }
 
     @Override
-    public List<RetrievalQuery> expand(RetrievalQuery query) {
-        int n = config.hypotheticalCount();
-        String promptTemplate = config.promptTemplate().orElse(DEFAULT_PROMPT);
+    public List<RetrievalQuery> expand(final RetrievalQuery query) {
+        final int n = config.hypotheticalCount();
+        final String promptTemplate = config.promptTemplate().orElse(DEFAULT_PROMPT);
 
-        List<RetrievalQuery> expansions = new ArrayList<>(n);
-        for (int i = 0; i < n; i++) {
+        if (n == 1) {
             String prompt = promptTemplate.formatted(query.text());
             String hypothetical = chatModel.chat(prompt);
-            expansions.add(query.withExpansion(hypothetical));
+            return List.of(query.withExpansion(hypothetical));
         }
-        return expansions;
+
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<RetrievalQuery>> futures = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                futures.add(executor.submit(() -> {
+                    String prompt = promptTemplate.formatted(query.text());
+                    String hypothetical = chatModel.chat(prompt);
+                    return query.withExpansion(hypothetical);
+                }));
+            }
+            List<RetrievalQuery> expansions = new ArrayList<>(n);
+            for (var future : futures) {
+                expansions.add(future.get());
+            }
+            return expansions;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException(e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 }
