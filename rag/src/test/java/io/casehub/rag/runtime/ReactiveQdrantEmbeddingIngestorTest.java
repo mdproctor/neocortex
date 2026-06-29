@@ -7,6 +7,7 @@ import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
+import io.qdrant.client.grpc.Collections.PayloadSchemaType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
@@ -284,6 +285,144 @@ class ReactiveQdrantEmbeddingIngestorTest {
             DenseQuantization.NONE, true))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("batchSize");
+    }
+
+    @Test
+    void ensureCollectionCreatesPayloadIndexes() throws Exception {
+        CorpusRef corpus = uniqueCorpus();
+        store.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())
+        )).await().indefinitely();
+
+        var info = client.getCollectionInfoAsync(
+            TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus)).get();
+        var schema = info.getPayloadSchemaMap();
+
+        assertThat(schema).containsKey("content");
+        assertThat(schema.get("content").getDataType())
+            .isEqualTo(PayloadSchemaType.Text);
+
+        assertThat(schema).containsKey("sourceDocumentId");
+        assertThat(schema.get("sourceDocumentId").getDataType())
+            .isEqualTo(PayloadSchemaType.Keyword);
+
+        assertThat(schema).containsKey("tenantId");
+        assertThat(schema.get("tenantId").getDataType())
+            .isEqualTo(PayloadSchemaType.Keyword);
+    }
+
+    @Test
+    void ensureCollectionAddsIndexesToExistingCollection() throws Exception {
+        ReactiveQdrantEmbeddingIngestor noSparseStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse",
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            Integer.MAX_VALUE,
+            DenseQuantization.NONE, true
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        String collection = TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus);
+
+        var denseParams = io.qdrant.client.grpc.Collections.VectorParams.newBuilder()
+            .setSize(DENSE_DIM)
+            .setDistance(io.qdrant.client.grpc.Collections.Distance.Cosine)
+            .build();
+        var paramsMap = io.qdrant.client.grpc.Collections.VectorParamsMap.newBuilder()
+            .putMap("dense", denseParams)
+            .build();
+        client.createCollectionAsync(
+            io.qdrant.client.grpc.Collections.CreateCollection.newBuilder()
+                .setCollectionName(collection)
+                .setVectorsConfig(io.qdrant.client.grpc.Collections.VectorsConfig.newBuilder()
+                    .setParamsMap(paramsMap).build())
+                .build()).get();
+
+        noSparseStore.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())
+        )).await().indefinitely();
+
+        var info = client.getCollectionInfoAsync(collection).get();
+        var schema = info.getPayloadSchemaMap();
+
+        assertThat(schema).containsKey("content");
+        assertThat(schema.get("content").getDataType()).isEqualTo(PayloadSchemaType.Text);
+        assertThat(schema).containsKey("sourceDocumentId");
+        assertThat(schema.get("sourceDocumentId").getDataType()).isEqualTo(PayloadSchemaType.Keyword);
+        assertThat(schema).containsKey("tenantId");
+        assertThat(schema.get("tenantId").getDataType()).isEqualTo(PayloadSchemaType.Keyword);
+    }
+
+    @Test
+    void ensureCollectionIdempotentOnAlreadyIndexedCollection() throws Exception {
+        CorpusRef corpus = uniqueCorpus();
+
+        store.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())
+        )).await().indefinitely();
+
+        ReactiveQdrantEmbeddingIngestor freshStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse",
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            Integer.MAX_VALUE,
+            DenseQuantization.NONE, true
+        );
+
+        freshStore.ingest(corpus, List.of(
+            new ChunkInput("more content", "doc-2", Map.of())
+        )).await().indefinitely();
+
+        List<String> docs = freshStore.listDocuments(corpus).await().indefinitely();
+        assertThat(docs).containsExactlyInAnyOrder("doc-1", "doc-2");
+    }
+
+    @Test
+    void ensureCollectionThrowsOnIndexTypeMismatch() throws Exception {
+        ReactiveQdrantEmbeddingIngestor noSparseStore = new ReactiveQdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenancyStrategy.SEPARATE_COLLECTIONS,
+            "dense", "sparse",
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            Integer.MAX_VALUE,
+            DenseQuantization.NONE, true
+        );
+
+        CorpusRef corpus = uniqueCorpus();
+        String collection = TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus);
+
+        var denseParams = io.qdrant.client.grpc.Collections.VectorParams.newBuilder()
+            .setSize(DENSE_DIM)
+            .setDistance(io.qdrant.client.grpc.Collections.Distance.Cosine)
+            .build();
+        var paramsMap = io.qdrant.client.grpc.Collections.VectorParamsMap.newBuilder()
+            .putMap("dense", denseParams)
+            .build();
+        client.createCollectionAsync(
+            io.qdrant.client.grpc.Collections.CreateCollection.newBuilder()
+                .setCollectionName(collection)
+                .setVectorsConfig(io.qdrant.client.grpc.Collections.VectorsConfig.newBuilder()
+                    .setParamsMap(paramsMap).build())
+                .build()).get();
+
+        client.createPayloadIndexAsync(collection, "content",
+            PayloadSchemaType.Keyword, null, true, null, null).get();
+
+        assertThatThrownBy(() -> noSparseStore.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())
+        )).await().indefinitely())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("content")
+            .hasMessageContaining("Text")
+            .hasMessageContaining("Keyword");
     }
 
     // --- helpers ---

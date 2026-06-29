@@ -12,8 +12,13 @@ import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Collections.Distance;
+import io.qdrant.client.grpc.Collections.PayloadIndexParams;
+import io.qdrant.client.grpc.Collections.PayloadSchemaInfo;
+import io.qdrant.client.grpc.Collections.PayloadSchemaType;
 import io.qdrant.client.grpc.Collections.SparseVectorConfig;
 import io.qdrant.client.grpc.Collections.SparseVectorParams;
+import io.qdrant.client.grpc.Collections.TextIndexParams;
+import io.qdrant.client.grpc.Collections.TokenizerType;
 import io.qdrant.client.grpc.Collections.VectorParams;
 import io.qdrant.client.grpc.Collections.VectorParamsMap;
 import io.qdrant.client.grpc.Collections.VectorsConfig;
@@ -252,6 +257,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                             + ") for collection '" + collection
                             + "'. Re-index the collection or adjust matryoshka.dimension.");
                 }
+                ensurePayloadIndexes(collection, info.getPayloadSchemaMap());
                 knownCollections.add(collection);
                 return;
             }
@@ -299,6 +305,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             CreateCollection createRequest = createBuilder.build();
 
             client.createCollectionAsync(createRequest).get();
+            ensurePayloadIndexes(collection, Map.of());
             knownCollections.add(collection);
 
         } catch (InterruptedException e) {
@@ -306,6 +313,46 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             throw new RuntimeException("Interrupted during ensureCollection", e);
         } catch (ExecutionException e) {
             throw new RuntimeException("ensureCollection failed", e.getCause());
+        }
+    }
+
+    private void ensurePayloadIndexes(String collection,
+            Map<String, PayloadSchemaInfo> existingSchema)
+            throws InterruptedException, ExecutionException {
+        checkIndexType(existingSchema, "content", PayloadSchemaType.Text, collection);
+        checkIndexType(existingSchema, "sourceDocumentId", PayloadSchemaType.Keyword, collection);
+        checkIndexType(existingSchema, "tenantId", PayloadSchemaType.Keyword, collection);
+
+        if (!existingSchema.containsKey("content")) {
+            PayloadIndexParams textParams = PayloadIndexParams.newBuilder()
+                .setTextIndexParams(TextIndexParams.newBuilder()
+                    .setTokenizer(TokenizerType.Word)
+                    .setLowercase(true)
+                    .setMinTokenLen(2)
+                    .setMaxTokenLen(40)
+                    .build())
+                .build();
+            client.createPayloadIndexAsync(collection, "content",
+                PayloadSchemaType.Text, textParams, true, null, null).get();
+        }
+        if (!existingSchema.containsKey("sourceDocumentId")) {
+            client.createPayloadIndexAsync(collection, "sourceDocumentId",
+                PayloadSchemaType.Keyword, null, true, null, null).get();
+        }
+        if (!existingSchema.containsKey("tenantId")) {
+            client.createPayloadIndexAsync(collection, "tenantId",
+                PayloadSchemaType.Keyword, null, true, null, null).get();
+        }
+    }
+
+    private static void checkIndexType(Map<String, PayloadSchemaInfo> schema,
+            String field, PayloadSchemaType expected, String collection) {
+        PayloadSchemaInfo info = schema.get(field);
+        if (info != null && info.getDataType() != expected) {
+            throw new IllegalStateException(
+                "Payload index type mismatch on field '" + field
+                    + "' in collection '" + collection
+                    + "': expected " + expected + " but found " + info.getDataType());
         }
     }
 

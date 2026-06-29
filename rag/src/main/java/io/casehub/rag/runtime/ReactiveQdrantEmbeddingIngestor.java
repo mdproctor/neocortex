@@ -13,8 +13,13 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Collections.Distance;
+import io.qdrant.client.grpc.Collections.PayloadIndexParams;
+import io.qdrant.client.grpc.Collections.PayloadSchemaInfo;
+import io.qdrant.client.grpc.Collections.PayloadSchemaType;
 import io.qdrant.client.grpc.Collections.SparseVectorConfig;
 import io.qdrant.client.grpc.Collections.SparseVectorParams;
+import io.qdrant.client.grpc.Collections.TextIndexParams;
+import io.qdrant.client.grpc.Collections.TokenizerType;
 import io.qdrant.client.grpc.Collections.VectorParams;
 import io.qdrant.client.grpc.Collections.VectorParamsMap;
 import io.qdrant.client.grpc.Collections.VectorsConfig;
@@ -200,7 +205,7 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
                 .chain(exists -> {
                     if (exists) {
                         return QdrantFutures.toUni(client.getCollectionInfoAsync(k))
-                            .invoke(info -> {
+                            .chain(info -> {
                                 int existingDim = (int) info.getConfig().getParams()
                                     .getVectorsConfig().getParamsMap().getMapMap()
                                     .get(denseVectorName).getSize();
@@ -211,12 +216,12 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
                                             + existingDim + ") for collection '" + k
                                             + "'. Re-index the collection or adjust matryoshka.dimension.");
                                 }
-                            })
-                            .replaceWithVoid();
+                                return ensurePayloadIndexes(k, info.getPayloadSchemaMap());
+                            });
                     }
                     return QdrantFutures.toUni(
                         client.createCollectionAsync(buildCreateRequest(k)))
-                        .replaceWithVoid();
+                        .chain(() -> ensurePayloadIndexes(k, Map.of()));
                 })
                 .onFailure().invoke(() -> ensuredCollections.remove(k))
                 .memoize().indefinitely()
@@ -287,6 +292,56 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
             builder.setSparseVectorsConfig(sparseConfig);
         }
         return builder.build();
+    }
+
+    private Uni<Void> ensurePayloadIndexes(String collection,
+            Map<String, PayloadSchemaInfo> existingSchema) {
+        checkIndexType(existingSchema, "content", PayloadSchemaType.Text, collection);
+        checkIndexType(existingSchema, "sourceDocumentId", PayloadSchemaType.Keyword, collection);
+        checkIndexType(existingSchema, "tenantId", PayloadSchemaType.Keyword, collection);
+
+        List<Uni<Void>> pending = new ArrayList<>();
+
+        if (!existingSchema.containsKey("content")) {
+            PayloadIndexParams textParams = PayloadIndexParams.newBuilder()
+                .setTextIndexParams(TextIndexParams.newBuilder()
+                    .setTokenizer(TokenizerType.Word)
+                    .setLowercase(true)
+                    .setMinTokenLen(2)
+                    .setMaxTokenLen(40)
+                    .build())
+                .build();
+            pending.add(QdrantFutures.toUni(
+                client.createPayloadIndexAsync(collection, "content",
+                    PayloadSchemaType.Text, textParams, true, null, null))
+                .replaceWithVoid());
+        }
+        if (!existingSchema.containsKey("sourceDocumentId")) {
+            pending.add(QdrantFutures.toUni(
+                client.createPayloadIndexAsync(collection, "sourceDocumentId",
+                    PayloadSchemaType.Keyword, null, true, null, null))
+                .replaceWithVoid());
+        }
+        if (!existingSchema.containsKey("tenantId")) {
+            pending.add(QdrantFutures.toUni(
+                client.createPayloadIndexAsync(collection, "tenantId",
+                    PayloadSchemaType.Keyword, null, true, null, null))
+                .replaceWithVoid());
+        }
+
+        if (pending.isEmpty()) return Uni.createFrom().voidItem();
+        return Uni.join().all(pending).andFailFast().replaceWithVoid();
+    }
+
+    private static void checkIndexType(Map<String, PayloadSchemaInfo> schema,
+            String field, PayloadSchemaType expected, String collection) {
+        PayloadSchemaInfo info = schema.get(field);
+        if (info != null && info.getDataType() != expected) {
+            throw new IllegalStateException(
+                "Payload index type mismatch on field '" + field
+                    + "' in collection '" + collection
+                    + "': expected " + expected + " but found " + info.getDataType());
+        }
     }
 
     private record EmbeddingResult(List<Embedding> dense, List<Map<Integer, Float>> sparse) {}
