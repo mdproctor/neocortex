@@ -15,6 +15,7 @@ import io.qdrant.client.grpc.Collections.Distance;
 import io.qdrant.client.grpc.Collections.PayloadIndexParams;
 import io.qdrant.client.grpc.Collections.PayloadSchemaInfo;
 import io.qdrant.client.grpc.Collections.PayloadSchemaType;
+import io.qdrant.client.grpc.Collections.Modifier;
 import io.qdrant.client.grpc.Collections.SparseVectorConfig;
 import io.qdrant.client.grpc.Collections.SparseVectorParams;
 import io.qdrant.client.grpc.Collections.TextIndexParams;
@@ -45,13 +46,8 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     private final QdrantClient client;
     private final EmbeddingModel embeddingModel;
     private final SparseEmbedder sparseEmbedder;
-    private final TenancyStrategy tenancyStrategy;
-    private final String denseVectorName;
-    private final String sparseVectorName;
     private final TenantGuard tenantGuard;
-    private final int batchSize;
-    private final DenseQuantization quantizationType;
-    private final boolean alwaysRam;
+    private final RagConfig config;
 
     private final Set<String> knownCollections = ConcurrentHashMap.newKeySet();
 
@@ -59,26 +55,16 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             QdrantClient client,
             EmbeddingModel embeddingModel,
             SparseEmbedder sparseEmbedder,
-            TenancyStrategy tenancyStrategy,
-            String denseVectorName,
-            String sparseVectorName,
             TenantGuard tenantGuard,
-            int batchSize,
-            DenseQuantization quantizationType,
-            boolean alwaysRam) {
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive, got: " + batchSize);
+            RagConfig config) {
+        if (config.embeddingBatchSize() <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive, got: " + config.embeddingBatchSize());
         }
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
-        this.tenancyStrategy = tenancyStrategy;
-        this.denseVectorName = denseVectorName;
-        this.sparseVectorName = sparseVectorName;
         this.tenantGuard = tenantGuard;
-        this.batchSize = batchSize;
-        this.quantizationType = quantizationType;
-        this.alwaysRam = alwaysRam;
+        this.config = config;
     }
 
     @Override
@@ -86,11 +72,11 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         tenantGuard.assertTenant(corpus.tenantId());
         if (chunks.isEmpty()) return;
 
-        String collection = tenancyStrategy.collectionName(corpus);
+        String collection = config.tenancyStrategy().collectionName(corpus);
         ensureCollection(collection);
 
         int[] chunkIndices = QdrantPointBuilder.computeChunkIndices(chunks);
-        int effectiveBatchSize = Math.min(batchSize, chunks.size());
+        int effectiveBatchSize = Math.min(config.embeddingBatchSize(), chunks.size());
         int totalBatches = (chunks.size() + effectiveBatchSize - 1) / effectiveBatchSize;
 
         for (int batchNum = 0; batchNum < totalBatches; batchNum++) {
@@ -115,7 +101,8 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                 points.add(QdrantPointBuilder.buildPoint(batch.get(i), corpus,
                     denseEmbeddings.get(i),
                     sparseEmbeddings != null ? sparseEmbeddings.get(i) : null,
-                    chunkIndices[start + i], denseVectorName, sparseVectorName));
+                    chunkIndices[start + i], config.denseVectorName(), config.sparseVectorName(),
+                    config.bm25Enabled(), config.bm25VectorName()));
             }
 
             try {
@@ -138,11 +125,11 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     public void deleteDocument(CorpusRef corpus, String sourceDocumentId) {
         tenantGuard.assertTenant(corpus.tenantId());
 
-        String collection = tenancyStrategy.collectionName(corpus);
+        String collection = config.tenancyStrategy().collectionName(corpus);
 
         Filter.Builder filterBuilder = Filter.newBuilder()
             .addMust(ConditionFactory.matchKeyword("sourceDocumentId", sourceDocumentId));
-        tenancyStrategy.tenantFilter(corpus)
+        config.tenancyStrategy().tenantFilter(corpus)
             .ifPresent(tf -> tf.getMustList().forEach(filterBuilder::addMust));
 
         try {
@@ -159,15 +146,15 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     public void deleteCorpus(CorpusRef corpus) {
         tenantGuard.assertTenant(corpus.tenantId());
 
-        String collection = tenancyStrategy.collectionName(corpus);
+        String collection = config.tenancyStrategy().collectionName(corpus);
 
         try {
-            if (tenancyStrategy == TenancyStrategy.SEPARATE_COLLECTIONS) {
+            if (config.tenancyStrategy() == TenancyStrategy.SEPARATE_COLLECTIONS) {
                 client.deleteCollectionAsync(collection).get();
                 knownCollections.remove(collection);
             } else {
                 // SHARED: delete only this tenant's points
-                var tenantFilter = tenancyStrategy.tenantFilter(corpus);
+                var tenantFilter = config.tenancyStrategy().tenantFilter(corpus);
                 if (tenantFilter.isPresent()) {
                     client.deleteAsync(collection, tenantFilter.get()).get();
                 }
@@ -184,7 +171,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     public List<String> listDocuments(CorpusRef corpus) {
         tenantGuard.assertTenant(corpus.tenantId());
 
-        String collection = tenancyStrategy.collectionName(corpus);
+        String collection = config.tenancyStrategy().collectionName(corpus);
 
         // Check if collection exists — return empty if not
         try {
@@ -209,7 +196,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                     .setWithPayload(
                         io.qdrant.client.WithPayloadSelectorFactory.enable(true));
 
-                tenancyStrategy.tenantFilter(corpus).ifPresent(scrollBuilder::setFilter);
+                config.tenancyStrategy().tenantFilter(corpus).ifPresent(scrollBuilder::setFilter);
 
                 if (offset != null) {
                     scrollBuilder.setOffset(offset);
@@ -248,7 +235,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             if (client.collectionExistsAsync(collection).get()) {
                 var info = client.getCollectionInfoAsync(collection).get();
                 int existingDim = (int) info.getConfig().getParams().getVectorsConfig()
-                    .getParamsMap().getMapMap().get(denseVectorName).getSize();
+                    .getParamsMap().getMapMap().get(config.denseVectorName()).getSize();
                 int configuredDim = embeddingModel.dimension();
                 if (existingDim != configuredDim) {
                     throw new IllegalStateException(
@@ -256,6 +243,20 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                             + ") does not match existing collection dimension (" + existingDim
                             + ") for collection '" + collection
                             + "'. Re-index the collection or adjust matryoshka.dimension.");
+                }
+                var existingSparse = info.getConfig().getParams()
+                    .getSparseVectorsConfig().getMapMap();
+                if (sparseEmbedder != null && !existingSparse.containsKey(config.sparseVectorName())) {
+                    throw new IllegalStateException(
+                        "Existing collection '" + collection
+                            + "' is missing required sparse vector '" + config.sparseVectorName()
+                            + "'. Re-create the collection with sparse vector support.");
+                }
+                if (config.bm25Enabled() && !existingSparse.containsKey(config.bm25VectorName())) {
+                    throw new IllegalStateException(
+                        "Existing collection '" + collection
+                            + "' is missing required sparse vector '" + config.bm25VectorName()
+                            + "'. Re-create the collection with BM25 support.");
                 }
                 ensurePayloadIndexes(collection, info.getPayloadSchemaMap());
                 knownCollections.add(collection);
@@ -266,19 +267,19 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                 .setSize(embeddingModel.dimension())
                 .setDistance(Distance.Cosine);
 
-            if (quantizationType == DenseQuantization.BINARY) {
+            if (config.quantization().type() == DenseQuantization.BINARY) {
                 denseParamsBuilder.setQuantizationConfig(
                     io.qdrant.client.grpc.Collections.QuantizationConfig.newBuilder()
                         .setBinary(io.qdrant.client.grpc.Collections.BinaryQuantization.newBuilder()
-                            .setAlwaysRam(alwaysRam)
+                            .setAlwaysRam(config.quantization().alwaysRam())
                             .build())
                         .build());
-            } else if (quantizationType == DenseQuantization.SCALAR) {
+            } else if (config.quantization().type() == DenseQuantization.SCALAR) {
                 denseParamsBuilder.setQuantizationConfig(
                     io.qdrant.client.grpc.Collections.QuantizationConfig.newBuilder()
                         .setScalar(io.qdrant.client.grpc.Collections.ScalarQuantization.newBuilder()
                             .setType(io.qdrant.client.grpc.Collections.QuantizationType.Int8)
-                            .setAlwaysRam(alwaysRam)
+                            .setAlwaysRam(config.quantization().alwaysRam())
                             .build())
                         .build());
             }
@@ -286,7 +287,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             VectorParams denseParams = denseParamsBuilder.build();
 
             VectorParamsMap paramsMap = VectorParamsMap.newBuilder()
-                .putMap(denseVectorName, denseParams)
+                .putMap(config.denseVectorName(), denseParams)
                 .build();
 
             CreateCollection.Builder createBuilder = CreateCollection.newBuilder()
@@ -295,11 +296,16 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                     .setParamsMap(paramsMap)
                     .build());
 
-            if (sparseEmbedder != null) {
-                SparseVectorConfig sparseConfig = SparseVectorConfig.newBuilder()
-                    .putMap(sparseVectorName, SparseVectorParams.getDefaultInstance())
-                    .build();
-                createBuilder.setSparseVectorsConfig(sparseConfig);
+            if (sparseEmbedder != null || config.bm25Enabled()) {
+                SparseVectorConfig.Builder sparseConfigBuilder = SparseVectorConfig.newBuilder();
+                if (sparseEmbedder != null) {
+                    sparseConfigBuilder.putMap(config.sparseVectorName(), SparseVectorParams.getDefaultInstance());
+                }
+                if (config.bm25Enabled()) {
+                    sparseConfigBuilder.putMap(config.bm25VectorName(),
+                        SparseVectorParams.newBuilder().setModifier(Modifier.Idf).build());
+                }
+                createBuilder.setSparseVectorsConfig(sparseConfigBuilder.build());
             }
 
             CreateCollection createRequest = createBuilder.build();
@@ -322,6 +328,9 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         checkIndexType(existingSchema, "content", PayloadSchemaType.Text, collection);
         checkIndexType(existingSchema, "sourceDocumentId", PayloadSchemaType.Keyword, collection);
         checkIndexType(existingSchema, "tenantId", PayloadSchemaType.Keyword, collection);
+        checkIndexType(existingSchema, "domain", PayloadSchemaType.Keyword, collection);
+        checkIndexType(existingSchema, "type", PayloadSchemaType.Keyword, collection);
+        checkIndexType(existingSchema, "tags", PayloadSchemaType.Keyword, collection);
 
         if (!existingSchema.containsKey("content")) {
             PayloadIndexParams textParams = PayloadIndexParams.newBuilder()
@@ -341,6 +350,18 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
         }
         if (!existingSchema.containsKey("tenantId")) {
             client.createPayloadIndexAsync(collection, "tenantId",
+                PayloadSchemaType.Keyword, null, true, null, null).get();
+        }
+        if (!existingSchema.containsKey("domain")) {
+            client.createPayloadIndexAsync(collection, "domain",
+                PayloadSchemaType.Keyword, null, true, null, null).get();
+        }
+        if (!existingSchema.containsKey("type")) {
+            client.createPayloadIndexAsync(collection, "type",
+                PayloadSchemaType.Keyword, null, true, null, null).get();
+        }
+        if (!existingSchema.containsKey("tags")) {
+            client.createPayloadIndexAsync(collection, "tags",
                 PayloadSchemaType.Keyword, null, true, null, null).get();
         }
     }

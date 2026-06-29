@@ -3,6 +3,7 @@ package io.casehub.rag;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -92,5 +93,70 @@ class ChunkInputTest {
         assertThat(chunk1).isEqualTo(chunk2);
         assertThat(chunk1).hasSameHashCodeAs(chunk2);
         assertThat(chunk1).isNotEqualTo(chunk3);
+    }
+
+    @Test
+    void backwardCompatibleConstructor() {
+        var chunk = new ChunkInput("content", "doc-1", Map.of("key", "val"));
+        assertThat(chunk.listMetadata()).isEmpty();
+    }
+
+    @Test
+    void fullConstructorWithListMetadata() {
+        var chunk = new ChunkInput("content", "doc-1", Map.of("domain", "jvm"),
+            Map.of("tags", List.of("cdi", "quarkus")));
+        assertThat(chunk.listMetadata().get("tags")).containsExactly("cdi", "quarkus");
+    }
+
+    @Test
+    void listMetadataIsImmutable() {
+        var chunk = new ChunkInput("content", "doc-1", Map.of(),
+            Map.of("tags", List.of("one")));
+        assertThatThrownBy(() -> chunk.listMetadata().put("new", List.of()))
+            .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void metadataRejectsContentKey() {
+        assertThatThrownBy(() -> new ChunkInput("text", "doc-1", Map.of("content", "x")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("content");
+    }
+
+    @Test
+    void metadataRejectsSourceDocumentIdKey() {
+        assertThatThrownBy(() -> new ChunkInput("text", "doc-1", Map.of("sourceDocumentId", "x")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("sourceDocumentId");
+    }
+
+    @Test
+    void metadataAllowsNonReservedKeys() {
+        var chunk = new ChunkInput("text", "doc-1", Map.of("domain", "jvm", "author", "mdp"));
+        assertThat(chunk.metadata()).containsExactlyInAnyOrderEntriesOf(
+            Map.of("domain", "jvm", "author", "mdp"));
+    }
+
+    @Test
+    void listMetadataRejectsContentKey() {
+        assertThatThrownBy(() -> new ChunkInput("text", "doc-1", Map.of(),
+            Map.of("content", List.of("x"))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("content");
+    }
+
+    @Test
+    void listMetadataRejectsSourceDocumentIdKey() {
+        assertThatThrownBy(() -> new ChunkInput("text", "doc-1", Map.of(),
+            Map.of("sourceDocumentId", List.of("x"))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("sourceDocumentId");
+    }
+
+    @Test
+    void listMetadataAllowsNonReservedKeys() {
+        var chunk = new ChunkInput("text", "doc-1", Map.of(),
+            Map.of("tags", List.of("cdi", "quarkus")));
+        assertThat(chunk.listMetadata().get("tags")).containsExactly("cdi", "quarkus");
     }
 }

@@ -2,6 +2,7 @@ package io.casehub.rag;
 
 import org.junit.jupiter.api.Test;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,10 +10,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ExtractionResultTest {
 
     @Test
-    void validConstruction() {
-        var result = new ExtractionResult("body text", Map.of("title", "Test"));
-        assertThat(result.body()).isEqualTo("body text");
-        assertThat(result.metadata()).containsEntry("title", "Test");
+    void backwardCompatibleConstructor() {
+        var result = new ExtractionResult("body", Map.of("key", "val"));
+        assertThat(result.listMetadata()).isEmpty();
+    }
+
+    @Test
+    void fullConstructorWithListMetadata() {
+        var result = new ExtractionResult("body", Map.of("domain", "jvm"),
+            Map.of("tags", List.of("cdi", "quarkus")));
+        assertThat(result.listMetadata().get("tags")).containsExactly("cdi", "quarkus");
+    }
+
+    @Test
+    void listMetadataIsImmutable() {
+        var result = new ExtractionResult("body", Map.of(),
+            Map.of("tags", List.of("one")));
+        assertThatThrownBy(() -> result.listMetadata().put("new", List.of()))
+            .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test

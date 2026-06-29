@@ -20,6 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,23 +65,16 @@ class HybridCaseRetrieverTest {
 
         TenantGuard guard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
 
+        RagConfig config = RagTestFixtures.stubConfig();
+
         store = new QdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            guard,
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            guard, config
         );
 
         retriever = new HybridCaseRetriever(
             client, embeddingModel, sparseEmbedder,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            64, 64, 60,
-            false, 10, null,
-            guard,
-            DenseQuantization.NONE, OptionalDouble.empty()
+            guard, null, config
         );
     }
 
@@ -147,23 +141,16 @@ class HybridCaseRetrieverTest {
 
         TenantGuard denseOnlyGuard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
 
+        RagConfig denseOnlyConfig = RagTestFixtures.stubConfig();
+
         QdrantEmbeddingIngestor denseOnlyStore = new QdrantEmbeddingIngestor(
             client, denseOnlyModel, null, // no sparse embedder
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            denseOnlyGuard,
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            denseOnlyGuard, denseOnlyConfig
         );
 
         HybridCaseRetriever denseOnlyRetriever = new HybridCaseRetriever(
             client, denseOnlyModel, null, // no sparse embedder
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            64, 64, 60,
-            false, 10, null,
-            denseOnlyGuard,
-            DenseQuantization.NONE, OptionalDouble.empty()
+            denseOnlyGuard, null, denseOnlyConfig
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -208,23 +195,16 @@ class HybridCaseRetrieverTest {
         TenantGuard noTenantGuard = TenantGuard.of(null);
         EmbeddingModel model = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
 
+        RagConfig noTenantConfig = RagTestFixtures.stubConfig();
+
         QdrantEmbeddingIngestor noTenantStore = new QdrantEmbeddingIngestor(
             client, model, null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            noTenantGuard,
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            noTenantGuard, noTenantConfig
         );
 
         HybridCaseRetriever noTenantRetriever = new HybridCaseRetriever(
             client, model, null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            64, 64, 60,
-            false, 10, null,
-            noTenantGuard,
-            DenseQuantization.NONE, OptionalDouble.empty()
+            noTenantGuard, null, noTenantConfig
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -243,22 +223,16 @@ class HybridCaseRetrieverTest {
         EmbeddingModel model = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
         TenantGuard guard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
 
+        RagConfig quantizedConfig = RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.BINARY, true, OptionalDouble.of(2.0), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, false);
+
         QdrantEmbeddingIngestor quantizedStore = new QdrantEmbeddingIngestor(
             client, model, null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            guard, Integer.MAX_VALUE,
-            DenseQuantization.BINARY, true
+            guard, quantizedConfig
         );
 
         HybridCaseRetriever quantizedRetriever = new HybridCaseRetriever(
             client, model, null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME,
-            64, 64, 60,
-            false, 10, null,
-            guard,
-            DenseQuantization.BINARY, java.util.OptionalDouble.of(2.0)
+            guard, null, quantizedConfig
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -268,6 +242,71 @@ class HybridCaseRetrieverTest {
 
         List<RetrievedChunk> results = quantizedRetriever.retrieve(
             RetrievalQuery.of("quantized"), corpus, 10, null);
+
+        assertThat(results).isNotEmpty();
+    }
+
+    @Test
+    void bm25OnlyModeIngestAndRetrieve() {
+        // Dense + BM25, no SPLADE
+        RagConfig bm25Config = RagTestFixtures.stubConfig("dense", "sparse", "bm25",
+            TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true,
+            OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE,
+            64, 64, 40, 60, false, 10, true);
+
+        QdrantEmbeddingIngestor bm25Store = new QdrantEmbeddingIngestor(
+            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)), bm25Config);
+
+        HybridCaseRetriever bm25Retriever = new HybridCaseRetriever(
+            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            null, bm25Config);
+
+        CorpusRef corpus = uniqueCorpus();
+        bm25Store.ingest(corpus, List.of(
+            new ChunkInput("ConcurrentHashMap is thread-safe", "doc-1",
+                Map.of("category", "java")),
+            new ChunkInput("Python asyncio event loop", "doc-2",
+                Map.of("category", "python"))
+        ));
+
+        List<RetrievedChunk> results = bm25Retriever.retrieve(
+            RetrievalQuery.of("HashMap"), corpus, 10, null);
+
+        assertThat(results).isNotEmpty();
+    }
+
+    @Test
+    void threeWayRrfIngestAndRetrieve() {
+        // Dense + SPLADE + BM25
+        InMemoryInferenceModel spladeModel = InMemoryInferenceModel.returning(
+            0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f);
+        SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
+
+        RagConfig threeWayConfig = RagTestFixtures.stubConfig("dense", "sparse", "bm25",
+            TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true,
+            OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE,
+            64, 64, 40, 60, false, 10, true);
+
+        QdrantEmbeddingIngestor store3 = new QdrantEmbeddingIngestor(
+            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            sparseEmbedder, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            threeWayConfig);
+
+        HybridCaseRetriever retriever3 = new HybridCaseRetriever(
+            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            sparseEmbedder, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            null, threeWayConfig);
+
+        CorpusRef corpus = uniqueCorpus();
+        store3.ingest(corpus, List.of(
+            new ChunkInput("ApplicationScoped CDI bean", "doc-1", Map.of()),
+            new ChunkInput("Quarkus REST endpoint", "doc-2", Map.of())
+        ));
+
+        List<RetrievedChunk> results = retriever3.retrieve(
+            RetrievalQuery.of("CDI bean"), corpus, 10, null);
 
         assertThat(results).isNotEmpty();
     }

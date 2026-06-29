@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 class QdrantPointBuilderTest {
 
@@ -64,9 +65,9 @@ class QdrantPointBuilderTest {
         Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f, 0.3f});
 
         PointStruct p1 = QdrantPointBuilder.buildPoint(
-            chunk, new CorpusRef("t1", "corpus"), embedding, null, 0, "dense", "sparse");
+            chunk, new CorpusRef("t1", "corpus"), embedding, null, 0, "dense", "sparse", false, "bm25");
         PointStruct p2 = QdrantPointBuilder.buildPoint(
-            chunk, new CorpusRef("t1", "corpus"), embedding, null, 0, "dense", "sparse");
+            chunk, new CorpusRef("t1", "corpus"), embedding, null, 0, "dense", "sparse", false, "bm25");
 
         assertThat(p1.getId()).isEqualTo(p2.getId());
     }
@@ -78,9 +79,9 @@ class QdrantPointBuilderTest {
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct p0 = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse");
+            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25");
         PointStruct p1 = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 1, "dense", "sparse");
+            chunk, corpus, embedding, null, 1, "dense", "sparse", false, "bm25");
 
         assertThat(p0.getId()).isNotEqualTo(p1.getId());
     }
@@ -92,7 +93,7 @@ class QdrantPointBuilderTest {
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct point = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse");
+            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25");
 
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("dense");
         assertThat(point.getVectors().getVectors().getVectorsMap()).doesNotContainKey("sparse");
@@ -110,9 +111,62 @@ class QdrantPointBuilderTest {
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct point = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, sparse, 0, "dense", "sparse");
+            chunk, corpus, embedding, sparse, 0, "dense", "sparse", false, "bm25");
 
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("dense");
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("sparse");
+    }
+
+    @Test
+    void buildPointRejectsTenantIdMetadata() {
+        ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of("tenantId", "evil"));
+        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        CorpusRef corpus = new CorpusRef("t1", "corpus");
+
+        assertThat(catchThrowable(() -> QdrantPointBuilder.buildPoint(
+            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("tenantId");
+    }
+
+    @Test
+    void buildPointRejectsTenantIdInListMetadata() {
+        ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of(),
+            Map.of("tenantId", List.of("evil")));
+        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        CorpusRef corpus = new CorpusRef("t1", "corpus");
+
+        assertThat(catchThrowable(() -> QdrantPointBuilder.buildPoint(
+            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("tenantId");
+    }
+
+    @Test
+    void buildPointWithBm25Vector() {
+        ChunkInput chunk = new ChunkInput("ConcurrentHashMap is useful", "doc-1", Map.of());
+        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        CorpusRef corpus = new CorpusRef("t1", "corpus");
+
+        PointStruct point = QdrantPointBuilder.buildPoint(
+            chunk, corpus, embedding, null, 0, "dense", "sparse", true, "bm25");
+
+        assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("bm25");
+        var bm25Vector = point.getVectors().getVectors().getVectorsMap().get("bm25");
+        assertThat(bm25Vector.hasDocument()).isTrue();
+        assertThat(bm25Vector.getDocument().getText()).contains("Concurrent Hash Map");
+        assertThat(bm25Vector.getDocument().getModel()).isEqualTo("qdrant/bm25");
+    }
+
+    @Test
+    void buildPointWithoutBm25WhenDisabled() {
+        ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of());
+        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        CorpusRef corpus = new CorpusRef("t1", "corpus");
+
+        PointStruct point = QdrantPointBuilder.buildPoint(
+            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25");
+
+        assertThat(point.getVectors().getVectors().getVectorsMap()).doesNotContainKey("bm25");
     }
 }

@@ -16,6 +16,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,11 +61,8 @@ class QdrantEmbeddingIngestorTest {
 
         store = new QdrantEmbeddingIngestor(
             client, embeddingModel, sparseEmbedder,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            RagTestFixtures.stubConfig()
         );
     }
 
@@ -173,11 +172,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null, // no sparse embedder
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            RagTestFixtures.stubConfig()
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -235,11 +231,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(null),
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            RagTestFixtures.stubConfig()
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -260,11 +253,8 @@ class QdrantEmbeddingIngestorTest {
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             new SparseEmbedder(InMemoryInferenceModel.returning(
                 0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f)),
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            2,
-            DenseQuantization.NONE, true);
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 2, 64, 64, 40, 60, false, 10, false));
 
         CorpusRef corpus = uniqueCorpus();
         batchedStore.ingest(corpus, List.of(
@@ -285,11 +275,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null, // dense-only for simplicity
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            2,
-            DenseQuantization.NONE, true);
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 2, 64, 64, 40, 60, false, 10, false));
 
         CorpusRef corpus = uniqueCorpus();
         // Batch 1: [A#0, A#1], Batch 2: [A#2]
@@ -315,11 +302,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            1,
-            DenseQuantization.NONE, true);
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 1, 64, 64, 40, 60, false, 10, false));
 
         CorpusRef corpus = uniqueCorpus();
         batchedStore.ingest(corpus, List.of(
@@ -337,11 +321,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            0,
-            DenseQuantization.NONE, true))
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 0, 64, 64, 40, 60, false, 10, false)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("batchSize");
     }
@@ -352,11 +333,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.BINARY, true
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.BINARY, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, false)
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -379,11 +357,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.SCALAR, true
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.SCALAR, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, false)
         );
 
         CorpusRef corpus = uniqueCorpus();
@@ -430,11 +405,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(2),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            RagTestFixtures.stubConfig()
         );
 
         assertThatThrownBy(() -> wrongDimStore.ingest(corpus, List.of(
@@ -522,11 +494,8 @@ class QdrantEmbeddingIngestorTest {
             client,
             new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
             null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true
+            RagTestFixtures.stubConfig()
         );
 
         // Second ingest on existing collection with indexes already present
@@ -573,6 +542,83 @@ class QdrantEmbeddingIngestorTest {
             .hasMessageContaining("content")
             .hasMessageContaining("Text")
             .hasMessageContaining("Keyword");
+    }
+
+    @Test
+    void ensureCollectionCreatesBm25SparseVector() throws Exception {
+        QdrantEmbeddingIngestor bm25Store = new QdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, true));
+
+        CorpusRef corpus = uniqueCorpus();
+        bm25Store.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of())));
+
+        var info = client.getCollectionInfoAsync(
+            TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus)).get();
+        var sparseVectors = info.getConfig().getParams().getSparseVectorsConfig().getMapMap();
+
+        assertThat(sparseVectors).containsKey("bm25");
+        assertThat(sparseVectors.get("bm25").getModifier())
+            .isEqualTo(io.qdrant.client.grpc.Collections.Modifier.Idf);
+    }
+
+    @Test
+    void ensureCollectionRejectsMissingBm25Vector() throws Exception {
+        // Create collection without BM25 vector
+        CorpusRef corpus = uniqueCorpus();
+        String collection = TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus);
+
+        var denseParams = io.qdrant.client.grpc.Collections.VectorParams.newBuilder()
+            .setSize(DENSE_DIM)
+            .setDistance(io.qdrant.client.grpc.Collections.Distance.Cosine).build();
+        client.createCollectionAsync(
+            io.qdrant.client.grpc.Collections.CreateCollection.newBuilder()
+                .setCollectionName(collection)
+                .setVectorsConfig(io.qdrant.client.grpc.Collections.VectorsConfig.newBuilder()
+                    .setParamsMap(io.qdrant.client.grpc.Collections.VectorParamsMap.newBuilder()
+                        .putMap("dense", denseParams).build()).build())
+                .build()).get();
+
+        // Try ingesting with BM25 enabled — should fail
+        QdrantEmbeddingIngestor bm25Store = new QdrantEmbeddingIngestor(
+            client,
+            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
+            null,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, true));
+
+        assertThatThrownBy(() -> bm25Store.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of()))))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("bm25");
+    }
+
+    @Test
+    void ensureCollectionRejectsMissingSparseVector() throws Exception {
+        // Create collection without SPLADE sparse vector
+        CorpusRef corpus = uniqueCorpus();
+        String collection = TenancyStrategy.SEPARATE_COLLECTIONS.collectionName(corpus);
+
+        var denseParams = io.qdrant.client.grpc.Collections.VectorParams.newBuilder()
+            .setSize(DENSE_DIM)
+            .setDistance(io.qdrant.client.grpc.Collections.Distance.Cosine).build();
+        client.createCollectionAsync(
+            io.qdrant.client.grpc.Collections.CreateCollection.newBuilder()
+                .setCollectionName(collection)
+                .setVectorsConfig(io.qdrant.client.grpc.Collections.VectorsConfig.newBuilder()
+                    .setParamsMap(io.qdrant.client.grpc.Collections.VectorParamsMap.newBuilder()
+                        .putMap("dense", denseParams).build()).build())
+                .build()).get();
+
+        // Try ingesting with SPLADE enabled — should fail
+        assertThatThrownBy(() -> store.ingest(corpus, List.of(
+            new ChunkInput("content", "doc-1", Map.of()))))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("sparse");
     }
 
     // --- helpers ---

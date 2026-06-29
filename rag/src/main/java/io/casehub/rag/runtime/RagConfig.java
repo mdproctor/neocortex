@@ -20,6 +20,12 @@ public interface RagConfig {
     @WithDefault("sparse")
     String sparseVectorName();
 
+    @WithDefault("true")
+    boolean bm25Enabled();
+
+    @WithDefault("bm25")
+    String bm25VectorName();
+
     RetrievalConfig retrieval();
 
     @WithDefault("100")
@@ -62,6 +68,9 @@ public interface RagConfig {
 
         @WithDefault("40")
         int sparseTopK();
+
+        @WithDefault("40")
+        int bm25TopK();
 
         @WithDefault("60")
         int rrfK();

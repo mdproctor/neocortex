@@ -27,52 +27,34 @@ public class RagBeanProducer {
             : embeddingModel;
     }
 
+    private SparseEmbedder resolveSparseEmbedder() {
+        return sparseEmbedderInstance.isResolvable()
+            ? sparseEmbedderInstance.get() : null;
+    }
+
+    private TenantGuard resolveTenantGuard() {
+        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
+            ? currentPrincipalInstance.get() : null;
+        return TenantGuard.of(principal);
+    }
+
+    private CrossEncoderReranker resolveReranker() {
+        return rerankerInstance.isResolvable()
+            ? rerankerInstance.get() : null;
+    }
+
     @Produces
     @ApplicationScoped
     QdrantEmbeddingIngestor corpusStore() {
-        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
-            ? sparseEmbedderInstance.get() : null;
-        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
-            ? currentPrincipalInstance.get() : null;
-        TenantGuard tenantGuard = TenantGuard.of(principal);
-        return new QdrantEmbeddingIngestor(
-            client,
-            effectiveEmbeddingModel(),
-            sparseEmbedder,
-            config.tenancyStrategy(),
-            config.denseVectorName(),
-            config.sparseVectorName(),
-            tenantGuard,
-            config.embeddingBatchSize(),
-            config.quantization().type(),
-            config.quantization().alwaysRam());
+        return new QdrantEmbeddingIngestor(client, effectiveEmbeddingModel(),
+            resolveSparseEmbedder(), resolveTenantGuard(), config);
     }
 
     @Produces
     @ApplicationScoped
     HybridCaseRetriever caseRetriever() {
-        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
-            ? sparseEmbedderInstance.get() : null;
-        CrossEncoderReranker reranker = rerankerInstance.isResolvable()
-            ? rerankerInstance.get() : null;
-        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
-            ? currentPrincipalInstance.get() : null;
-        TenantGuard tenantGuard = TenantGuard.of(principal);
-        return new HybridCaseRetriever(
-            client,
-            effectiveEmbeddingModel(),
-            sparseEmbedder,
-            config.tenancyStrategy(),
-            config.denseVectorName(),
-            config.sparseVectorName(),
-            config.retrieval().denseTopK(),
-            config.retrieval().sparseTopK(),
-            config.retrieval().rrfK(),
-            config.retrieval().rerankEnabled(),
-            config.retrieval().rerankTopN(),
-            reranker,
-            tenantGuard,
-            config.quantization().type(),
-            config.quantization().oversampling());
+        return new HybridCaseRetriever(client, effectiveEmbeddingModel(),
+            resolveSparseEmbedder(), resolveTenantGuard(),
+            resolveReranker(), config);
     }
 }

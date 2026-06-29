@@ -138,7 +138,7 @@ Tracks `casehubio/parent#158`. Authoritative design: `Hortora/spec: docs/superpo
 
 ### 2. RAG Integration (`rag-*` modules)
 
-casehub-specific LangChain4j RAG pipeline wiring. Exposes `EmbeddingIngestor` SPI (ingest documents) and `CaseRetriever` SPI (retrieve context for case steps), with reactive variants (`ReactiveEmbeddingIngestor`, `ReactiveCaseRetriever`) for consumers on the Vert.x event loop. Tenancy-isolated Qdrant collections. Hybrid dense (LangChain4j) + sparse (inference-splade) search via RRF fusion. `CorpusIngestionService` bridges corpus modules to RAG — polls `ChangeSource`, reads via `CorpusReader`, extracts metadata (`MetadataExtractor` SPI), chunks, and pushes to Qdrant via `EmbeddingIngestor`. Config-driven with cursor persistence (`CursorStore` SPI) and admin-triggered reconciliation.
+casehub-specific LangChain4j RAG pipeline wiring. Exposes `EmbeddingIngestor` SPI (ingest documents) and `CaseRetriever` SPI (retrieve context for case steps), with reactive variants (`ReactiveEmbeddingIngestor`, `ReactiveCaseRetriever`) for consumers on the Vert.x event loop. Tenancy-isolated Qdrant collections. Hybrid dense (LangChain4j) + sparse (inference-splade) + BM25 (server-side Qdrant inference) search via RRF fusion. `CorpusIngestionService` bridges corpus modules to RAG — polls `ChangeSource`, reads via `CorpusReader`, extracts metadata (`MetadataExtractor` SPI), chunks, and pushes to Qdrant via `EmbeddingIngestor`. Config-driven with cursor persistence (`CursorStore` SPI) and admin-triggered reconciliation.
 
 Tracks `casehubio/parent#164`.
 
@@ -154,7 +154,7 @@ inference-splade/   — sparse SPLADE embeddings (Map<Integer, Float>)
 inference-inmem/    — deterministic stubs; no JNI; safe in all test contexts
 inference-quarkus/  — CDI wiring, @InferenceModel qualifier, Dev Services, @QuarkusTest
 rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, CaseRetriever + ReactiveCaseRetriever SPIs, QueryExpander SPI, RetrievalQuery, MetadataExtractor + CursorStore SPIs, value types — Mutiny provided
-rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion, MatryoshkaEmbeddingModel (truncating decorator), DenseQuantization (binary/scalar), search-time oversampling, @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
+rag/                — LangChain4j wiring, Qdrant, hybrid RRF fusion (dense + SPLADE + BM25), MatryoshkaEmbeddingModel (truncating decorator), DenseQuantization (binary/scalar), search-time oversampling, CamelCaseExpander (BM25 token pre-processing), @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
 rag-tika/           — optional Apache Tika document parsing → chunked ChunkInput
 rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped)
 rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever and ReactiveCaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath + config activated. CrossEncoderRelevanceEvaluator default. Already-graded guard prevents double-application through blocking-to-reactive bridge.

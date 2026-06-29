@@ -16,6 +16,7 @@ import io.qdrant.client.grpc.Collections.Distance;
 import io.qdrant.client.grpc.Collections.PayloadIndexParams;
 import io.qdrant.client.grpc.Collections.PayloadSchemaInfo;
 import io.qdrant.client.grpc.Collections.PayloadSchemaType;
+import io.qdrant.client.grpc.Collections.Modifier;
 import io.qdrant.client.grpc.Collections.SparseVectorConfig;
 import io.qdrant.client.grpc.Collections.SparseVectorParams;
 import io.qdrant.client.grpc.Collections.TextIndexParams;
@@ -49,14 +50,8 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
     private final QdrantClient client;
     private final EmbeddingModel embeddingModel;
     private final SparseEmbedder sparseEmbedder;
-    private final TenancyStrategy tenancyStrategy;
-    private final String denseVectorName;
-    private final String sparseVectorName;
-    private final int denseDimension;
     private final TenantGuard tenantGuard;
-    private final int batchSize;
-    private final DenseQuantization quantizationType;
-    private final boolean alwaysRam;
+    private final RagConfig config;
 
     private final ConcurrentHashMap<String, Uni<Void>> ensuredCollections = new ConcurrentHashMap<>();
 
@@ -64,27 +59,16 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
             QdrantClient client,
             EmbeddingModel embeddingModel,
             SparseEmbedder sparseEmbedder,
-            TenancyStrategy tenancyStrategy,
-            String denseVectorName,
-            String sparseVectorName,
             TenantGuard tenantGuard,
-            int batchSize,
-            DenseQuantization quantizationType,
-            boolean alwaysRam) {
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive, got: " + batchSize);
+            RagConfig config) {
+        if (config.embeddingBatchSize() <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive, got: " + config.embeddingBatchSize());
         }
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
-        this.tenancyStrategy = tenancyStrategy;
-        this.denseVectorName = denseVectorName;
-        this.sparseVectorName = sparseVectorName;
-        this.denseDimension = embeddingModel.dimension();
         this.tenantGuard = tenantGuard;
-        this.batchSize = batchSize;
-        this.quantizationType = quantizationType;
-        this.alwaysRam = alwaysRam;
+        this.config = config;
     }
 
     @Override
@@ -93,9 +77,9 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
             tenantGuard.assertTenant(corpus.tenantId());
             if (chunks.isEmpty()) return Uni.createFrom().voidItem();
 
-            String collection = tenancyStrategy.collectionName(corpus);
+            String collection = config.tenancyStrategy().collectionName(corpus);
             int[] chunkIndices = QdrantPointBuilder.computeChunkIndices(chunks);
-            int effectiveBatchSize = Math.min(batchSize, chunks.size());
+            int effectiveBatchSize = Math.min(config.embeddingBatchSize(), chunks.size());
             int totalBatches = (chunks.size() + effectiveBatchSize - 1) / effectiveBatchSize;
 
             List<int[]> batchRanges = new ArrayList<>(totalBatches);
@@ -131,11 +115,14 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
                                 points.add(QdrantPointBuilder.buildPoint(batch.get(i), corpus,
                                     embeddings.dense().get(i),
                                     embeddings.sparse() != null ? embeddings.sparse().get(i) : null,
-                                    chunkIndices[start + i], denseVectorName, sparseVectorName));
+                                    chunkIndices[start + i], config.denseVectorName(), config.sparseVectorName(),
+                                    config.bm25Enabled(), config.bm25VectorName()));
                             }
                             return QdrantFutures.toUni(client.upsertAsync(collection, points))
-                                .invoke(() -> LOG.fine(() -> "Ingested batch " + (batchNum + 1) + "/" + totalBatches
-                                    + " (" + end + "/" + chunks.size() + " chunks)"))
+                                .invoke(() -> {
+                                    LOG.fine(() -> "Ingested batch " + (batchNum + 1) + "/" + totalBatches
+                                        + " (" + end + "/" + chunks.size() + " chunks)");
+                                })
                                 .replaceWithVoid();
                         });
                     })
@@ -148,11 +135,11 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
     public Uni<Void> deleteDocument(CorpusRef corpus, String sourceDocumentId) {
         return Uni.createFrom().deferred(() -> {
             tenantGuard.assertTenant(corpus.tenantId());
-            String collection = tenancyStrategy.collectionName(corpus);
+            String collection = config.tenancyStrategy().collectionName(corpus);
 
             Filter.Builder filterBuilder = Filter.newBuilder()
                 .addMust(ConditionFactory.matchKeyword("sourceDocumentId", sourceDocumentId));
-            tenancyStrategy.tenantFilter(corpus)
+            config.tenancyStrategy().tenantFilter(corpus)
                 .ifPresent(tf -> tf.getMustList().forEach(filterBuilder::addMust));
 
             return QdrantFutures.toUni(client.deleteAsync(collection, filterBuilder.build()))
@@ -164,14 +151,14 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
     public Uni<Void> deleteCorpus(CorpusRef corpus) {
         return Uni.createFrom().deferred(() -> {
             tenantGuard.assertTenant(corpus.tenantId());
-            String collection = tenancyStrategy.collectionName(corpus);
+            String collection = config.tenancyStrategy().collectionName(corpus);
 
-            if (tenancyStrategy == TenancyStrategy.SEPARATE_COLLECTIONS) {
+            if (config.tenancyStrategy() == TenancyStrategy.SEPARATE_COLLECTIONS) {
                 return QdrantFutures.toUni(client.deleteCollectionAsync(collection))
                     .invoke(() -> ensuredCollections.remove(collection))
                     .replaceWithVoid();
             } else {
-                Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+                Optional<Filter> tenantFilter = config.tenancyStrategy().tenantFilter(corpus);
                 if (tenantFilter.isPresent()) {
                     return QdrantFutures.toUni(client.deleteAsync(collection, tenantFilter.get()))
                         .replaceWithVoid();
@@ -185,8 +172,8 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
     public Uni<List<String>> listDocuments(CorpusRef corpus) {
         return Uni.createFrom().deferred(() -> {
             tenantGuard.assertTenant(corpus.tenantId());
-            String collection = tenancyStrategy.collectionName(corpus);
-            Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+            String collection = config.tenancyStrategy().collectionName(corpus);
+            Optional<Filter> tenantFilter = config.tenancyStrategy().tenantFilter(corpus);
 
             return QdrantFutures.<Boolean>toUni(client.collectionExistsAsync(collection))
             .chain(exists -> {
@@ -208,13 +195,28 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
                             .chain(info -> {
                                 int existingDim = (int) info.getConfig().getParams()
                                     .getVectorsConfig().getParamsMap().getMapMap()
-                                    .get(denseVectorName).getSize();
-                                if (existingDim != denseDimension) {
+                                    .get(config.denseVectorName()).getSize();
+                                int denseDim = embeddingModel.dimension();
+                                if (existingDim != denseDim) {
                                     throw new IllegalStateException(
-                                        "Configured embedding dimension (" + denseDimension
+                                        "Configured embedding dimension (" + denseDim
                                             + ") does not match existing collection dimension ("
                                             + existingDim + ") for collection '" + k
                                             + "'. Re-index the collection or adjust matryoshka.dimension.");
+                                }
+                                var existingSparse = info.getConfig().getParams()
+                                    .getSparseVectorsConfig().getMapMap();
+                                if (sparseEmbedder != null && !existingSparse.containsKey(config.sparseVectorName())) {
+                                    throw new IllegalStateException(
+                                        "Existing collection '" + k
+                                            + "' is missing required sparse vector '" + config.sparseVectorName()
+                                            + "'. Re-create the collection with sparse vector support.");
+                                }
+                                if (config.bm25Enabled() && !existingSparse.containsKey(config.bm25VectorName())) {
+                                    throw new IllegalStateException(
+                                        "Existing collection '" + k
+                                            + "' is missing required sparse vector '" + config.bm25VectorName()
+                                            + "'. Re-create the collection with BM25 support.");
                                 }
                                 return ensurePayloadIndexes(k, info.getPayloadSchemaMap());
                             });
@@ -257,22 +259,22 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
 
     private CreateCollection buildCreateRequest(String collection) {
         VectorParams.Builder denseParamsBuilder = VectorParams.newBuilder()
-            .setSize(denseDimension)
+            .setSize(embeddingModel.dimension())
             .setDistance(Distance.Cosine);
 
-        if (quantizationType == DenseQuantization.BINARY) {
+        if (config.quantization().type() == DenseQuantization.BINARY) {
             denseParamsBuilder.setQuantizationConfig(
                 io.qdrant.client.grpc.Collections.QuantizationConfig.newBuilder()
                     .setBinary(io.qdrant.client.grpc.Collections.BinaryQuantization.newBuilder()
-                        .setAlwaysRam(alwaysRam)
+                        .setAlwaysRam(config.quantization().alwaysRam())
                         .build())
                     .build());
-        } else if (quantizationType == DenseQuantization.SCALAR) {
+        } else if (config.quantization().type() == DenseQuantization.SCALAR) {
             denseParamsBuilder.setQuantizationConfig(
                 io.qdrant.client.grpc.Collections.QuantizationConfig.newBuilder()
                     .setScalar(io.qdrant.client.grpc.Collections.ScalarQuantization.newBuilder()
                         .setType(io.qdrant.client.grpc.Collections.QuantizationType.Int8)
-                        .setAlwaysRam(alwaysRam)
+                        .setAlwaysRam(config.quantization().alwaysRam())
                         .build())
                     .build());
         }
@@ -280,16 +282,21 @@ public class ReactiveQdrantEmbeddingIngestor implements ReactiveEmbeddingIngesto
         VectorParams denseParams = denseParamsBuilder.build();
 
         VectorParamsMap paramsMap = VectorParamsMap.newBuilder()
-            .putMap(denseVectorName, denseParams)
+            .putMap(config.denseVectorName(), denseParams)
             .build();
         CreateCollection.Builder builder = CreateCollection.newBuilder()
             .setCollectionName(collection)
             .setVectorsConfig(VectorsConfig.newBuilder().setParamsMap(paramsMap).build());
-        if (sparseEmbedder != null) {
-            SparseVectorConfig sparseConfig = SparseVectorConfig.newBuilder()
-                .putMap(sparseVectorName, SparseVectorParams.getDefaultInstance())
-                .build();
-            builder.setSparseVectorsConfig(sparseConfig);
+        if (sparseEmbedder != null || config.bm25Enabled()) {
+            SparseVectorConfig.Builder sparseConfigBuilder = SparseVectorConfig.newBuilder();
+            if (sparseEmbedder != null) {
+                sparseConfigBuilder.putMap(config.sparseVectorName(), SparseVectorParams.getDefaultInstance());
+            }
+            if (config.bm25Enabled()) {
+                sparseConfigBuilder.putMap(config.bm25VectorName(),
+                    SparseVectorParams.newBuilder().setModifier(Modifier.Idf).build());
+            }
+            builder.setSparseVectorsConfig(sparseConfigBuilder.build());
         }
         return builder.build();
     }

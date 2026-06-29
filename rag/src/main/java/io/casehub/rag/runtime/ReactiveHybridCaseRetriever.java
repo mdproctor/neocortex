@@ -16,6 +16,7 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.JsonWithInt.Value;
+import io.qdrant.client.grpc.Points.Document;
 import io.qdrant.client.grpc.Points.PrefetchQuery;
 import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.Rrf;
@@ -31,60 +32,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalDouble;
 
 public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
-
-    private static final java.util.Set<String> RESERVED_PAYLOAD_KEYS =
-        java.util.Set.of("content", "sourceDocumentId", "tenantId");
 
     private final QdrantClient client;
     private final EmbeddingModel embeddingModel;
     private final SparseEmbedder sparseEmbedder;
-    private final TenancyStrategy tenancyStrategy;
-    private final String denseVectorName;
-    private final String sparseVectorName;
-    private final int denseTopK;
-    private final int sparseTopK;
-    private final int rrfK;
-    private final boolean rerankEnabled;
-    private final int rerankTopN;
-    private final CrossEncoderReranker reranker;
     private final TenantGuard tenantGuard;
-    private final DenseQuantization quantizationType;
-    private final OptionalDouble oversampling;
+    private final CrossEncoderReranker reranker;
+    private final RagConfig config;
 
     ReactiveHybridCaseRetriever(
             QdrantClient client,
             EmbeddingModel embeddingModel,
             SparseEmbedder sparseEmbedder,
-            TenancyStrategy tenancyStrategy,
-            String denseVectorName,
-            String sparseVectorName,
-            int denseTopK,
-            int sparseTopK,
-            int rrfK,
-            boolean rerankEnabled,
-            int rerankTopN,
-            CrossEncoderReranker reranker,
             TenantGuard tenantGuard,
-            DenseQuantization quantizationType,
-            OptionalDouble oversampling) {
+            CrossEncoderReranker reranker,
+            RagConfig config) {
         this.client = client;
         this.embeddingModel = embeddingModel;
         this.sparseEmbedder = sparseEmbedder;
-        this.tenancyStrategy = tenancyStrategy;
-        this.denseVectorName = denseVectorName;
-        this.sparseVectorName = sparseVectorName;
-        this.denseTopK = denseTopK;
-        this.sparseTopK = sparseTopK;
-        this.rrfK = rrfK;
-        this.rerankEnabled = rerankEnabled;
-        this.rerankTopN = rerankTopN;
-        this.reranker = reranker;
         this.tenantGuard = tenantGuard;
-        this.quantizationType = quantizationType;
-        this.oversampling = oversampling;
+        this.reranker = reranker;
+        this.config = config;
     }
 
     @Override
@@ -92,8 +62,8 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
         return Uni.createFrom().deferred(() -> {
             tenantGuard.assertTenant(corpus.tenantId());
 
-            String collection = tenancyStrategy.collectionName(corpus);
-            Optional<Filter> tenantFilter = tenancyStrategy.tenantFilter(corpus);
+            String collection = config.tenancyStrategy().collectionName(corpus);
+            Optional<Filter> tenantFilter = config.tenancyStrategy().tenantFilter(corpus);
             Optional<Filter> payloadFilter = PayloadFilterTranslator.toQdrantFilter(filter);
 
             Filter.Builder combined = Filter.newBuilder();
@@ -109,7 +79,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                     }
                     return Uni.createFrom().item(() -> embedQuery(query))
                         .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                        .chain(embeddings -> executeQuery(collection, mergedFilter,
+                        .chain(embeddings -> executeQuery(query, collection, mergedFilter,
                             embeddings, maxResults))
                         .map(this::mapToChunks)
                         .chain(chunks -> maybeRerank(query, chunks, maxResults));
@@ -124,54 +94,74 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
         return new QueryEmbeddings(denseEmbedding, sparseMap);
     }
 
-    private Uni<List<ScoredPoint>> executeQuery(String collection,
+    private Uni<List<ScoredPoint>> executeQuery(RetrievalQuery query, String collection,
             Optional<Filter> mergedFilter, QueryEmbeddings embeddings, int maxResults) {
-        int queryLimit = rerankEnabled && reranker != null
-            ? Math.max(maxResults, rerankTopN)
+        int queryLimit = config.retrieval().rerankEnabled() && reranker != null
+            ? Math.max(maxResults, config.retrieval().rerankTopN())
             : maxResults;
 
         QueryPoints queryPoints;
-        if (embeddings.sparse != null) {
-            // Hybrid mode: dense + sparse prefetch with RRF fusion
-            List<Float> sparseValues = new ArrayList<>(embeddings.sparse.size());
-            List<Integer> sparseIndices = new ArrayList<>(embeddings.sparse.size());
-            for (Map.Entry<Integer, Float> entry : embeddings.sparse.entrySet()) {
-                sparseIndices.add(entry.getKey());
-                sparseValues.add(entry.getValue());
-            }
+        boolean useRrf = embeddings.sparse != null || config.bm25Enabled();
+        if (useRrf) {
+            QueryPoints.Builder qb = QueryPoints.newBuilder()
+                .setCollectionName(collection);
 
+            // Dense prefetch (always present in RRF mode)
             PrefetchQuery.Builder densePrefetch = PrefetchQuery.newBuilder()
                 .setQuery(QueryFactory.nearest(embeddings.dense.vectorAsList()))
-                .setUsing(denseVectorName)
-                .setLimit(denseTopK);
-            if (quantizationType != DenseQuantization.NONE && oversampling.isPresent()) {
+                .setUsing(config.denseVectorName())
+                .setLimit(config.retrieval().denseTopK());
+            if (config.quantization().type() != DenseQuantization.NONE && config.quantization().oversampling().isPresent()) {
                 densePrefetch.setParams(quantizationSearchParams());
             }
             mergedFilter.ifPresent(densePrefetch::setFilter);
+            qb.addPrefetch(densePrefetch);
 
-            PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
-                .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
-                .setUsing(sparseVectorName)
-                .setLimit(sparseTopK);
-            mergedFilter.ifPresent(sparsePrefetch::setFilter);
+            // SPLADE prefetch (when available)
+            if (embeddings.sparse != null) {
+                List<Float> sparseValues = new ArrayList<>(embeddings.sparse.size());
+                List<Integer> sparseIndices = new ArrayList<>(embeddings.sparse.size());
+                for (Map.Entry<Integer, Float> entry : embeddings.sparse.entrySet()) {
+                    sparseIndices.add(entry.getKey());
+                    sparseValues.add(entry.getValue());
+                }
 
-            queryPoints = QueryPoints.newBuilder()
-                .setCollectionName(collection)
-                .addPrefetch(densePrefetch)
-                .addPrefetch(sparsePrefetch)
-                .setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(rrfK).build()))
-                .setLimit(queryLimit)
-                .setWithPayload(WithPayloadSelectorFactory.enable(true))
-                .build();
+                PrefetchQuery.Builder sparsePrefetch = PrefetchQuery.newBuilder()
+                    .setQuery(QueryFactory.nearest(sparseValues, sparseIndices))
+                    .setUsing(config.sparseVectorName())
+                    .setLimit(config.retrieval().sparseTopK());
+                mergedFilter.ifPresent(sparsePrefetch::setFilter);
+                qb.addPrefetch(sparsePrefetch);
+            }
+
+            // BM25 prefetch (when enabled)
+            if (config.bm25Enabled()) {
+                String expandedQuery = CamelCaseExpander.expand(query.text());
+                PrefetchQuery.Builder bm25Prefetch = PrefetchQuery.newBuilder()
+                    .setQuery(QueryFactory.nearest(
+                        Document.newBuilder()
+                            .setText(expandedQuery)
+                            .setModel(QdrantPointBuilder.BM25_MODEL)
+                            .build()))
+                    .setUsing(config.bm25VectorName())
+                    .setLimit(config.retrieval().bm25TopK());
+                mergedFilter.ifPresent(bm25Prefetch::setFilter);
+                qb.addPrefetch(bm25Prefetch);
+            }
+
+            qb.setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(config.retrieval().rrfK()).build()))
+               .setLimit(queryLimit)
+               .setWithPayload(WithPayloadSelectorFactory.enable(true));
+            queryPoints = qb.build();
         } else {
-            // Dense-only mode: direct nearest-neighbor query
+            // Dense-only mode: direct nearest-neighbor query (no fusion)
             QueryPoints.Builder builder = QueryPoints.newBuilder()
                 .setCollectionName(collection)
                 .setQuery(QueryFactory.nearest(embeddings.dense.vectorAsList()))
-                .setUsing(denseVectorName)
+                .setUsing(config.denseVectorName())
                 .setLimit(queryLimit)
                 .setWithPayload(WithPayloadSelectorFactory.enable(true));
-            if (quantizationType != DenseQuantization.NONE && oversampling.isPresent()) {
+            if (config.quantization().type() != DenseQuantization.NONE && config.quantization().oversampling().isPresent()) {
                 builder.setParams(quantizationSearchParams());
             }
             mergedFilter.ifPresent(builder::setFilter);
@@ -191,7 +181,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
 
             Map<String, String> metadata = new HashMap<>();
             for (Map.Entry<String, Value> entry : payload.entrySet()) {
-                if (!RESERVED_PAYLOAD_KEYS.contains(entry.getKey())
+                if (!QdrantPointBuilder.RESERVED_PAYLOAD_KEYS.contains(entry.getKey())
                         && entry.getValue().hasStringValue()) {
                     metadata.put(entry.getKey(), entry.getValue().getStringValue());
                 }
@@ -204,7 +194,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
 
     private Uni<List<RetrievedChunk>> maybeRerank(RetrievalQuery query,
             List<RetrievedChunk> chunks, int maxResults) {
-        if (!rerankEnabled || reranker == null || chunks.isEmpty()) {
+        if (!config.retrieval().rerankEnabled() || reranker == null || chunks.isEmpty()) {
             chunks.sort((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()));
             return Uni.createFrom().item(Collections.unmodifiableList(chunks));
         }
@@ -234,7 +224,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
     private SearchParams quantizationSearchParams() {
         return SearchParams.newBuilder()
             .setQuantization(QuantizationSearchParams.newBuilder()
-                .setOversampling(oversampling.getAsDouble())
+                .setOversampling(config.quantization().oversampling().getAsDouble())
                 .setRescore(true)
                 .build())
             .build();

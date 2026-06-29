@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalDouble;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -79,21 +78,14 @@ class AssertTenantReactiveTest {
     private ReactiveQdrantEmbeddingIngestor createIngestor() {
         return new ReactiveQdrantEmbeddingIngestor(
             null, new RagTestFixtures.StubEmbeddingModel(4), null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            Integer.MAX_VALUE,
-            DenseQuantization.NONE, true);
+            RagTestFixtures.stubConfig());
     }
 
     private ReactiveHybridCaseRetriever createRetriever() {
         return new ReactiveHybridCaseRetriever(
             null, null, null,
-            TenancyStrategy.SEPARATE_COLLECTIONS,
-            "dense", "sparse",
-            64, 64, 60,
-            false, 10, null,
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            DenseQuantization.NONE, OptionalDouble.empty());
+            null, RagTestFixtures.stubConfig());
     }
 }

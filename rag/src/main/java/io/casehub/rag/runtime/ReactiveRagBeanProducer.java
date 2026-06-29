@@ -31,41 +31,34 @@ public class ReactiveRagBeanProducer {
             : embeddingModel;
     }
 
+    private SparseEmbedder resolveSparseEmbedder() {
+        return sparseEmbedderInstance.isResolvable()
+            ? sparseEmbedderInstance.get() : null;
+    }
+
+    private TenantGuard resolveTenantGuard() {
+        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
+            ? currentPrincipalInstance.get() : null;
+        return TenantGuard.of(principal);
+    }
+
+    private CrossEncoderReranker resolveReranker() {
+        return rerankerInstance.isResolvable()
+            ? rerankerInstance.get() : null;
+    }
+
     @Produces
     @ApplicationScoped
     ReactiveQdrantEmbeddingIngestor corpusStore() {
-        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
-            ? sparseEmbedderInstance.get() : null;
-        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
-            ? currentPrincipalInstance.get() : null;
-        return new ReactiveQdrantEmbeddingIngestor(
-            client, effectiveEmbeddingModel(), sparseEmbedder,
-            config.tenancyStrategy(),
-            config.denseVectorName(), config.sparseVectorName(),
-            TenantGuard.of(principal),
-            config.embeddingBatchSize(),
-            config.quantization().type(),
-            config.quantization().alwaysRam());
+        return new ReactiveQdrantEmbeddingIngestor(client, effectiveEmbeddingModel(),
+            resolveSparseEmbedder(), resolveTenantGuard(), config);
     }
 
     @Produces
     @ApplicationScoped
     ReactiveHybridCaseRetriever caseRetriever() {
-        SparseEmbedder sparseEmbedder = sparseEmbedderInstance.isResolvable()
-            ? sparseEmbedderInstance.get() : null;
-        CrossEncoderReranker reranker = rerankerInstance.isResolvable()
-            ? rerankerInstance.get() : null;
-        CurrentPrincipal principal = currentPrincipalInstance.isResolvable()
-            ? currentPrincipalInstance.get() : null;
-        TenantGuard tenantGuard = TenantGuard.of(principal);
-        return new ReactiveHybridCaseRetriever(
-            client, effectiveEmbeddingModel(), sparseEmbedder,
-            config.tenancyStrategy(),
-            config.denseVectorName(), config.sparseVectorName(),
-            config.retrieval().denseTopK(), config.retrieval().sparseTopK(),
-            config.retrieval().rrfK(), config.retrieval().rerankEnabled(),
-            config.retrieval().rerankTopN(), reranker, tenantGuard,
-            config.quantization().type(),
-            config.quantization().oversampling());
+        return new ReactiveHybridCaseRetriever(client, effectiveEmbeddingModel(),
+            resolveSparseEmbedder(), resolveTenantGuard(),
+            resolveReranker(), config);
     }
 }
