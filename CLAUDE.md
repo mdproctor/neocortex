@@ -1,14 +1,14 @@
-# neural-text Workspace
-**Name:** casehub-neural-text
+# neocortex Workspace
+**Name:** casehub-neocortex
 
-**Physical path:** `/Users/mdproctor/claude/casehub/neural-text/CLAUDE.md`
-**Project repo:** `/Users/mdproctor/claude/casehub/neural-text`
-**Workspace:** `/Users/mdproctor/claude/public/casehub/neural-text`
+**Physical path:** `/Users/mdproctor/claude/casehub/neocortex/CLAUDE.md`
+**Project repo:** `/Users/mdproctor/claude/casehub/neocortex`
+**Workspace:** `/Users/mdproctor/claude/public/casehub/neocortex`
 **Workspace type:** public
 
 ## Session Start
 
-Run `add-dir /Users/mdproctor/claude/casehub/neural-text` before any other work.
+Run `add-dir /Users/mdproctor/claude/casehub/neocortex` before any other work.
 
 ## Artifact Locations
 
@@ -37,16 +37,16 @@ Run `add-dir /Users/mdproctor/claude/casehub/neural-text` before any other work.
 ## Git Discipline
 
 Two git repositories are active in every session:
-- **Workspace** (`/Users/mdproctor/claude/public/casehub/neural-text`) — staging for specs/ADRs; permanent home for blog, handover, plans, snapshots
-- **Project repo** (`/Users/mdproctor/claude/casehub/neural-text`) — source code + promoted specs (`docs/specs/`) + promoted ADRs (`docs/adr/`)
+- **Workspace** (`/Users/mdproctor/claude/public/casehub/neocortex`) — staging for specs/ADRs; permanent home for blog, handover, plans, snapshots
+- **Project repo** (`/Users/mdproctor/claude/casehub/neocortex`) — source code + promoted specs (`docs/specs/`) + promoted ADRs (`docs/adr/`)
 
 Never rely on CWD for git operations. Always use explicit paths:
 ```bash
-git -C /Users/mdproctor/claude/public/casehub/neural-text ...  # workspace artifacts
-git -C /Users/mdproctor/claude/casehub/neural-text ...         # project artifacts
+git -C /Users/mdproctor/claude/public/casehub/neocortex ...  # workspace artifacts
+git -C /Users/mdproctor/claude/casehub/neocortex ...         # project artifacts
 ```
 
-Source code commits → project repo (`origin` = mdproctor/neural-text, `upstream` = casehubio/neural-text)
+Source code commits → project repo (`origin` = mdproctor/neocortex, `upstream` = casehubio/neocortex)
 
 ## Rules
 
@@ -76,7 +76,7 @@ Living docs — check for drift after significant changes:
 
 ## Peer Repos — Hard Boundary
 
-**Never commit to these repos from a neural-text session.** Each has its own Claude session. For cross-repo fixes, create a GitHub issue on the target repo instead.
+**Never commit to these repos from a neocortex session.** Each has its own Claude session. For cross-repo fixes, create a GitHub issue on the target repo instead.
 
 Peer repos: platform, ledger, connectors, work, qhorus, eidos, engine, claudony, openclaw, devtown, aml, clinical, life, drafthouse, quarkmind, flow
 
@@ -95,7 +95,7 @@ https://raw.githubusercontent.com/casehubio/parent/main/docs/PLATFORM.md
 
 **This repo's deep-dive:**
 ```
-https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-neural-text.md
+https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-neocortex.md
 ```
 
 **Related specs:**
@@ -125,7 +125,7 @@ type: java
 
 ## What This Project Is
 
-`casehub-neural-text` provides two related capabilities for the casehubio platform:
+`casehub-neocortex` provides two related capabilities for the casehubio platform:
 
 ### 1. Neural Text Inference (`inference-*` modules)
 
@@ -144,9 +144,9 @@ Tracks `casehubio/parent#164`.
 
 ### 3. CBR Memory (`memory-*` modules)
 
-Case-Based Reasoning retrieval SPI and implementations. `CbrCaseMemoryStore` (standalone SPI — does not extend `CaseMemoryStore`) provides structured feature-vector similarity search over past cases. Open `CbrCase` type hierarchy supports Textual, Feature-Vector, and Plan-Based CBR paradigms. Qdrant-backed implementation uses payload filters (categorical exact-match, numeric range) + optional dense vector for `problem()` text similarity. In-memory implementation for testing. Delegates durable storage to platform's `CaseMemoryStore` via composition.
+Agent memory SPI and all backend implementations. `CaseMemoryStore` SPI (queryable, permission-aware, persistent memory — migrated from platform in #56) + `ReactiveCaseMemoryStore` + `GraphCaseMemoryStore`. Backends: in-memory, JPA (PostgreSQL + FTS), SQLite (FTS5), Mem0 (vector embeddings), Graphiti (temporal knowledge graph). `CbrCaseMemoryStore` (standalone SPI) provides structured feature-vector similarity search over past cases via CBR. Open `CbrCase` type hierarchy with `cbrType()` discriminator supports Textual, Feature-Vector, and Plan-Based CBR paradigms. Qdrant-backed CBR implementation uses payload filters + optional dense vector. All backends coexist via three-tier CDI priority ladder.
 
-Tracks `casehubio/neural-text#20`, `casehubio/parent#227`. Design spec: `specs/issue-20-cbr-retrieval-architecture/`.
+Tracks `casehubio/neocortex#20`, `casehubio/neocortex#56`, `casehubio/parent#227`.
 
 ---
 
@@ -172,6 +172,11 @@ memory/             — NoOpCbrCaseMemoryStore @DefaultBean, BlockingToReactiveC
 memory-testing/     — CbrCaseMemoryStoreContractTest abstract base (12 tests)
 memory-cbr-inmem/   — InMemoryCbrCaseMemoryStore @Alternative @Priority(2) — in-memory stub for tests
 memory-qdrant/      — QdrantCbrCaseMemoryStore — Qdrant-backed CBR with payload filters (categorical/numeric/text) + optional dense vector, Testcontainers integration tests
+memory-inmem/       — InMemoryMemoryStore @Alternative @Priority(10) — volatile ConcurrentHashMap, test + ephemeral
+memory-jpa/         — JpaMemoryStore @ApplicationScoped — PostgreSQL + Flyway V1000 + FTS via websearch_to_tsquery
+memory-sqlite/      — SqliteMemoryStore @Alternative @Priority(1) — SQLite + HikariCP WAL + FTS5
+memory-mem0/        — Mem0CaseMemoryStore @Alternative @Priority(1) — Mem0 REST + vector embeddings
+memory-graphiti/    — GraphitiCaseMemoryStore @Alternative @Priority(2) — Graphiti REST temporal knowledge graph
 examples/
   example-text-analysis/  — standalone demos: NLI, zero-shot classification, scoring, reranking, SPLADE — no Quarkus
   example-rag-pipeline/   — Quarkus demos: corpus ingestion (flat + zip), hybrid search, CDI wiring — requires Qdrant
@@ -183,37 +188,43 @@ Examples are excluded from the default build. Activate with `-Pexamples-smoke` (
 
 | Element | Value |
 |---|---|
-| GitHub repo | `casehubio/neural-text` |
+| GitHub repo | `casehubio/neocortex` |
 | groupId | `io.casehub` |
-| Parent artifactId | `casehub-neural-text-parent` |
-| Inference API | `casehub-inference-api` |
-| Inference Runtime | `casehub-inference-runtime` |
-| Inference Tasks | `casehub-inference-tasks` |
-| Inference SPLADE | `casehub-inference-splade` |
-| Inference in-memory | `casehub-inference-inmem` |
-| Inference Quarkus | `casehub-inference-quarkus` |
-| RAG API | `casehub-rag-api` |
-| RAG | `casehub-rag` |
-| RAG Tika | `casehub-rag-tika` |
-| RAG testing | `casehub-rag-testing` |
-| RAG CRAG | `casehub-rag-crag` |
-| RAG Expansion | `casehub-rag-expansion` |
-| Corpus API | `casehub-corpus-api` |
-| Corpus | `casehub-corpus` |
-| Memory API | `casehub-memory-api` |
-| Memory CDI | `casehub-memory` |
-| Memory testing | `casehub-memory-testing` |
-| Memory CBR in-memory | `casehub-memory-cbr-inmem` |
-| Memory CBR Qdrant | `casehub-memory-qdrant` |
-| Example Text Analysis | `casehub-example-text-analysis` |
-| Example RAG Pipeline | `casehub-example-rag-pipeline` |
-| Root Java package (inference) | `io.casehub.inference` |
-| Root Java package (rag) | `io.casehub.rag` |
-| Root Java package (examples) | `io.casehub.examples.analysis`, `io.casehub.examples.rag` |
-| Root Java package (rag-expansion) | `io.casehub.rag.expansion` |
-| Root Java package (corpus) | `io.casehub.corpus` |
-| Root Java package (memory) | `io.casehub.memory.cbr` |
-| Root Java package (memory-qdrant) | `io.casehub.memory.cbr.qdrant` |
+| Parent artifactId | `casehub-neocortex-parent` |
+| Inference API | `casehub-neocortex-inference-api` |
+| Inference Runtime | `casehub-neocortex-inference-runtime` |
+| Inference Tasks | `casehub-neocortex-inference-tasks` |
+| Inference SPLADE | `casehub-neocortex-inference-splade` |
+| Inference in-memory | `casehub-neocortex-inference-inmem` |
+| Inference Quarkus | `casehub-neocortex-inference-quarkus` |
+| RAG API | `casehub-neocortex-rag-api` |
+| RAG | `casehub-neocortex-rag` |
+| RAG Tika | `casehub-neocortex-rag-tika` |
+| RAG testing | `casehub-neocortex-rag-testing` |
+| RAG CRAG | `casehub-neocortex-rag-crag` |
+| RAG Expansion | `casehub-neocortex-rag-expansion` |
+| Corpus API | `casehub-neocortex-corpus-api` |
+| Corpus | `casehub-neocortex-corpus` |
+| Memory API | `casehub-neocortex-memory-api` |
+| Memory CDI | `casehub-neocortex-memory` |
+| Memory testing | `casehub-neocortex-memory-testing` |
+| Memory CBR in-memory | `casehub-neocortex-memory-cbr-inmem` |
+| Memory CBR Qdrant | `casehub-neocortex-memory-qdrant` |
+| Memory In-Memory | `casehub-neocortex-memory-inmem` |
+| Memory JPA | `casehub-neocortex-memory-jpa` |
+| Memory SQLite | `casehub-neocortex-memory-sqlite` |
+| Memory Mem0 | `casehub-neocortex-memory-mem0` |
+| Memory Graphiti | `casehub-neocortex-memory-graphiti` |
+| Example Text Analysis | `casehub-neocortex-example-text-analysis` |
+| Example RAG Pipeline | `casehub-neocortex-example-rag-pipeline` |
+| Root Java package (inference) | `io.casehub.neocortex.inference` |
+| Root Java package (rag) | `io.casehub.neocortex.rag` |
+| Root Java package (examples) | `io.casehub.neocortex.examples.analysis`, `io.casehub.neocortex.examples.rag` |
+| Root Java package (rag-expansion) | `io.casehub.neocortex.rag.expansion` |
+| Root Java package (corpus) | `io.casehub.neocortex.corpus` |
+| Root Java package (memory) | `io.casehub.neocortex.memory` |
+| Root Java package (memory-cbr) | `io.casehub.neocortex.memory.cbr` |
+| Root Java package (memory-qdrant) | `io.casehub.neocortex.memory.cbr.qdrant` |
 
 ## Build Commands
 
@@ -247,5 +258,5 @@ The C2 native image gate passed (ONNX Runtime JNI + HuggingFace Tokenizers JNI b
 ## Work Tracking
 
 **Issue tracking:** enabled
-**GitHub repo:** casehubio/neural-text
+**GitHub repo:** casehubio/neocortex
 **Changelog:** GitHub Releases

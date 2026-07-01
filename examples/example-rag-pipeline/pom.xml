@@ -6,56 +6,56 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
-  <artifactId>casehub-example-rag-pipeline</artifactId>
-  <name>CaseHub Neural Text - Example: RAG Pipeline</name>
+  <artifactId>casehub-neocortex-example-rag-pipeline</artifactId>
+  <name>CaseHub Neocortex - Example: RAG Pipeline</name>
   <description>Demonstration of corpus ingestion, hybrid search, and RAG retrieval</description>
 
   <dependencies>
     <!-- Inference modules -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-api</artifactId>
+      <artifactId>casehub-neocortex-inference-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-runtime</artifactId>
+      <artifactId>casehub-neocortex-inference-runtime</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-tasks</artifactId>
+      <artifactId>casehub-neocortex-inference-tasks</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-splade</artifactId>
+      <artifactId>casehub-neocortex-inference-splade</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-quarkus</artifactId>
+      <artifactId>casehub-neocortex-inference-quarkus</artifactId>
     </dependency>
 
     <!-- RAG modules -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-api</artifactId>
+      <artifactId>casehub-neocortex-rag-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag</artifactId>
+      <artifactId>casehub-neocortex-rag</artifactId>
     </dependency>
 
     <!-- Corpus modules -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-corpus-api</artifactId>
+      <artifactId>casehub-neocortex-corpus-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-corpus</artifactId>
+      <artifactId>casehub-neocortex-corpus</artifactId>
     </dependency>
 
     <!-- LangChain4j dense embeddings (OnnxEmbeddingModel for all-MiniLM-L6-v2) -->
@@ -88,12 +88,12 @@
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-inmem</artifactId>
+      <artifactId>casehub-neocortex-inference-inmem</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-testing</artifactId>
+      <artifactId>casehub-neocortex-rag-testing</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

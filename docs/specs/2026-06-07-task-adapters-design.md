@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-07
 **Status:** Approved (rev 3)
-**Issue:** casehubio/neural-text#4
+**Issue:** casehubio/neocortex#4
 **Module:** inference-tasks
 **Consumers:** casehub-engine (#154 — NliClassifier), casehub-openclaw (TextClassifier → ActionRiskClassifier), casehub-eidos (ScalarRegressor → CapabilityHealth epistemic confidence), Hortora (CrossEncoderReranker)
 **Depends on:** inference-api (C3, shipped)
@@ -18,8 +18,8 @@ Four typed adapters that wrap `InferenceModel` and interpret `float[]` output as
 
 ## Module Identity
 
-- **Package:** `io.casehub.inference.tasks`
-- **Dependencies:** `casehub-inference-api` (compile). `casehub-inference-inmem`, `archunit-junit5` (test).
+- **Package:** `io.casehub.neocortex.inference.tasks`
+- **Dependencies:** `casehub-neocortex-inference-api` (compile). `casehub-neocortex-inference-inmem`, `archunit-junit5` (test).
 - **Tier:** Pure Java, zero external deps (Tier 1 per `module-tier-structure.md`)
 - **ArchUnit enforced:** zero casehub (non-inference), Quarkus, Spring, LangChain4j, ONNX Runtime, DJL imports
 - **Thread safety:** Adapters are stateless and thread-safe — concurrent calls delegate to the thread-safe `InferenceModel`. Safe as `@ApplicationScoped` CDI beans in C5.
@@ -180,7 +180,7 @@ public final class CrossEncoderReranker {
 
 ## Softmax
 
-Package-private utility class `Softmax` in `io.casehub.inference.tasks`. Single implementation, zero public API surface. Numerically stable: subtract max before exp to prevent overflow.
+Package-private utility class `Softmax` in `io.casehub.neocortex.inference.tasks`. Single implementation, zero public API surface. Numerically stable: subtract max before exp to prevent overflow.
 
 ```java
 final class Softmax {
@@ -296,14 +296,14 @@ The existing modules (inference-api, inference-inmem) don't enforce this because
 ```java
 @ArchTest
 static final ArchRule noCasehubDomain = noClasses()
-    .that().resideInAPackage("io.casehub.inference.tasks..")
+    .that().resideInAPackage("io.casehub.neocortex.inference.tasks..")
     .should().dependOnClassesThat(
         DescribedPredicate.describe("casehub domain classes",
             cls -> cls.getPackageName().startsWith("io.casehub.")
-                && !cls.getPackageName().startsWith("io.casehub.inference")));
+                && !cls.getPackageName().startsWith("io.casehub.neocortex.inference")));
 ```
 
-This allows `io.casehub.inference.*` (the SPI) while blocking `io.casehub.engine.*`, `io.casehub.openclaw.*`, `io.casehub.eidos.*`, and any other casehub domain package. This rule should also be backported to inference-api, inference-inmem, and inference-runtime — tracked as a follow-up, not blocking C4.
+This allows `io.casehub.neocortex.inference.*` (the SPI) while blocking `io.casehub.engine.*`, `io.casehub.openclaw.*`, `io.casehub.eidos.*`, and any other casehub domain package. This rule should also be backported to inference-api, inference-inmem, and inference-runtime — tracked as a follow-up, not blocking C4.
 
 ---
 

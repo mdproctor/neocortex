@@ -1,6 +1,6 @@
 # inference-quarkus — CDI Wiring Design
 
-**Issue:** casehubio/neural-text#5
+**Issue:** casehubio/neocortex#5
 **Status:** Approved
 **Scope:** inference-quarkus module — Quarkus CDI integration for inference-* modules
 

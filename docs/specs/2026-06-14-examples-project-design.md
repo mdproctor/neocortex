@@ -2,13 +2,13 @@
 
 **Date:** 2026-06-14
 **Status:** Approved (revised after two review rounds)
-**Tracks:** casehubio/neural-text examples initiative
+**Tracks:** casehubio/neocortex examples initiative
 
 ---
 
 ## Overview
 
-Two example modules demonstrating all casehub-neural-text capabilities across multiple domains (tech, news, legal). Organised along the infrastructure boundary: one standalone (no Quarkus, no Docker), one full RAG pipeline (Quarkus, Testcontainers Qdrant). Real ONNX models from HuggingFace. Comprehensive testing at five levels across two profiles, selected by JUnit `@Tag` and Maven surefire groups.
+Two example modules demonstrating all casehub-neocortex capabilities across multiple domains (tech, news, legal). Organised along the infrastructure boundary: one standalone (no Quarkus, no Docker), one full RAG pipeline (Quarkus, Testcontainers Qdrant). Real ONNX models from HuggingFace. Comprehensive testing at five levels across two profiles, selected by JUnit `@Tag` and Maven surefire groups.
 
 ---
 
@@ -30,7 +30,7 @@ Both modules live inside the main repo but are excluded from the default build. 
 
 ### Parent POM Changes
 
-Add to `casehub-neural-text-parent/pom.xml`:
+Add to `casehub-neocortex-parent/pom.xml`:
 
 ```xml
 <profiles>

@@ -6,12 +6,12 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-inference-inmem</artifactId>
-  <name>CaseHub Neural Text - Inference In-Memory</name>
+  <artifactId>casehub-neocortex-inference-inmem</artifactId>
+  <name>CaseHub Neocortex - Inference In-Memory</name>
   <description>Deterministic InferenceModel stubs — no JNI, no native libs, safe in all test contexts including @QuarkusTest</description>
 
   <!-- ArchUnit enforced: zero casehub, Quarkus, Spring, LangChain4j dependencies -->
@@ -20,7 +20,7 @@
 
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-api</artifactId>
+      <artifactId>casehub-neocortex-inference-api</artifactId>
     </dependency>
 
     <dependency>

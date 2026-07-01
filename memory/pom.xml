@@ -5,16 +5,16 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
-  <artifactId>casehub-memory</artifactId>
-  <name>CaseHub Neural Text - Memory CBR CDI</name>
-  <description>NoOpCbrCaseMemoryStore @DefaultBean and BlockingToReactiveCbrBridge.</description>
+  <artifactId>casehub-neocortex-memory</artifactId>
+  <name>CaseHub Neocortex - Memory CDI</name>
+  <description>NoOp @DefaultBean implementations and blocking-to-reactive bridges for both CaseMemoryStore and CbrCaseMemoryStore.</description>
   <dependencies>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-memory-api</artifactId>
+      <artifactId>casehub-neocortex-memory-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
@@ -27,6 +27,11 @@
     <dependency>
       <groupId>io.smallrye.reactive</groupId>
       <artifactId>mutiny</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

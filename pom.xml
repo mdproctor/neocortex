@@ -5,13 +5,13 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.casehub</groupId>
-  <artifactId>casehub-neural-text-parent</artifactId>
+  <artifactId>casehub-neocortex-parent</artifactId>
   <version>0.2-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>CaseHub Neural Text - Parent</name>
+  <name>CaseHub Neocortex - Parent</name>
   <description>ONNX neural text inference (NLI, classification, SPLADE, reranking) and LangChain4j RAG integration for the casehubio platform</description>
-  <url>https://github.com/casehubio/neural-text</url>
+  <url>https://github.com/casehubio/neocortex</url>
 
   <modules>
     <module>inference-api</module>
@@ -34,6 +34,11 @@
     <module>memory-testing</module>
     <module>memory-cbr-inmem</module>
     <module>memory-qdrant</module>
+    <module>memory-inmem</module>
+    <module>memory-jpa</module>
+    <module>memory-sqlite</module>
+    <module>memory-mem0</module>
+    <module>memory-graphiti</module>
     <module>examples/example-text-analysis</module>
     <module>examples/example-rag-pipeline</module>
   </modules>
@@ -42,20 +47,20 @@
     <repository>
       <id>github</id>
       <name>casehubio GitHub Packages</name>
-      <url>https://maven.pkg.github.com/casehubio/neural-text</url>
+      <url>https://maven.pkg.github.com/casehubio/neocortex</url>
     </repository>
     <snapshotRepository>
       <id>github</id>
       <name>casehubio GitHub Packages</name>
-      <url>https://maven.pkg.github.com/casehubio/neural-text</url>
+      <url>https://maven.pkg.github.com/casehubio/neocortex</url>
       <uniqueVersion>false</uniqueVersion>
     </snapshotRepository>
   </distributionManagement>
 
   <scm>
-    <connection>scm:git:https://github.com/casehubio/neural-text.git</connection>
-    <developerConnection>scm:git:https://github.com/casehubio/neural-text.git</developerConnection>
-    <url>https://github.com/casehubio/neural-text</url>
+    <connection>scm:git:https://github.com/casehubio/neocortex.git</connection>
+    <developerConnection>scm:git:https://github.com/casehubio/neocortex.git</developerConnection>
+    <url>https://github.com/casehubio/neocortex</url>
     <tag>HEAD</tag>
   </scm>
 
@@ -109,95 +114,107 @@
         <version>${casehub-platform-api.version}</version>
       </dependency>
 
-      <!-- casehub-neural-text internal artifacts -->
+      <!-- Memory backend dependencies (from platform migration) -->
+      <dependency>
+        <groupId>org.xerial</groupId>
+        <artifactId>sqlite-jdbc</artifactId>
+        <version>3.53.1.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>HikariCP</artifactId>
+        <version>7.0.2</version>
+      </dependency>
+
+      <!-- casehub-neocortex internal artifacts -->
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-inference-api</artifactId>
+        <artifactId>casehub-neocortex-inference-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-inference-runtime</artifactId>
+        <artifactId>casehub-neocortex-inference-runtime</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-inference-tasks</artifactId>
+        <artifactId>casehub-neocortex-inference-tasks</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-inference-splade</artifactId>
+        <artifactId>casehub-neocortex-inference-splade</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-inference-inmem</artifactId>
+        <artifactId>casehub-neocortex-inference-inmem</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-inference-quarkus</artifactId>
+        <artifactId>casehub-neocortex-inference-quarkus</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-rag-api</artifactId>
+        <artifactId>casehub-neocortex-rag-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-rag</artifactId>
+        <artifactId>casehub-neocortex-rag</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-rag-testing</artifactId>
+        <artifactId>casehub-neocortex-rag-testing</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-rag-crag</artifactId>
+        <artifactId>casehub-neocortex-rag-crag</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-rag-expansion</artifactId>
+        <artifactId>casehub-neocortex-rag-expansion</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-corpus-api</artifactId>
+        <artifactId>casehub-neocortex-corpus-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-corpus</artifactId>
+        <artifactId>casehub-neocortex-corpus</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-memory-api</artifactId>
+        <artifactId>casehub-neocortex-memory-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-memory</artifactId>
+        <artifactId>casehub-neocortex-memory</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-memory-testing</artifactId>
+        <artifactId>casehub-neocortex-memory-testing</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-memory-cbr-inmem</artifactId>
+        <artifactId>casehub-neocortex-memory-cbr-inmem</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-memory-qdrant</artifactId>
+        <artifactId>casehub-neocortex-memory-qdrant</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -306,6 +323,11 @@
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             </systemPropertyVariables>
           </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${surefire-plugin.version}</version>
         </plugin>
         <plugin>
           <groupId>io.smallrye</groupId>

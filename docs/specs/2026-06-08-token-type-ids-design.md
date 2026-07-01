@@ -1,6 +1,6 @@
 # token_type_ids Support for BERT-based Models
 
-**Issue:** casehubio/neural-text#8
+**Issue:** casehubio/neocortex#8
 **Status:** Approved
 **Scope:** inference-runtime only — no API or SPI changes
 

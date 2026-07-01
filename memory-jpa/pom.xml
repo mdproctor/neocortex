@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-parent</artifactId>
+        <version>0.2-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>casehub-neocortex-memory-jpa</artifactId>
+    <packaging>jar</packaging>
+    <name>CaseHub Neocortex - Memory JPA</name>
+    <description>JPA-backed CaseMemoryStore. @ApplicationScoped — displaces @DefaultBean no-op.
+        Add as compile dep; add classpath:db/memory/migration to quarkus.flyway.locations.
+        Do NOT add casehub-platform-memory-inmem alongside this in test scope.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-neocortex-memory-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-hibernate-orm-panache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jackson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-neocortex-memory</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-neocortex-memory-testing</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-platform</artifactId>
+            <version>${casehub-platform-api.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-platform-testing</artifactId>
+            <version>${casehub-platform-api.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                No 'build' goal here. The build goal triggers CDI validation at augmentation time.
+                JpaMemoryStore injects CurrentPrincipal, which is only on the test classpath
+                (casehub-platform test scope). Production augmentation would fail with
+                UnsatisfiedResolutionException because no CurrentPrincipal bean is visible.
+                generate-code/generate-code-tests are kept for annotation processing only.
+            -->
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.version}</version>
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate-code</goal>
+                            <goal>generate-code-tests</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <executions>
+                    <!-- Disable the default execution — ordering is controlled explicitly below. -->
+                    <execution>
+                        <id>default-test</id>
+                        <phase>none</phase>
+                    </execution>
+                    <!-- PostgreSQL Testcontainers execution runs FIRST: Quarkus augments for PostgreSQL
+                         and caches on disk; first augmentation wins. -->
+                    <execution>
+                        <id>postgres-dialect-test</id>
+                        <phase>test</phase>
+                        <goals><goal>test</goal></goals>
+                        <configuration>
+                            <includes>
+                                <include>**/PostgresDialect*.java</include>
+                            </includes>
+                            <reuseForks>false</reuseForks>
+                            <systemPropertyVariables>
+                                <quarkus.datasource.db-kind>postgresql</quarkus.datasource.db-kind>
+                                <quarkus.datasource.devservices.enabled>false</quarkus.datasource.devservices.enabled>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                    <!-- H2 tests run SECOND after PostgreSQL augmentation cache is written.
+                         Re-assert db-kind=h2 to override the postgresql system property set by the
+                         postgres-dialect-test execution above (fork=false shares the JVM process). -->
+                    <execution>
+                        <id>h2-tests</id>
+                        <phase>test</phase>
+                        <goals><goal>test</goal></goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/PostgresDialect*.java</exclude>
+                            </excludes>
+                            <systemPropertyVariables>
+                                <quarkus.datasource.db-kind>h2</quarkus.datasource.db-kind>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals><goal>jandex</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

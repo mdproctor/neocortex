@@ -2,9 +2,9 @@
 
 **Date:** 2026-06-07
 **Status:** Approved (rev 4 — final)
-**Issue:** casehubio/neural-text#3
+**Issue:** casehubio/neocortex#3
 **Modules:** inference-api, inference-runtime, inference-inmem
-**Consumers:** casehub-engine (#154), casehub-openclaw, casehub-eidos, casehub-rag, Hortora
+**Consumers:** casehub-engine (#154), casehub-openclaw, casehub-eidos, casehub-neocortex-rag, Hortora
 **Authoritative prior spec:** Hortora/spec `docs/superpowers/specs/2026-06-03-onnx-inference-module-design.md`
 
 ---
@@ -26,7 +26,7 @@ The Hortora spec (2026-06-03) defined the initial SPI shape. This spec supersede
 
 This SPI is scoped to **text-in, tensor-out inference**. All five known consumers (NLI, classification, regression, SPLADE, cross-encoder) operate on text inputs. Non-text modalities (image, audio, multimodal) are out of scope — they would require a different input type and tokenization strategy.
 
-The name `InferenceModel` (not `TextInferenceModel`) is intentional — the module lives in `casehub-neural-text`, which already scopes to text. If a non-text inference SPI is needed in the future, it would be a separate module with its own types.
+The name `InferenceModel` (not `TextInferenceModel`) is intentional — the module lives in `casehub-neocortex`, which already scopes to text. If a non-text inference SPI is needed in the future, it would be a separate module with its own types.
 
 ---
 
@@ -48,7 +48,7 @@ This avoids re-introducing tensor name coupling at the SPI level while giving co
 
 ## Module 1: inference-api
 
-**Package:** `io.casehub.inference`
+**Package:** `io.casehub.neocortex.inference`
 **Dependencies:** none (pure Java, zero deps)
 **ArchUnit enforced:** zero casehub, Quarkus, Spring, LangChain4j imports
 
@@ -139,7 +139,7 @@ public class InferenceException extends RuntimeException {
 
 ## Module 2: inference-runtime
 
-**Package:** `io.casehub.inference.runtime`
+**Package:** `io.casehub.neocortex.inference.runtime`
 **Dependencies:** inference-api, ONNX Runtime JVM (`onnxruntime`), DJL Tokenizers (`ai.djl.huggingface:tokenizers`)
 **ArchUnit enforced:** zero casehub, Quarkus, Spring, LangChain4j imports
 
@@ -246,7 +246,7 @@ Only `input_ids` and `attention_mask` are passed. Models requiring `token_type_i
 
 ## Module 3: inference-inmem
 
-**Package:** `io.casehub.inference.inmem`
+**Package:** `io.casehub.neocortex.inference.inmem`
 **Dependencies:** inference-api only
 **ArchUnit enforced:** zero casehub, Quarkus, Spring, LangChain4j, ONNX Runtime, DJL imports
 

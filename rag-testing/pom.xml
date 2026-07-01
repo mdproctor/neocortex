@@ -6,19 +6,19 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-rag-testing</artifactId>
-  <name>CaseHub Neural Text - RAG Testing</name>
+  <artifactId>casehub-neocortex-rag-testing</artifactId>
+  <name>CaseHub Neocortex - RAG Testing</name>
   <description>In-memory EmbeddingIngestor and CaseRetriever stubs for @QuarkusTest — no Qdrant required, deterministic retrieval responses</description>
 
   <dependencies>
 
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-api</artifactId>
+      <artifactId>casehub-neocortex-rag-api</artifactId>
     </dependency>
 
     <dependency>

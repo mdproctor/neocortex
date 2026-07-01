@@ -6,19 +6,19 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-rag-tika</artifactId>
-  <name>CaseHub Neural Text - RAG Tika</name>
+  <artifactId>casehub-neocortex-rag-tika</artifactId>
+  <name>CaseHub Neocortex - RAG Tika</name>
   <description>Optional Apache Tika document parsing for EmbeddingIngestor ingestion</description>
 
   <dependencies>
 
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-api</artifactId>
+      <artifactId>casehub-neocortex-rag-api</artifactId>
     </dependency>
 
     <dependency>

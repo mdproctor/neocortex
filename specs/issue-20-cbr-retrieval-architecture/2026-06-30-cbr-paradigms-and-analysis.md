@@ -75,7 +75,7 @@ CaseHub runs Retain + Reuse only. Trust-scored routing improves with repetition 
 | System | Store | Query | Result | Similarity |
 |--------|-------|-------|--------|-----------|
 | **CaseMemoryStore** (platform) | `store(MemoryInput)` | `query(MemoryQuery)` with `question` + `RELEVANCE` | `Memory` | Text: mem0 vector, JPA FTS, SQLite FTS5, graphiti graph |
-| **CaseRetriever** (neural-text) | `ingest(ChunkInput)` | `retrieve(RetrievalQuery, CorpusRef)` | `RetrievedChunk` | Hybrid: dense + SPLADE + BM25 RRF over Qdrant |
+| **CaseRetriever** (neocortex) | `ingest(ChunkInput)` | `retrieve(RetrievalQuery, CorpusRef)` | `RetrievedChunk` | Hybrid: dense + SPLADE + BM25 RRF over Qdrant |
 | **CBR** (gap) | — | — | — | — |
 
 ### 2.4 CaseMemoryStore Already Supports Textual CBR

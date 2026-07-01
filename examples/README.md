@@ -1,6 +1,6 @@
-# casehub-neural-text Examples
+# casehub-neocortex Examples
 
-Two example modules demonstrating all casehub-neural-text capabilities across tech, news, and legal domains.
+Two example modules demonstrating all casehub-neocortex capabilities across tech, news, and legal domains.
 
 ## Quick Start
 

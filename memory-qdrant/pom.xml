@@ -5,22 +5,22 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
-  <artifactId>casehub-memory-qdrant</artifactId>
-  <name>CaseHub Neural Text - Memory CBR Qdrant</name>
+  <artifactId>casehub-neocortex-memory-qdrant</artifactId>
+  <name>CaseHub Neocortex - Memory CBR Qdrant</name>
   <description>Qdrant-backed CbrCaseMemoryStore with payload filters + dense vector search.</description>
   <dependencies>
 
     <!-- casehub modules -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-memory-api</artifactId>
+      <artifactId>casehub-neocortex-memory-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-api</artifactId>
+      <artifactId>casehub-neocortex-rag-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
@@ -54,7 +54,7 @@
     <!-- Testing -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-memory-testing</artifactId>
+      <artifactId>casehub-neocortex-memory-testing</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

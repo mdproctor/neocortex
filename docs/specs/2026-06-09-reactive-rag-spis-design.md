@@ -1,6 +1,6 @@
 # Reactive EmbeddingIngestor + CaseRetriever Variants
 
-**Issue:** casehubio/neural-text#11
+**Issue:** casehubio/neocortex#11
 **Date:** 2026-06-09
 **Status:** Approved
 
@@ -42,7 +42,7 @@ Add dependency:
 </dependency>
 ```
 
-New interfaces in `io.casehub.rag`:
+New interfaces in `io.casehub.neocortex.rag`:
 
 **`ReactiveEmbeddingIngestor`** — mirrors `EmbeddingIngestor`:
 
@@ -123,14 +123,14 @@ to both existing blocking stubs in this branch. This aligns with canonical impls
 
 ```
 casehub-engine (or any consumer)
-  └── casehub-rag-api (compile)          ← blocking + reactive SPIs, no heavy deps
-  └── casehub-rag-testing (test)         ← in-memory stubs for both tiers
-  └── casehub-rag (runtime, via app)     ← Qdrant impls + bridge
+  └── casehub-neocortex-rag-api (compile)          ← blocking + reactive SPIs, no heavy deps
+  └── casehub-neocortex-rag-testing (test)         ← in-memory stubs for both tiers
+  └── casehub-neocortex-rag (runtime, via app)     ← Qdrant impls + bridge
 ```
 
-Engine depends on `casehub-rag-api` at compile time for both `CaseRetriever` and
+Engine depends on `casehub-neocortex-rag-api` at compile time for both `CaseRetriever` and
 `ReactiveCaseRetriever`. No Qdrant, LangChain4j, or other heavy deps on the
-compile classpath. The deploying application brings `casehub-rag` at runtime.
+compile classpath. The deploying application brings `casehub-neocortex-rag` at runtime.
 
 ## Build gating
 

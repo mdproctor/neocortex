@@ -6,12 +6,12 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-inference-api</artifactId>
-  <name>CaseHub Neural Text - Inference API</name>
+  <artifactId>casehub-neocortex-inference-api</artifactId>
+  <name>CaseHub Neocortex - Inference API</name>
   <description>InferenceModel SPI and domain types — pure Java, zero deps, safe for any module or project to depend on (including Hortora)</description>
 
   <!-- ArchUnit enforced: zero casehub, Quarkus, Spring, LangChain4j dependencies -->

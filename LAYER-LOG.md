@@ -1,4 +1,4 @@
-# Layer Log — casehub-neural-text
+# Layer Log — casehub-neocortex
 
 Epic log: one entry per major integration milestone.
 

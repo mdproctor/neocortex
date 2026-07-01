@@ -1,4 +1,4 @@
-# ARC42STORIES — casehub-neural-text
+# ARC42STORIES — casehub-neocortex
 
 **Version:** 0.3  
 **Status:** All chapters complete (C1–C11) — J1 + J2 + J3 + J4 ✅  
@@ -9,7 +9,7 @@
 
 ## §1 Introduction and Goals
 
-`casehub-neural-text` provides two related capabilities:
+`casehub-neocortex` provides two related capabilities:
 
 **Neural Text Inference** — a standalone, general-purpose ONNX model execution layer for JVM projects. Fills the gap LangChain4j leaves: NLI (hallucination detection), classification (action risk), regression (epistemic confidence), SPLADE sparse embeddings, and cross-encoder reranking. Zero casehub domain dependencies in the core modules. Shared with Hortora.
 
@@ -38,7 +38,7 @@
 
 | Artifact type | Format | Example | Where it lives |
 |---|---|---|---|
-| Issue / epic | `#N` | `#2` | casehubio/neural-text GitHub Issues |
+| Issue / epic | `#N` | `#2` | casehubio/neocortex GitHub Issues |
 | Parent tracking issue | `parent#N` | `parent#158` | casehubio/parent GitHub Issues |
 | Garden entry | `GE-YYYYMMDD-XXXXXX` | `GE-20260530-0dc6de` | `~/.hortora/garden/` |
 | Design spec | `YYYY-MM-DD-topic` | `2026-06-03-ai-fusion` | `docs/specs/` |
@@ -64,7 +64,7 @@
 
 ```mermaid
 C4Context
-  title casehub-neural-text — System Context
+  title casehub-neocortex — System Context
 
   Person(hortora, "Hortora", "Takes inference-* and rag-* modules")
   Person(casehub_eng, "casehub-engine", "Hallucination detection; fact space prompt compiler")
@@ -72,7 +72,7 @@ C4Context
   Person(casehub_ei, "casehub-eidos", "Epistemic confidence via ScalarRegressor")
   Person(app_repos, "Application repos", "Corpus-grounded LLM reasoning")
 
-  System_Boundary(b, "casehub-neural-text") {
+  System_Boundary(b, "casehub-neocortex") {
     System(inference, "inference-*", "ONNX model execution layer — NLI, classification, SPLADE, reranking")
     System(rag, "rag-*", "LangChain4j RAG pipeline wiring — corpus storage, hybrid search, retrieval")
   }
@@ -141,7 +141,7 @@ This module sits **below** LangChain4j for inference and **above** LangChain4j f
 - C2 before C5 and C6: **completed** — native image gate passed; C5 and C6 shipped in JVM mode. Native image not pursued for the service (JVM mode by design for long-running workloads); reachability metadata available for downstream native consumers.
 - C3 before C4: **hard** — `inference-tasks` wraps `InferenceModel` from `inference-runtime`; runtime must exist before adapters can be built.
 - C4 before C6: **soft** — `inference-splade` follows the same adapter pattern as `inference-tasks`; C4 establishes it.
-- C6 before C7: **hard** — `casehub-rag` uses `SparseEmbedder` from `inference-splade` for the sparse search leg.
+- C6 before C7: **hard** — `casehub-neocortex-rag` uses `SparseEmbedder` from `inference-splade` for the sparse search leg.
 - C3 and C5 independent: C5 (Quarkus CDI wiring) wraps C3 (runtime), but C3 ships first as a usable JVM-only artifact; C5 adds the Quarkus layer separately.
 - C7 before C8: **hard** — corpus storage feeds the RAG pipeline; the pipeline must exist first.
 - C8 before C9: **hard** — `CorpusIngestionService` reads `ChangeSource` + `CorpusReader` from `corpus-api`; corpus modules must exist before the bridge.
@@ -154,7 +154,7 @@ This module sits **below** LangChain4j for inference and **above** LangChain4j f
 
 ```mermaid
 C4Container
-  title casehub-neural-text — Layer Architecture (scaffold state)
+  title casehub-neocortex — Layer Architecture (scaffold state)
 
   Container_Boundary(b_inference_spi, "Layer: SPI Foundation") {
     Container(inference_api, "inference-api", "Pure Java", "InferenceModel SPI, InferenceInput, InferenceOutput, ModelConfig")
@@ -284,7 +284,7 @@ When binary or scalar quantization is active, Qdrant's default oversampling (1.0
 
 ```mermaid
 C4Deployment
-  title casehub-neural-text — Deployment (JVM mode)
+  title casehub-neocortex — Deployment (JVM mode)
 
   Deployment_Node(jvm, "JVM (Java 21+)", "hosting process") {
     Deployment_Node(quarkus, "Quarkus application", "consuming app") {
@@ -322,7 +322,7 @@ All `inference-*` modules (except `inference-quarkus`) and `rag-api` enforce zer
 
 ```java
 // Example ArchUnit rule (inference-api)
-noClasses().that().resideInAPackage("io.casehub.inference..")
+noClasses().that().resideInAPackage("io.casehub.neocortex.inference..")
     .should().dependOnClassesThat()
     .resideInAnyPackage("io.casehub..", "io.quarkus..", "org.springframework..", "dev.langchain4j..")
     .check(importedClasses);
@@ -483,7 +483,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 **Delivered:** 2026-06-07 | **Issues:** #3 | **Blocked by:** — (independent of C2)
 
 **What this delivers**  
-`inference-api` and `inference-runtime` are published artifacts. Any JVM project (casehub or Hortora) can depend on `casehub-inference-api` and `casehub-inference-runtime` and execute ONNX model inference. `inference-inmem` stubs are available for testing without JNI.
+`inference-api` and `inference-runtime` are published artifacts. Any JVM project (casehub or Hortora) can depend on `casehub-neocortex-inference-api` and `casehub-neocortex-inference-runtime` and execute ONNX model inference. `inference-inmem` stubs are available for testing without JNI.
 
 **Accountability gaps closed**  
 - ArchUnit zero-domain-dep constraint → enforced from this chapter forward
@@ -542,7 +542,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 **Issues:** #6 | **Blocked by:** C4 (adapter pattern established)
 
 **What this delivers**  
-`inference-splade` published. `SparseEmbedder` produces log-saturated sparse term weight maps from SPLADE models. The sparse leg of casehub-rag's hybrid search is now available. Hortora can use `SparseEmbedder` for their Qdrant hybrid search. Candidate for upstream LangChain4j contribution (#1600).
+`inference-splade` published. `SparseEmbedder` produces log-saturated sparse term weight maps from SPLADE models. The sparse leg of casehub-neocortex-rag's hybrid search is now available. Hortora can use `SparseEmbedder` for their Qdrant hybrid search. Candidate for upstream LangChain4j contribution (#1600).
 
 **Accountability gaps closed**  
 - Hybrid search sparse leg → SparseEmbedder available
@@ -624,7 +624,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 **Issues:** #33, #38, #41 | **Blocked by:** C7 (CaseRetriever SPI), C4 (CrossEncoderReranker)
 
 **What this delivers**
-`rag-crag` module — a CDI `@Decorator` on `CaseRetriever` that evaluates retrieval quality via `RelevanceEvaluator` SPI, filters INCORRECT chunks, optionally expands search when too few results survive, and fires `RetrievalQuality` CDI events. Default evaluator: `CrossEncoderRelevanceEvaluator` — threshold-based grading reusing the deployed cross-encoder model. Classpath-activated: add `casehub-rag-crag` as a compile dependency to enable. `rag-api` enriched with `RelevanceGrade` on `RetrievedChunk`, `RelevanceEvaluator` SPI, and `RetrievalQuality` event type. `rag-testing` gains `InMemoryRelevanceEvaluator` stub.
+`rag-crag` module — a CDI `@Decorator` on `CaseRetriever` that evaluates retrieval quality via `RelevanceEvaluator` SPI, filters INCORRECT chunks, optionally expands search when too few results survive, and fires `RetrievalQuality` CDI events. Default evaluator: `CrossEncoderRelevanceEvaluator` — threshold-based grading reusing the deployed cross-encoder model. Classpath-activated: add `casehub-neocortex-rag-crag` as a compile dependency to enable. `rag-api` enriched with `RelevanceGrade` on `RetrievedChunk`, `RelevanceEvaluator` SPI, and `RetrievalQuality` event type. `rag-testing` gains `InMemoryRelevanceEvaluator` stub.
 
 **Accountability gaps closed**
 
@@ -831,7 +831,7 @@ SPLADE output is not an adapter in `inference-tasks` — it is a separate module
 
 - Adapter null-arg validation must precede `InferenceInput.of()`/`.pair()` construction — otherwise callers get `NullPointerException` from `Objects.requireNonNull` in the factory instead of `IllegalArgumentException` with an adapter-specific message
 - `ClassificationResult` compact constructor must use `Map.copyOf()` — records with Map fields need defensive copies to maintain immutability
-- ArchUnit casehub domain exclusion requires `DescribedPredicate.describe()` with a lambda checking `getPackageName()` — the existing `resideInAnyPackage()` pattern cannot express "allow io.casehub.inference but block all other io.casehub" (backported in #10)
+- ArchUnit casehub domain exclusion requires `DescribedPredicate.describe()` with a lambda checking `getPackageName()` — the existing `resideInAnyPackage()` pattern cannot express "allow io.casehub.neocortex.inference but block all other io.casehub" (backported in #10)
 
 #### Pattern to replicate
 
@@ -888,7 +888,7 @@ Quarkus applications declare ONNX models in `application.properties` and inject 
 
 #### Architectural decisions
 
-`@Inference` qualifier, not `@InferenceModel` — avoids import collision with the `io.casehub.inference.InferenceModel` SPI interface. `@Nonbinding String value()` means CDI treats all `@Inference` qualifiers identically; the producer inspects `InjectionPoint` to resolve the specific model name at runtime.
+`@Inference` qualifier, not `@InferenceModel` — avoids import collision with the `io.casehub.neocortex.inference.InferenceModel` SPI interface. `@Nonbinding String value()` means CDI treats all `@Inference` qualifiers identically; the producer inspects `InjectionPoint` to resolve the specific model name at runtime.
 
 CDI-only, no Quarkus extension (no deployment/runtime split). Full Quarkus extension not needed — JVM mode by design for long-running services. `@DefaultBean` on the production producer means any `@Produces @Inference` method in test code wins automatically.
 
@@ -1066,7 +1066,7 @@ Rolling archive pattern with chain manifest for any append-heavy storage where i
 
 #### What it adds
 
-Classpath + config activated corrective retrieval — when `casehub-rag-crag` is on the classpath and `casehub.rag.crag.enabled=true`, `CorrectiveCaseRetriever` and `ReactiveCorrectiveCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability. Already-graded guard prevents double CRAG application when the blocking-to-reactive bridge is active — uses `RelevanceGrade.UNGRADED` as the idempotency signal. Shared `CragEvaluationLogic` helper provides pure functions consumed by both decorators.
+Classpath + config activated corrective retrieval — when `casehub-neocortex-rag-crag` is on the classpath and `casehub.rag.crag.enabled=true`, `CorrectiveCaseRetriever` and `ReactiveCorrectiveCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability. Already-graded guard prevents double CRAG application when the blocking-to-reactive bridge is active — uses `RelevanceGrade.UNGRADED` as the idempotency signal. Shared `CragEvaluationLogic` helper provides pure functions consumed by both decorators.
 
 #### Accountability gaps closed
 
@@ -1109,7 +1109,7 @@ CDI `@Decorator` with constructor injection for classpath-activated pipeline sta
 
 #### What it adds
 
-Config-gated query expansion — when `casehub-rag-expansion` is on the classpath and `casehub.rag.expansion.enabled=true`, `QueryExpandingCaseRetriever` and `ReactiveQueryExpandingCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Expands the original query through `QueryExpander` SPI before passing to the delegate retriever. Dense embedding uses the expanded `searchText()`; sparse embedding and reranking use the original `text()`. Three bundled expanders: `LlmQueryExpander` (LLM-generated hypothetical documents for HyDE mode, multi-query support via N hypothetical documents with RRF fusion via `casehub.rag.expansion.hypothetical-count`), `TemplateQueryExpander` (pattern-based string expansion), and `StepBackQueryExpander` (step-back prompting — abstract reformulation, returns [original, abstract] for multi-query fan-out). Each bean carries its own `@IfBuildProperty` annotation — decorators gated by `casehub.rag.expansion.enabled`, expanders gated by `casehub.rag.expansion.mode`. `RrfFusion` utility in `rag-api` provides application-level Reciprocal Rank Fusion for decorator-level multi-query merging.
+Config-gated query expansion — when `casehub-neocortex-rag-expansion` is on the classpath and `casehub.rag.expansion.enabled=true`, `QueryExpandingCaseRetriever` and `ReactiveQueryExpandingCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Expands the original query through `QueryExpander` SPI before passing to the delegate retriever. Dense embedding uses the expanded `searchText()`; sparse embedding and reranking use the original `text()`. Three bundled expanders: `LlmQueryExpander` (LLM-generated hypothetical documents for HyDE mode, multi-query support via N hypothetical documents with RRF fusion via `casehub.rag.expansion.hypothetical-count`), `TemplateQueryExpander` (pattern-based string expansion), and `StepBackQueryExpander` (step-back prompting — abstract reformulation, returns [original, abstract] for multi-query fan-out). Each bean carries its own `@IfBuildProperty` annotation — decorators gated by `casehub.rag.expansion.enabled`, expanders gated by `casehub.rag.expansion.mode`. `RrfFusion` utility in `rag-api` provides application-level Reciprocal Rank Fusion for decorator-level multi-query merging.
 
 #### Accountability gaps closed
 
@@ -1155,10 +1155,10 @@ Config-gated CDI decorator with `@IfBuildProperty` — same pattern for any futu
 *(decisions not captured inline in layer or chapter entries)*
 
 **AD-001 — Single repo for inference-* and rag-*** (2026-06-04)  
-inference-* and rag-* are in the same repo (`casehubio/neural-text`). Rationale: rag-* uses `inference-splade` and `CrossEncoderReranker` — they are commonly deployed together in casehub. Hortora takes both `inference-*` and `rag-*` artifacts (#35). Tenancy enforcement is optional for single-tenant consumers (#36). Can be split into separate repos later if Hortora's dependency footprint becomes a concern. Cost of splitting: low (Maven multi-module → separate projects). Cost of premature splitting: one more repo to maintain before any code ships.
+inference-* and rag-* are in the same repo (`casehubio/neocortex`). Rationale: rag-* uses `inference-splade` and `CrossEncoderReranker` — they are commonly deployed together in casehub. Hortora takes both `inference-*` and `rag-*` artifacts (#35). Tenancy enforcement is optional for single-tenant consumers (#36). Can be split into separate repos later if Hortora's dependency footprint becomes a concern. Cost of splitting: low (Maven multi-module → separate projects). Cost of premature splitting: one more repo to maintain before any code ships.
 
 **AD-002 — LangChain4j for dense RAG, not a custom implementation** (2026-06-04)  
-LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dense ONNX embeddings), and 30+ vector store integrations including Qdrant. Building a parallel implementation would duplicate ~80% of what LangChain4j already does. casehub already uses langchain4j-core (in casehub-eidos). The remaining gap (SPLADE, NLI, classification) is precisely what `casehub-neural-text` adds.
+LangChain4j provides Tika document parsing, chunking, `OnnxEmbeddingModel` (dense ONNX embeddings), and 30+ vector store integrations including Qdrant. Building a parallel implementation would duplicate ~80% of what LangChain4j already does. casehub already uses langchain4j-core (in casehub-eidos). The remaining gap (SPLADE, NLI, classification) is precisely what `casehub-neocortex` adds.
 
 ---
 

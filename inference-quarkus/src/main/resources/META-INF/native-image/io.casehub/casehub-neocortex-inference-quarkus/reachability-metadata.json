@@ -1,0 +1,1579 @@
+{
+  "reflection": [
+    {
+      "type": "ai.djl.huggingface.tokenizers.jni.CharSpan",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "int",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ai.djl.huggingface.tokenizers.jni.CharSpan[]"
+    },
+    {
+      "type": "ai.onnxruntime.OnnxTensor",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "long",
+            "long",
+            "ai.onnxruntime.TensorInfo"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ai.onnxruntime.TensorInfo",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "long[]",
+            "java.lang.String[]",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.Callback",
+      "jniAccessible": true
+    },
+    {
+      "type": "com.sun.jna.CallbackProxy"
+    },
+    {
+      "type": "com.sun.jna.CallbackReference",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getCallback",
+          "parameterTypes": [
+            "java.lang.Class",
+            "com.sun.jna.Pointer",
+            "boolean"
+          ]
+        },
+        {
+          "name": "getFunctionPointer",
+          "parameterTypes": [
+            "com.sun.jna.Callback",
+            "boolean"
+          ]
+        },
+        {
+          "name": "getNativeString",
+          "parameterTypes": [
+            "java.lang.Object",
+            "boolean"
+          ]
+        },
+        {
+          "name": "initializeThread",
+          "parameterTypes": [
+            "com.sun.jna.Callback",
+            "com.sun.jna.CallbackReference$AttachOptions"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.CallbackReference$AttachOptions",
+      "jniAccessible": true
+    },
+    {
+      "type": "com.sun.jna.FromNativeConverter",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "nativeType",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.IntegerType",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.JNIEnv",
+      "jniAccessible": true
+    },
+    {
+      "type": "com.sun.jna.Native",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "dispose",
+          "parameterTypes": []
+        },
+        {
+          "name": "fromNative",
+          "parameterTypes": [
+            "com.sun.jna.FromNativeConverter",
+            "java.lang.Object",
+            "java.lang.reflect.Method"
+          ]
+        },
+        {
+          "name": "fromNative",
+          "parameterTypes": [
+            "java.lang.Class",
+            "java.lang.Object"
+          ]
+        },
+        {
+          "name": "fromNative",
+          "parameterTypes": [
+            "java.lang.reflect.Method",
+            "java.lang.Object"
+          ]
+        },
+        {
+          "name": "nativeType",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "toNative",
+          "parameterTypes": [
+            "com.sun.jna.ToNativeConverter",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.Native$ffi_callback",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "invoke",
+          "parameterTypes": [
+            "long",
+            "long",
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.NativeMapped",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "toNative",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.Pointer",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "peer"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.PointerType",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "pointer"
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.Structure",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "memory"
+        },
+        {
+          "name": "typeInfo"
+        }
+      ],
+      "methods": [
+        {
+          "name": "autoRead",
+          "parameterTypes": []
+        },
+        {
+          "name": "autoWrite",
+          "parameterTypes": []
+        },
+        {
+          "name": "getTypeInfo",
+          "parameterTypes": []
+        },
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "java.lang.Class",
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.Structure$ByValue",
+      "jniAccessible": true
+    },
+    {
+      "type": "com.sun.jna.Structure$FFIType$FFITypes",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "ffi_type_double"
+        },
+        {
+          "name": "ffi_type_float"
+        },
+        {
+          "name": "ffi_type_longdouble"
+        },
+        {
+          "name": "ffi_type_pointer"
+        },
+        {
+          "name": "ffi_type_sint16"
+        },
+        {
+          "name": "ffi_type_sint32"
+        },
+        {
+          "name": "ffi_type_sint64"
+        },
+        {
+          "name": "ffi_type_sint8"
+        },
+        {
+          "name": "ffi_type_uint16"
+        },
+        {
+          "name": "ffi_type_uint32"
+        },
+        {
+          "name": "ffi_type_uint64"
+        },
+        {
+          "name": "ffi_type_uint8"
+        },
+        {
+          "name": "ffi_type_void"
+        }
+      ]
+    },
+    {
+      "type": "com.sun.jna.WString",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "float[][]"
+    },
+    {
+      "type": "io.casehub.neocortex.inference.quarkus.gate.NativeImageGateCommand"
+    },
+    {
+      "type": "io.quarkus.arc.AsyncObserverExceptionHandler"
+    },
+    {
+      "type": "io.quarkus.arc.generator.Default_jakarta_enterprise_context_ApplicationScoped_ContextInstances"
+    },
+    {
+      "type": "io.quarkus.arc.impl.AbstractInstanceHandle"
+    },
+    {
+      "type": "io.quarkus.arc.impl.CurrentManagedContext$CurrentContextState",
+      "fields": [
+        {
+          "name": "state"
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.arc.impl.DefaultAsyncObserverExceptionHandler"
+    },
+    {
+      "type": "io.quarkus.arc.runtime.ConfigStaticInitValues"
+    },
+    {
+      "type": "io.quarkus.arc.setup.Default_ComponentsProvider"
+    },
+    {
+      "type": "io.quarkus.bootstrap.logging.EmptyLogConfiguratorFactory"
+    },
+    {
+      "type": "io.quarkus.bootstrap.logging.InitialConfigurator"
+    },
+    {
+      "type": "io.quarkus.runner.ApplicationImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runner.GeneratedMain",
+      "methods": [
+        {
+          "name": "main",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.ApplicationConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.ApplicationConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.BannerRuntimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.BannerRuntimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.ConfigConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.ConfigConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.LaunchConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.LaunchConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.LiveReloadConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.LiveReloadConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.LocalesBuildTimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.LocalesBuildTimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.QuarkusApplication"
+    },
+    {
+      "type": "io.quarkus.runtime.StartupEvent"
+    },
+    {
+      "type": "io.quarkus.runtime.ThreadPoolConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.ThreadPoolConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.configuration.CharsetConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.configuration.InetSocketAddressConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.configuration.MemorySize"
+    },
+    {
+      "type": "io.quarkus.runtime.configuration.MemorySizeConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.console.ConsoleRuntimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.console.ConsoleRuntimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.generated.RunTimeConfig",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.generated.StaticInitConfig",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.init.InitRuntimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.init.InitRuntimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.init.InitRuntimeConfig$BooleanConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.InheritableLevel"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LevelConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogBuildTimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogBuildTimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogBuildTimeConfig$CategoryBuildTimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogBuildTimeConfig$CategoryBuildTimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$AsyncConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$AsyncConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$CategoryConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$CategoryConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$CleanupFilterConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$CleanupFilterConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$ConsoleConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig$RotationConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$FileConfig$RotationConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$SocketConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.logging.LogRuntimeConfig$SyslogConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.runtime.shutdown.ShutdownConfig"
+    },
+    {
+      "type": "io.quarkus.runtime.shutdown.ShutdownConfig$$CMImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "io.smallrye.config.ConfigMappingContext"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSecrets",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.quarkus.value.registry.ValueRegistry"
+    },
+    {
+      "type": "io.smallrye.common.net.CidrAddress"
+    },
+    {
+      "type": "io.smallrye.config._private.ConfigLogging_$logger",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "org.jboss.logging.Logger"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "jakarta.enterprise.context.BeforeDestroyed",
+      "methods": [
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "jakarta.enterprise.context.Destroyed",
+      "methods": [
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "jakarta.enterprise.context.Initialized",
+      "methods": [
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "jakarta.enterprise.inject.Any"
+    },
+    {
+      "type": "jakarta.enterprise.inject.Default"
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "boolean"
+          ]
+        },
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Byte",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Character",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "char"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Class",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getComponentType",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.ClassLoader",
+      "fields": [
+        {
+          "name": "classLoaderValueMap"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Double",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "double"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Float",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "float"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Integer",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Long",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Short",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        },
+        {
+          "name": "value"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "short"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.String",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]"
+          ]
+        },
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "byte[]",
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "getBytes",
+          "parameterTypes": []
+        },
+        {
+          "name": "getBytes",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "toCharArray",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.lang.System",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getProperty",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Thread",
+      "fields": [
+        {
+          "name": "inheritableThreadLocals"
+        },
+        {
+          "name": "threadLocals"
+        }
+      ],
+      "methods": [
+        {
+          "name": "isVirtual",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Throwable",
+      "methods": [
+        {
+          "name": "addSuppressed",
+          "parameterTypes": [
+            "java.lang.Throwable"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.UnsatisfiedLinkError",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Void",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.Method",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getParameterTypes",
+          "parameterTypes": []
+        },
+        {
+          "name": "getReturnType",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.net.InetAddress"
+    },
+    {
+      "type": "java.net.InetSocketAddress"
+    },
+    {
+      "type": "java.nio.Buffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "position",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.ByteBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.CharBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.DoubleBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.FloatBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.IntBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.LongBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.ShortBuffer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "array",
+          "parameterTypes": []
+        },
+        {
+          "name": "arrayOffset",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.charset.Charset"
+    },
+    {
+      "type": "java.nio.file.Path"
+    },
+    {
+      "type": "java.time.Duration"
+    },
+    {
+      "type": "java.time.ZoneId"
+    },
+    {
+      "type": "java.util.Locale"
+    },
+    {
+      "type": "java.util.logging.Level"
+    },
+    {
+      "type": "java.util.regex.Pattern"
+    },
+    {
+      "type": "jdk.internal.jrtfs.JrtFileSystemProvider"
+    },
+    {
+      "type": "jdk.internal.misc.Unsafe"
+    },
+    {
+      "type": "org.jboss.logmanager.CopyOnWriteMap"
+    },
+    {
+      "type": "org.jboss.logmanager.ExtHandler"
+    },
+    {
+      "type": "org.jboss.logmanager.ExtLogRecord",
+      "methods": [
+        {
+          "name": "setMarker",
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.jboss.logmanager.JBossLoggerFinder"
+    },
+    {
+      "type": "org.jboss.logmanager.LogManager"
+    },
+    {
+      "type": "org.jboss.logmanager.Logger$AttachmentKey"
+    },
+    {
+      "type": "org.jboss.logmanager.LoggerNode"
+    },
+    {
+      "type": "org.jboss.logmanager.StandardOutputStreams"
+    },
+    {
+      "type": "org.jboss.logmanager.configuration.DefaultConfiguratorFactory"
+    },
+    {
+      "type": "org.jboss.threads.Messages_$logger",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "org.jboss.logging.Logger"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.jboss.threads.Messages_$logger_en"
+    },
+    {
+      "type": "org.jboss.threads.Messages_$logger_en_GB"
+    },
+    {
+      "type": "org.slf4j.impl.JBossSlf4jServiceProvider"
+    },
+    {
+      "type": "sun.misc.Unsafe",
+      "methods": [
+        {
+          "name": "trySetMemoryAccessWarned",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en"
+    }
+  ],
+  "resources": [
+    {
+      "glob": "META-INF/microprofile-config.properties"
+    },
+    {
+      "glob": "META-INF/microprofile-config.yaml"
+    },
+    {
+      "glob": "META-INF/microprofile-config.yml"
+    },
+    {
+      "glob": "META-INF/services/io.quarkus.arc.ComponentsProvider"
+    },
+    {
+      "glob": "META-INF/services/io.quarkus.arc.ResourceReferenceProvider"
+    },
+    {
+      "glob": "META-INF/services/java.net.spi.InetAddressResolverProvider"
+    },
+    {
+      "glob": "META-INF/services/java.net.spi.URLStreamHandlerProvider"
+    },
+    {
+      "glob": "META-INF/services/java.nio.file.spi.FileSystemProvider"
+    },
+    {
+      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
+      "glob": "META-INF/services/org.jboss.logmanager.ConfiguratorFactory"
+    },
+    {
+      "glob": "META-INF/services/org.jboss.logmanager.LogContextInitializer"
+    },
+    {
+      "glob": "META-INF/services/org.jboss.logmanager.MDCProvider"
+    },
+    {
+      "glob": "META-INF/services/org.jboss.logmanager.NDCProvider"
+    },
+    {
+      "glob": "META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+    },
+    {
+      "glob": "ai/onnxruntime/native/osx-aarch64/libdxcompiler.dylib"
+    },
+    {
+      "glob": "ai/onnxruntime/native/osx-aarch64/libdxil.dylib"
+    },
+    {
+      "glob": "ai/onnxruntime/native/osx-aarch64/libonnxruntime.dylib"
+    },
+    {
+      "glob": "ai/onnxruntime/native/osx-aarch64/libonnxruntime4j_jni.dylib"
+    },
+    {
+      "glob": "ai/onnxruntime/native/osx-aarch64/libonnxruntime_providers_shared.dylib"
+    },
+    {
+      "glob": "ai/onnxruntime/native/osx-aarch64/libwebgpu_dawn.dylib"
+    },
+    {
+      "glob": "application.properties"
+    },
+    {
+      "glob": "application.yaml"
+    },
+    {
+      "glob": "application.yml"
+    },
+    {
+      "glob": "com/sun/jna/darwin-aarch64/libjnidispatch.jnilib"
+    },
+    {
+      "glob": "darwin-aarch64/libcudart.dylib"
+    },
+    {
+      "glob": "darwin/libcudart.dylib"
+    },
+    {
+      "glob": "libcudart.dylib"
+    },
+    {
+      "glob": "native/lib/tokenizers.properties"
+    },
+    {
+      "glob": "org/jboss/threads/Version.properties"
+    },
+    {
+      "glob": "tokenizers-engine.properties"
+    }
+  ]
+}

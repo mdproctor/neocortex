@@ -1,8 +1,8 @@
-# RAG Pipeline Design — casehub-neural-text #7
+# RAG Pipeline Design — casehub-neocortex #7
 
 **Date:** 2026-06-08
 **Status:** Approved — pending implementation
-**Issue:** casehubio/neural-text#7
+**Issue:** casehubio/neocortex#7
 **Platform tracking:** casehubio/parent#164
 
 ---
@@ -18,23 +18,23 @@
 ```
 rag-api/       Pure Java, zero deps.
                EmbeddingIngestor SPI, CaseRetriever SPI, CorpusRef, ChunkInput, RetrievedChunk.
-               Package: io.casehub.rag
-               (matches inference-api convention: io.casehub.inference)
+               Package: io.casehub.neocortex.rag
+               (matches inference-api convention: io.casehub.neocortex.inference)
                Zero-deps for quality and testability — same reason inference-api
                is zero-deps. Not shared with Hortora (see Hortora Boundary below).
 
 rag/           Quarkus library JAR (Jandex-indexed, not a Quarkus extension).
                QdrantEmbeddingIngestor, HybridCaseRetriever, TenancyStrategy, QdrantConfig.
-               Package: io.casehub.rag.runtime
+               Package: io.casehub.neocortex.rag.runtime
 
 rag-tika/      NEW MODULE (not in original scaffold — must be created and added
                to parent pom <modules>). Optional. LangChain4j Tika parser →
                List<ChunkInput>. Callers add as compile dep to activate.
-               Package: io.casehub.rag.tika
+               Package: io.casehub.neocortex.rag.tika
 
 rag-testing/   In-memory EmbeddingIngestor + CaseRetriever stubs.
                @Alternative @Priority(1). No Qdrant, no embeddings.
-               Package: io.casehub.rag.testing
+               Package: io.casehub.neocortex.rag.testing
 ```
 
 ### Dependencies
@@ -55,7 +55,7 @@ The scaffolded POMs predate this spec. The following changes are needed:
 | `pom.xml` (parent) | Add `<module>rag-tika</module>` | New module |
 | `rag/pom.xml` | Remove `langchain4j-qdrant` | Unified Qdrant client — langchain4j-qdrant not used |
 | `rag/pom.xml` | Remove `langchain4j-document-parser-apache-tika` | Moved to `rag-tika` |
-| `rag/pom.xml` | Remove `casehub-inference-quarkus` | App provides SparseEmbedder/CrossEncoderReranker; rag does not own CDI model resolution |
+| `rag/pom.xml` | Remove `casehub-neocortex-inference-quarkus` | App provides SparseEmbedder/CrossEncoderReranker; rag does not own CDI model resolution |
 | `rag/pom.xml` | Replace `langchain4j` with `langchain4j-core` | Only `EmbeddingModel`, `Embedding`, `TextSegment` needed — all in `langchain4j-core` |
 | `rag/pom.xml` | Remove `langchain4j-embeddings` | `EmbeddingModel` is in `langchain4j-core`, not `langchain4j-embeddings` |
 
@@ -63,7 +63,7 @@ The scaffolded POMs predate this spec. The following changes are needed:
 
 **`langchain4j-qdrant` removed.** LangChain4j does not support Qdrant hybrid search with named vector spaces. The generic hybrid search feature request ([langchain4j#4087](https://github.com/langchain4j/langchain4j/issues/4087)) was closed — resolved via PR #4124 for store-agnostic hybrid retrieval. But the Qdrant-specific implementation ([langchain4j#4994](https://github.com/langchain4j/langchain4j/issues/4994) — "Support Hybrid Search for Qdrant vector store") remains open with no timeline. Both dense and sparse legs use the Qdrant Java gRPC client (`io.qdrant:client`) directly for a unified architecture.
 
-**`casehub-inference-quarkus` not a dependency of `rag`.** The `@Inference` qualifier uses `@Nonbinding` value with `InjectionPoint` dispatch — CDI resolves all `@Inference`-qualified injection points through a single producer. Making `CrossEncoderReranker` optional via `Instance<>` is trivial when the app provides the bean; it requires solving the "unconfigured model throws at CDI wiring time" problem if `rag` injects `@Inference`-qualified models directly. The app-provides pattern is cleaner: 6 lines of producer code per consuming app, full control over model selection, no transitive ONNX Runtime JNI forced onto `rag` consumers.
+**`casehub-neocortex-inference-quarkus` not a dependency of `rag`.** The `@Inference` qualifier uses `@Nonbinding` value with `InjectionPoint` dispatch — CDI resolves all `@Inference`-qualified injection points through a single producer. Making `CrossEncoderReranker` optional via `Instance<>` is trivial when the app provides the bean; it requires solving the "unconfigured model throws at CDI wiring time" problem if `rag` injects `@Inference`-qualified models directly. The app-provides pattern is cleaner: 6 lines of producer code per consuming app, full control over model selection, no transitive ONNX Runtime JNI forced onto `rag` consumers.
 
 LangChain4j is still used for: `EmbeddingModel` (dense embedding generation), `Embedding`/`TextSegment` types (in `langchain4j-core`), `DocumentSplitter` + `ApacheTikaDocumentParser` (in `rag-tika`).
 
@@ -270,7 +270,7 @@ casehub.rag.tika.chunk-size = 512
 casehub.rag.tika.chunk-overlap = 64
 ```
 
-Callers add `casehub-rag-tika` as compile dep to activate. Without it, `EmbeddingIngestor.ingest()` still works — callers provide their own `List<ChunkInput>`.
+Callers add `casehub-neocortex-rag-tika` as compile dep to activate. Without it, `EmbeddingIngestor.ingest()` still works — callers provide their own `List<ChunkInput>`.
 
 ---
 
@@ -288,7 +288,7 @@ Consumer test classpath:
 ```xml
 <dependency>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-rag-testing</artifactId>
+    <artifactId>casehub-neocortex-rag-testing</artifactId>
     <scope>test</scope>
 </dependency>
 ```

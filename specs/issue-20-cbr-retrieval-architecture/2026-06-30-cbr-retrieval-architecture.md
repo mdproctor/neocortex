@@ -1,6 +1,6 @@
-# CBR Retrieval Architecture — Unified Knowledge Retrieval in neural-text
+# CBR Retrieval Architecture — Unified Knowledge Retrieval in neocortex
 
-**Issue:** casehubio/neural-text#20
+**Issue:** casehubio/neocortex#20
 **Date:** 2026-06-30
 **Status:** Draft
 **Background:** [CBR Paradigms and Analysis](2026-06-30-cbr-paradigms-and-analysis.md)
@@ -10,15 +10,15 @@
 
 ## 1. Problem
 
-CaseHub has three independent "find similar things" systems — `CaseMemoryStore` (platform), `CaseRetriever` (neural-text), and CBR (gap) — that share no infrastructure despite doing the same underlying work: embed, index, search by similarity, return ranked results. CBR retrieval (the Retrieve step of the CBR cycle) does not exist; the platform runs degenerate CBR with Retain and Reuse only. Textual CBR already works via `CaseMemoryStore.query(question, RELEVANCE)`, but Feature-Vector and Plan-Based CBR have no SPI or implementation.
+CaseHub has three independent "find similar things" systems — `CaseMemoryStore` (platform), `CaseRetriever` (neocortex), and CBR (gap) — that share no infrastructure despite doing the same underlying work: embed, index, search by similarity, return ranked results. CBR retrieval (the Retrieve step of the CBR cycle) does not exist; the platform runs degenerate CBR with Retain and Reuse only. Textual CBR already works via `CaseMemoryStore.query(question, RELEVANCE)`, but Feature-Vector and Plan-Based CBR have no SPI or implementation.
 
 ## 2. Decision
 
-Build CBR retrieval as a natural extension of the existing `CaseMemoryStore` memory system. Add CBR-specific SPIs and types in `casehub-neural-text` that compose with `CaseMemoryStore` (which stays in `casehub-platform`) via delegation. The Qdrant-backed CBR implementation naturally belongs in neural-text alongside the existing Qdrant/embedding infrastructure.
+Build CBR retrieval as a natural extension of the existing `CaseMemoryStore` memory system. Add CBR-specific SPIs and types in `casehub-neocortex` that compose with `CaseMemoryStore` (which stays in `casehub-platform`) via delegation. The Qdrant-backed CBR implementation naturally belongs in neocortex alongside the existing Qdrant/embedding infrastructure.
 
 **Why not CaseRetriever?** Issue #20 and engine#478 originally proposed `CaseRetriever` as the CBR retrieval SPI. Design analysis revealed these are fundamentally different contracts: `CaseRetriever` is a RAG SPI operating on text queries against document corpora (`RetrievalQuery` + `CorpusRef` → `RetrievedChunk`). CBR retrieval operates on structured feature vectors against case memories — different input types, output types, storage models, and similarity functions. `CbrCaseMemoryStore.retrieveSimilar()` is the right abstraction because CBR retrieval is a memory operation, not a corpus operation. Engine#478's integration point changes from `CaseRetriever` to `CbrCaseMemoryStore.retrieveSimilar()`.
 
-### 2.1 What Goes in neural-text
+### 2.1 What Goes in neocortex
 
 | Module | Contents |
 |--------|----------|
@@ -45,11 +45,11 @@ Also stays: `CurrentPrincipal`, `Preferences`, `Path`, `EndpointRegistry`, `Grou
 
 ### 2.3 Dependencies
 
-`memory-api` (neural-text) depends on `platform-api` for `MemoryInput`, `MemoryDomain`, `MemoryPermissions`, and `CurrentPrincipal`. Package: `io.casehub.memory.cbr`. No circular dependency — neural-text depends on platform, never the reverse.
+`memory-api` (neocortex) depends on `platform-api` for `MemoryInput`, `MemoryDomain`, `MemoryPermissions`, and `CurrentPrincipal`. Package: `io.casehub.neocortex.memory.cbr`. No circular dependency — neocortex depends on platform, never the reverse.
 
 `CbrCaseMemoryStore` does NOT extend `CaseMemoryStore`. It is a standalone SPI that internally delegates regular memory storage to an injected `CaseMemoryStore`. This avoids CDI bean displacement conflicts — a `CbrCaseMemoryStore` bean (e.g., Qdrant) coexists with any platform `CaseMemoryStore` bean (e.g., JPA) without ambiguity or priority displacement.
 
-Consumers that need CBR retrieval add `casehub-memory-api` alongside `casehub-platform-api`. Existing `CaseMemoryStore` imports and usage are unchanged.
+Consumers that need CBR retrieval add `casehub-neocortex-memory-api` alongside `casehub-platform-api`. Existing `CaseMemoryStore` imports and usage are unchanged.
 
 ---
 
@@ -177,7 +177,7 @@ Applications provide a schema per case type alongside `CbrFeatureVectorBuilder` 
 ## 5. CbrQuery
 
 ```java
-// memory-api (io.casehub.memory.cbr)
+// memory-api (io.casehub.neocortex.memory.cbr)
 public record CbrQuery(
     String tenantId,                  // mandatory — tenant isolation (non-null)
     MemoryDomain domain,              // mandatory — domain scoping (non-null)
@@ -208,31 +208,31 @@ public record CbrQuery(
 
 Standalone SPI — does NOT extend `CaseMemoryStore`. Implementations internally delegate regular memory storage to an injected `CaseMemoryStore` from platform.
 
-**Why not extend?** The `GraphCaseMemoryStore extends CaseMemoryStore` pattern works within one repo where you pick one backend (Graphiti subsumes everything). With CBR in neural-text and base memory in platform, the `extends` relationship creates CDI bean displacement conflicts: a `CbrCaseMemoryStore` bean would also be a `CaseMemoryStore` bean, causing priority displacement with JPA/SQLite/inmem, dual `@DefaultBean` ambiguity between `NoOpCaseMemoryStore` and `NoOpCbrCaseMemoryStore`, and `@DefaultBean` removal cascades. Composition via delegation avoids all of these.
+**Why not extend?** The `GraphCaseMemoryStore extends CaseMemoryStore` pattern works within one repo where you pick one backend (Graphiti subsumes everything). With CBR in neocortex and base memory in platform, the `extends` relationship creates CDI bean displacement conflicts: a `CbrCaseMemoryStore` bean would also be a `CaseMemoryStore` bean, causing priority displacement with JPA/SQLite/inmem, dual `@DefaultBean` ambiguity between `NoOpCaseMemoryStore` and `NoOpCbrCaseMemoryStore`, and `@DefaultBean` removal cascades. Composition via delegation avoids all of these.
 
 ```java
-// memory-api (io.casehub.memory.cbr)
+// memory-api (io.casehub.neocortex.memory.cbr)
 public interface CbrCaseMemoryStore {
 
     void registerSchema(CbrFeatureSchema schema);
 
-    String store(CbrCase cbrCase, String entityId, MemoryDomain domain,
-                 String tenantId, String caseId);
+    String store(CbrCase cbrCase, String caseType, String entityId,
+                 MemoryDomain domain, String tenantId, String caseId);
 
     <C extends CbrCase> List<C> retrieveSimilar(CbrQuery query, Class<C> caseType);
 
-    int erase(EraseRequest request);
+    Integer erase(EraseRequest request);
 
-    int eraseEntity(String entityId, String tenantId);
+    Integer eraseEntity(String entityId, String tenantId);
 }
 
-// memory-api (io.casehub.memory.cbr)
+// memory-api (io.casehub.neocortex.memory.cbr)
 public interface ReactiveCbrCaseMemoryStore {
 
     Uni<Void> registerSchema(CbrFeatureSchema schema);
 
-    Uni<String> store(CbrCase cbrCase, String entityId, MemoryDomain domain,
-                      String tenantId, String caseId);
+    Uni<String> store(CbrCase cbrCase, String caseType, String entityId,
+                      MemoryDomain domain, String tenantId, String caseId);
 
     <C extends CbrCase> Uni<List<C>> retrieveSimilar(CbrQuery query, Class<C> caseType);
 
@@ -263,9 +263,9 @@ Throws `IllegalArgumentException` with a descriptive message on type mismatch. E
 
 ### 6.3 Bridge and No-Op
 
-`BlockingToReactiveCbrBridge @DefaultBean` in `neural-text/memory` wraps blocking `CbrCaseMemoryStore` as `ReactiveCbrCaseMemoryStore`, following the same `runSubscriptionOn(workerPool)` pattern as `BlockingToReactiveBridge` in platform.
+`BlockingToReactiveCbrBridge @DefaultBean` in `neocortex/memory` wraps blocking `CbrCaseMemoryStore` as `ReactiveCbrCaseMemoryStore`, following the same `runSubscriptionOn(workerPool)` pattern as `BlockingToReactiveBridge` in platform.
 
-`NoOpCbrCaseMemoryStore @DefaultBean` in `neural-text/memory` — `store()` delegates to injected `CaseMemoryStore` only (no CBR indexing), `retrieveSimilar()` returns `List.of()`. No CDI conflict with `NoOpCaseMemoryStore` in platform — they are independent types.
+`NoOpCbrCaseMemoryStore @DefaultBean` in `neocortex/memory` — pure no-op. `store()` returns `""`, `retrieveSimilar()` returns `List.of()`, `erase*()` returns `0`. Does NOT delegate to `CaseMemoryStore` — no hard dependency on platform having an active bean. No CDI conflict with `NoOpCaseMemoryStore` in platform — they are independent types.
 
 ### 6.5 Erasure Cascade
 
@@ -284,8 +284,8 @@ Failure analysis: JPA success + Qdrant failure → JPA record gone, Qdrant point
 
 | Backend | Repo | Implements | CBR Capability |
 |---------|------|-----------|----------------|
-| cbr-inmem (NEW) | neural-text | `CbrCaseMemoryStore` | In-memory field matching (testing + dev) |
-| Qdrant (NEW) | neural-text | `CbrCaseMemoryStore` | Full: payload filters + dense + hybrid |
+| cbr-inmem (NEW) | neocortex | `CbrCaseMemoryStore` | In-memory field matching (testing + dev) |
+| Qdrant (NEW) | neocortex | `CbrCaseMemoryStore` | Full: payload filters + dense + hybrid |
 | inmem | platform | `CaseMemoryStore` | Text only |
 | JPA | platform | `CaseMemoryStore` | Text only (extend later) |
 | SQLite | platform | `CaseMemoryStore` | Text only (extend later) |
@@ -323,7 +323,7 @@ The delegate `CaseMemoryStore` (JPA/SQLite) is the **source of truth**. Qdrant i
 ## 8. Module Structure
 
 ```
-neural-text/
+neocortex/
   memory-api/              ← CBR SPI + types (Tier 1 pure Java; dep: platform-api)
   memory/                  ← NoOpCbrCaseMemoryStore @DefaultBean, BlockingToReactiveCbrBridge
   memory-cbr-inmem/        ← In-memory CbrCaseMemoryStore (@Alternative @Priority(2))
@@ -391,10 +391,10 @@ Enables CHEF-style plan adaptation: retrieve similar plans, identify substitutab
 
 | Document | Change |
 |----------|--------|
-| **PLATFORM.md** Capability Ownership | Add "CBR retrieval" owner → `casehub-neural-text/memory-api` (`CbrCaseMemoryStore`). Base "Agent memory" stays in `casehub-platform-api`. |
-| **PLATFORM.md** Boundary Rule | "CBR retrieval belongs in neural-text via `CbrCaseMemoryStore`" (not `CaseRetriever`). `CaseRetriever` remains the RAG retrieval SPI. |
-| **PLATFORM.md** Cross-Repo Dependency Map | Add `casehub-memory-api` → engine (for `CbrCaseMemoryStore.retrieveSimilar()` at plan creation) |
-| **CBR-CAPABILITY.md** Retrieve owner | `casehub-neural-text/memory-api` — `CbrCaseMemoryStore.retrieveSimilar()` (not `CaseRetriever`) |
+| **PLATFORM.md** Capability Ownership | Add "CBR retrieval" owner → `casehub-neocortex/memory-api` (`CbrCaseMemoryStore`). Base "Agent memory" stays in `casehub-platform-api`. |
+| **PLATFORM.md** Boundary Rule | "CBR retrieval belongs in neocortex via `CbrCaseMemoryStore`" (not `CaseRetriever`). `CaseRetriever` remains the RAG retrieval SPI. |
+| **PLATFORM.md** Cross-Repo Dependency Map | Add `casehub-neocortex-memory-api` → engine (for `CbrCaseMemoryStore.retrieveSimilar()` at plan creation) |
+| **CBR-CAPABILITY.md** Retrieve owner | `casehub-neocortex/memory-api` — `CbrCaseMemoryStore.retrieveSimilar()` (not `CaseRetriever`) |
 | **CBR-CAPABILITY.md** Component Map | Retrieve via `CbrCaseMemoryStore`; base `CaseMemoryStore` still in platform |
 
 ---
@@ -403,12 +403,12 @@ Enables CHEF-style plan adaptation: retrieve similar plans, identify substitutab
 
 | Repo | Title | Depends On |
 |------|-------|-----------|
-| neural-text | `memory-api` — CBR SPI types (`CbrCaseMemoryStore`, `CbrCase`, `CbrQuery`, `CbrFeatureSchema`) | — |
-| neural-text | `PayloadFilter` extension — add `Gte`, `Lte`, `Range` numeric filter records to sealed hierarchy | — |
-| neural-text | `memory-qdrant` — Qdrant-backed `CbrCaseMemoryStore` with payload filters + dense vector | `memory-api`, PayloadFilter |
-| neural-text | `memory-cbr-inmem` — in-memory `CbrCaseMemoryStore` for testing + dev | `memory-api` |
-| neural-text | `memory-testing` — `CbrCaseMemoryStoreContractTest` | `memory-api` |
-| neural-text | `memory` — `NoOpCbrCaseMemoryStore @DefaultBean` + `BlockingToReactiveCbrBridge` | `memory-api` |
+| neocortex | `memory-api` — CBR SPI types (`CbrCaseMemoryStore`, `CbrCase`, `CbrQuery`, `CbrFeatureSchema`) | — |
+| neocortex | `PayloadFilter` extension — add `Gte`, `Lte`, `Range` numeric filter records to sealed hierarchy | — |
+| neocortex | `memory-qdrant` — Qdrant-backed `CbrCaseMemoryStore` with payload filters + dense vector | `memory-api`, PayloadFilter |
+| neocortex | `memory-cbr-inmem` — in-memory `CbrCaseMemoryStore` for testing + dev | `memory-api` |
+| neocortex | `memory-testing` — `CbrCaseMemoryStoreContractTest` | `memory-api` |
+| neocortex | `memory` — `NoOpCbrCaseMemoryStore @DefaultBean` + `BlockingToReactiveCbrBridge` | `memory-api` |
 | engine | `PlanTrace` type in engine-api | — |
 | engine | Retain plan traces at case close (`CaseOutcomeObserver` impl) | PlanTrace |
 | engine | Update engine#478 — integration point is `CbrCaseMemoryStore.retrieveSimilar()`, not `CaseRetriever` | `memory-api` |

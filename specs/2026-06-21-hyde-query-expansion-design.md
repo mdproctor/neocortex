@@ -1,6 +1,6 @@
 # HyDE — Hypothetical Document Embeddings for Query Expansion
 
-**Issue:** casehubio/neural-text#32
+**Issue:** casehubio/neocortex#32
 **Date:** 2026-06-21
 **Status:** Approved
 
@@ -236,12 +236,12 @@ public class TemplateQueryExpander implements QueryExpander {
 
 `rag-hyde` does NOT depend on `rag` or `rag-crag` — it decorates the SPI, not the implementation. Consumers add `rag-hyde` to classpath and set `casehub.rag.hyde.enabled=true`.
 
-**Package:** `io.casehub.rag.hyde`
-**Artifact:** `casehub-rag-hyde`
+**Package:** `io.casehub.neocortex.rag.hyde`
+**Artifact:** `casehub-neocortex-rag-hyde`
 
 ### CRAG retrofit (rag-crag)
 
-**Activation model change:** CRAG currently activates purely by classpath presence — this was an explicit design decision in the CRAG spec and is documented in ARC42STORIES L10 as "classpath-activated." This spec changes CRAG to classpath + config activation, matching HyDE's model. This is a deliberate behavioral change: any deployment that has `casehub-rag-crag` on the classpath without `casehub.rag.crag.enabled=true` will no longer activate CRAG. This is the right direction — config-gated activation prevents accidental activation from transitive dependencies and lets you add the module without activating it during testing.
+**Activation model change:** CRAG currently activates purely by classpath presence — this was an explicit design decision in the CRAG spec and is documented in ARC42STORIES L10 as "classpath-activated." This spec changes CRAG to classpath + config activation, matching HyDE's model. This is a deliberate behavioral change: any deployment that has `casehub-neocortex-rag-crag` on the classpath without `casehub.rag.crag.enabled=true` will no longer activate CRAG. This is the right direction — config-gated activation prevents accidental activation from transitive dependencies and lets you add the module without activating it during testing.
 
 ```properties
 casehub.rag.crag.enabled=true    # required — classpath alone no longer activates
@@ -490,7 +490,7 @@ Add column C11:
 
 ## Behavioral changes
 
-- **CRAG activation:** changes from classpath-only to classpath + `casehub.rag.crag.enabled=true`. Deployments with `casehub-rag-crag` on the classpath must add this config property to maintain CRAG activation. This is deliberate — prevents accidental activation from transitive dependencies.
+- **CRAG activation:** changes from classpath-only to classpath + `casehub.rag.crag.enabled=true`. Deployments with `casehub-neocortex-rag-crag` on the classpath must add this config property to maintain CRAG activation. This is deliberate — prevents accidental activation from transitive dependencies.
 - **CaseRetriever SPI:** `String query` → `RetrievalQuery query`. All consumers must migrate.
 
 ## Out of scope

@@ -2,11 +2,11 @@
 
 **Date:** 2026-06-11
 **Status:** Approved (rev 5 — post round-4 review)
-**Tracks:** casehubio/neural-text (new modules: `corpus-api/`, `corpus/`, plus ingestion bridge in `rag/`)
+**Tracks:** casehubio/neocortex (new modules: `corpus-api/`, `corpus/`, plus ingestion bridge in `rag/`)
 
 ## Problem
 
-casehub-neural-text provides a RAG pipeline (embedding, Qdrant, hybrid search) but has no document storage layer. Consumers must manage their own document lifecycle — storage, versioning, change tracking, distribution — before feeding documents into the RAG pipeline.
+casehub-neocortex provides a RAG pipeline (embedding, Qdrant, hybrid search) but has no document storage layer. Consumers must manage their own document lifecycle — storage, versioning, change tracking, distribution — before feeding documents into the RAG pipeline.
 
 The Hortora knowledge garden (~1,900 entries today, potentially millions at scale) is the first consumer. Other casehub domains (legal, clinical, compliance) have the same pattern: a corpus of text documents that need ingestion, versioning, change tracking, and semantic retrieval.
 
@@ -21,14 +21,14 @@ The Hortora knowledge garden (~1,900 entries today, potentially millions at scal
 
 ## Prerequisite: Rename Existing CorpusStore
 
-The existing `io.casehub.rag.CorpusStore` pushes pre-chunked text into Qdrant via `ingest(CorpusRef, List<ChunkInput>)`. It is an embedding ingestor, not a corpus store. The name is misleading.
+The existing `io.casehub.neocortex.rag.CorpusStore` pushes pre-chunked text into Qdrant via `ingest(CorpusRef, List<ChunkInput>)`. It is an embedding ingestor, not a corpus store. The name is misleading.
 
 **Rename before implementing this spec:**
 
 | Current | New |
 |---------|-----|
-| `io.casehub.rag.CorpusStore` | `io.casehub.rag.EmbeddingIngestor` |
-| `io.casehub.rag.ReactiveCorpusStore` | `io.casehub.rag.ReactiveEmbeddingIngestor` |
+| `io.casehub.neocortex.rag.CorpusStore` | `io.casehub.neocortex.rag.EmbeddingIngestor` |
+| `io.casehub.neocortex.rag.ReactiveCorpusStore` | `io.casehub.neocortex.rag.ReactiveEmbeddingIngestor` |
 | `QdrantCorpusStore` | `QdrantEmbeddingIngestor` |
 | `ReactiveQdrantCorpusStore` | `ReactiveQdrantEmbeddingIngestor` |
 | `BlockingToReactiveCorpusStore` | `BlockingToReactiveEmbeddingIngestor` |
@@ -61,7 +61,7 @@ rag/            — Ingestion bridge additions. Depends on corpus-api + existing
 
 L8 and L9 are peer layers to L6/L7, not below them. Both are Hortora-eligible (domain-free, zero casehub deps in the SPI). Same selective dependency model as inference-* (AD-001).
 
-**Repo placement decision:** stays in neural-text. Extract trigger: when a non-neural-text, non-Hortora repo needs corpus-api.
+**Repo placement decision:** stays in neocortex. Extract trigger: when a non-neocortex, non-Hortora repo needs corpus-api.
 
 ### Architecture
 
@@ -482,10 +482,10 @@ No changes required. DEDUPE and REVIEW currently read entries via `git show`. Th
 
 | Module | artifactId |
 |--------|-----------|
-| Corpus API | `casehub-corpus-api` |
-| Corpus | `casehub-corpus` |
+| Corpus API | `casehub-neocortex-corpus-api` |
+| Corpus | `casehub-neocortex-corpus` |
 
-Ingestion bridge lives in existing `casehub-rag`.
+Ingestion bridge lives in existing `casehub-neocortex-rag`.
 
 ## Implementation Sequence
 
@@ -519,4 +519,4 @@ Ingestion bridge lives in existing `casehub-rag`.
 
 ## Upstream Dependencies
 
-Track quarkus-langchain4j composition annotations (casehubio/neural-text#16). When `@DocumentIngestion` ships, the ingestion bridge can adopt it. When `@Corpus` qualifier ships, multi-corpus CDI injection simplifies.
+Track quarkus-langchain4j composition annotations (casehubio/neocortex#16). When `@DocumentIngestion` ships, the ingestion bridge can adopt it. When `@Corpus` qualifier ships, multi-corpus CDI injection simplifies.

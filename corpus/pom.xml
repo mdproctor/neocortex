@@ -6,18 +6,18 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-corpus</artifactId>
-  <name>CaseHub Neural Text - Corpus</name>
+  <artifactId>casehub-neocortex-corpus</artifactId>
+  <name>CaseHub Neocortex - Corpus</name>
   <description>ZIP-backed document storage with chain integrity, versioning, composite mode, and compaction. Hortora-eligible.</description>
 
   <dependencies>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-corpus-api</artifactId>
+      <artifactId>casehub-neocortex-corpus-api</artifactId>
     </dependency>
 
     <dependency>

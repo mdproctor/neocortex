@@ -6,24 +6,24 @@
 
     <parent>
         <groupId>io.casehub</groupId>
-        <artifactId>casehub-neural-text-parent</artifactId>
+        <artifactId>casehub-neocortex-parent</artifactId>
         <version>0.2-SNAPSHOT</version>
     </parent>
 
-    <artifactId>casehub-inference-bge-m3</artifactId>
-    <name>CaseHub Inference BGE-M3</name>
+    <artifactId>casehub-neocortex-inference-bge-m3</artifactId>
+    <name>CaseHub Neocortex - Inference BGE-M3</name>
 
     <dependencies>
         <dependency>
             <groupId>io.casehub</groupId>
-            <artifactId>casehub-inference-api</artifactId>
+            <artifactId>casehub-neocortex-inference-api</artifactId>
             <version>${project.version}</version>
         </dependency>
 
         <!-- Test dependencies -->
         <dependency>
             <groupId>io.casehub</groupId>
-            <artifactId>casehub-inference-inmem</artifactId>
+            <artifactId>casehub-neocortex-inference-inmem</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

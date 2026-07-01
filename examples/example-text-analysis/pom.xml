@@ -6,32 +6,32 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
-  <artifactId>casehub-example-text-analysis</artifactId>
-  <name>CaseHub Neural Text - Example: Text Analysis</name>
+  <artifactId>casehub-neocortex-example-text-analysis</artifactId>
+  <name>CaseHub Neocortex - Example: Text Analysis</name>
   <description>Demonstration of NLI, classification, regression, reranking, and SPLADE</description>
 
   <dependencies>
     <!-- Inference modules -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-api</artifactId>
+      <artifactId>casehub-neocortex-inference-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-runtime</artifactId>
+      <artifactId>casehub-neocortex-inference-runtime</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-tasks</artifactId>
+      <artifactId>casehub-neocortex-inference-tasks</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-splade</artifactId>
+      <artifactId>casehub-neocortex-inference-splade</artifactId>
     </dependency>
 
     <!-- Test -->
@@ -47,7 +47,7 @@
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-inmem</artifactId>
+      <artifactId>casehub-neocortex-inference-inmem</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

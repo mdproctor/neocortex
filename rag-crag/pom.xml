@@ -6,24 +6,24 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-rag-crag</artifactId>
-  <name>CaseHub Neural Text - RAG CRAG</name>
+  <artifactId>casehub-neocortex-rag-crag</artifactId>
+  <name>CaseHub Neocortex - RAG CRAG</name>
   <description>Corrective RAG — CDI @Decorator on CaseRetriever that evaluates retrieval quality, filters irrelevant chunks, and expands search. Classpath-activated.</description>
 
   <dependencies>
 
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-api</artifactId>
+      <artifactId>casehub-neocortex-rag-api</artifactId>
     </dependency>
 
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-tasks</artifactId>
+      <artifactId>casehub-neocortex-inference-tasks</artifactId>
     </dependency>
 
     <dependency>
@@ -63,12 +63,12 @@
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-inmem</artifactId>
+      <artifactId>casehub-neocortex-inference-inmem</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-rag-testing</artifactId>
+      <artifactId>casehub-neocortex-rag-testing</artifactId>
       <scope>test</scope>
     </dependency>
 

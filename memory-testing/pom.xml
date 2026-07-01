@@ -5,16 +5,16 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
-  <artifactId>casehub-memory-testing</artifactId>
-  <name>CaseHub Neural Text - Memory CBR Testing</name>
+  <artifactId>casehub-neocortex-memory-testing</artifactId>
+  <name>CaseHub Neocortex - Memory CBR Testing</name>
   <description>CbrCaseMemoryStoreContractTest base class.</description>
   <dependencies>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-memory-api</artifactId>
+      <artifactId>casehub-neocortex-memory-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>

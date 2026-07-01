@@ -6,12 +6,12 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-memory-api</artifactId>
-  <name>CaseHub Neural Text - Memory API</name>
+  <artifactId>casehub-neocortex-memory-api</artifactId>
+  <name>CaseHub Neocortex - Memory API</name>
   <description>CBR case memory SPI — CbrCaseMemoryStore, CbrCase hierarchy, CbrQuery, CbrFeatureSchema. Tier 1 pure Java.</description>
 
   <dependencies>

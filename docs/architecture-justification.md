@@ -1,6 +1,6 @@
-# Architecture Justification — neural-text
+# Architecture Justification — neocortex
 
-This document records the evidence base for each architectural layer in `casehub-neural-text`. Every claim is attributed to a specific source. Where benchmarks are cited, the dataset, metric, and result are included. No claims are made without supporting evidence.
+This document records the evidence base for each architectural layer in `casehub-neocortex`. Every claim is attributed to a specific source. Where benchmarks are cited, the dataset, metric, and result are included. No claims are made without supporting evidence.
 
 ---
 
@@ -20,7 +20,7 @@ Hybrid RAG (combining dense vector search with sparse keyword search) improves r
 
 All major vector databases now support hybrid search natively: Weaviate, Qdrant, Pinecone, Elasticsearch, and Amazon OpenSearch. Hybrid search is the production default for enterprise RAG systems as of 2026. ([Digital Applied — Hybrid Search: BM25, Vector & Reranking 2026][2])
 
-### What neural-text implements
+### What neocortex implements
 
 `HybridCaseRetriever` and `ReactiveHybridCaseRetriever` perform two-leg retrieval against Qdrant: dense embeddings via LangChain4j `EmbeddingModel` and sparse embeddings via `SparseEmbedder` (SPLADE). Both legs are stored as named vector spaces in Qdrant and fused server-side via RRF.
 
@@ -40,7 +40,7 @@ A May 2026 benchmark tested SPLADE v3 against BM25 as the sparse leg of hybrid s
 
 Open-source SPLADE libraries ship with pre-trained weights fine-tuned on enterprise search tasks. Inference adds **8–15ms per query** on modern hardware, making it viable for sub-100ms latency budgets. Some deployments report higher latency of **80–120ms on GPU endpoints** depending on model size and hardware. ([RAG About It][4]; [Digital Applied][2])
 
-### What neural-text implements
+### What neocortex implements
 
 `inference-splade` provides `SparseEmbedder`, which runs any SPLADE-family ONNX model locally via `OnnxInferenceModel`. The output is `Map<Integer, Float>` (vocabulary index → weight), with ReLU activation, log-saturation (`log1p`), and a configurable sparsity threshold. Single and batch modes are supported.
 
@@ -58,7 +58,7 @@ In one benchmark, Convex Combination with α=0.5 achieved **Recall@5 of 0.726**,
 
 The parameter k=60 was empirically validated in the original RRF paper (Cormack, Clarke, and Butt, 2009) across multiple TREC benchmarks. For small corpora (50–200 documents), lower k values (10–20) produce steeper rank differentiation. ([Digital Applied][2])
 
-### What neural-text implements
+### What neocortex implements
 
 `HybridCaseRetriever` uses Qdrant's native `PrefetchQuery` with `Fusion.RRF` — both dense and sparse prefetch queries are executed server-side and fused by Qdrant before results are returned. This avoids client-side fusion logic and benefits from Qdrant's optimised implementation.
 
@@ -84,7 +84,7 @@ With only 20 candidates, reranking is ineffective (**Recall@5: 0.458**) because 
 
 A cross-encoder processes the query and document as a single input sequence — `[CLS] query [SEP] document [SEP]` — and outputs a scalar relevance score. Because both texts pass through every transformer layer together, attention models their interaction directly. This is fundamentally more expressive than bi-encoder similarity but too expensive for first-stage retrieval over an entire corpus. ([Medium — Reranking in RAG][9])
 
-### What neural-text implements
+### What neocortex implements
 
 `CrossEncoderReranker` in `inference-tasks` wraps any single-output ONNX model. It provides `score(query, candidate)` for individual scoring and `rerank(query, candidates)` which returns `List<RankedResult>` sorted by descending relevance, with original indices preserved. The model runs locally via `OnnxInferenceModel` — no external API dependency.
 
@@ -108,7 +108,7 @@ Accurate inference depends on keeping tokenizers and models perfectly aligned. A
 
 Scalable inference patterns use native Java constructs for load-balancing across CPU/GPU threads, async job queues, and high-throughput pipelines. JVM-native observability, security, and CI/CD workflows are preserved. The Foreign Function & Memory API (JEP 454) is being evaluated as a future replacement for JNI in inference pipelines. ([InfoQ][10])
 
-### What neural-text implements
+### What neocortex implements
 
 `OnnxInferenceModel` in `inference-runtime` loads ONNX models via ONNX Runtime JNI and tokenizes via HuggingFace Tokenizers JNI. It supports both 2-input (input_ids + attention_mask) and 3-input (+ token_type_ids for BERT-family) models. It is thread-safe for concurrent `run`/`runBatch` calls, with close-safety guards that reject post-close inference attempts. Model and tokenizer are treated as versioned file artifacts (`model.onnx` + `tokenizer.json`).
 
@@ -120,7 +120,7 @@ Scalable inference patterns use native Java constructs for load-balancing across
 
 LangChain4j provides `OnnxEmbeddingModel` for dense embeddings but does not cover NLI, text classification, scalar regression, or SPLADE sparse embeddings. These capabilities require running arbitrary ONNX models with varying output shapes and post-processing (softmax, label mapping, ReLU + log-saturation). ([Java Code Geeks — RAG Architecture on the JVM][12])
 
-### What neural-text implements
+### What neocortex implements
 
 `inference-tasks` provides four task wrappers that fill this gap:
 
@@ -139,7 +139,7 @@ Each wrapper validates output size at construction (when known) and at runtime, 
 
 ONNX Runtime JNI and HuggingFace Tokenizers JNI require native libraries that are platform-specific and add significant test startup time. Unit tests and `@QuarkusTest` suites should not depend on native library availability.
 
-### What neural-text implements
+### What neocortex implements
 
 `InMemoryInferenceModel` in `inference-inmem` provides deterministic stubs with no JNI dependency. It supports fixed return values (`returning(float...)`), custom functions (`withFunction(outputSize, Function<InferenceInput, float[]>)`), and configurable output size. It is safe in all test contexts including CI environments without native libraries installed.
 
@@ -149,7 +149,7 @@ ONNX Runtime JNI and HuggingFace Tokenizers JNI require native libraries that ar
 
 The recommended 2026 production RAG pipeline, as described across the cited sources:
 
-| Stage | Recommendation | neural-text implementation |
+| Stage | Recommendation | neocortex implementation |
 |-------|---------------|--------------------------|
 | 1. Sparse retrieval | SPLADE over BM25 for domain-specific term expansion | `SparseEmbedder` (inference-splade) |
 | 2. Dense retrieval | Bi-encoder semantic embeddings via ANN search | LangChain4j `EmbeddingModel` (rag/) |

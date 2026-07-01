@@ -1,8 +1,8 @@
-# casehubio/neural-text — Design Brief
+# casehubio/neocortex — Design Brief
 
 **Date:** 2026-06-03  
 **Status:** Design agreed — pending native image prototype  
-**Repo:** `casehubio/neural-text`  
+**Repo:** `casehubio/neocortex`  
 **Consumers:** casehub, Hortora  
 **Tracking:** casehubio/parent#158, Hortora/spec#15  
 **Authoritative design spec:** `Hortora/spec: docs/superpowers/specs/2026-06-03-onnx-inference-module-design.md`
@@ -49,13 +49,13 @@ This module sits **below** LangChain4j, not beside it.
 
 ## How Each Project Uses It
 
-**casehub** takes `casehubio/neural-text` as a dependency in:
-- `casehub-rag` (#164) — `inference-splade` for the sparse leg of hybrid search; `CrossEncoderReranker` for precision-mode reranking
+**casehub** takes `casehubio/neocortex` as a dependency in:
+- `casehub-neocortex-rag` (#164) — `inference-splade` for the sparse leg of hybrid search; `CrossEncoderReranker` for precision-mode reranking
 - `casehub-openclaw` — `TextClassifier` replaces the always-AUTONOMOUS `ActionRiskClassifier` stub
 - `casehub-engine` (observability) — `NliClassifier` for hallucination detection
 - `casehub-eidos` — `ScalarRegressor` for dynamic epistemic confidence estimation
 
-**Hortora** takes `casehubio/neural-text` directly:
+**Hortora** takes `casehubio/neocortex` directly:
 - `inference-splade` — sparse leg of hybrid search with Qdrant
 - `CrossEncoderReranker` — precision-mode reranking for human-facing retrieval UI
 
@@ -65,10 +65,10 @@ This module sits **below** LangChain4j, not beside it.
 
 Each project wires LangChain4j RAG independently for their own runtime and domain model:
 
-- **casehub** → `casehub-rag` (#164): Quarkus CDI, casehub tenancy isolation, `CorpusStore` SPI, `CaseRetriever` SPI, fact space integration
+- **casehub** → `casehub-neocortex-rag` (#164): Quarkus CDI, casehub tenancy isolation, `CorpusStore` SPI, `CaseRetriever` SPI, fact space integration
 - **Hortora** → their own equivalent wiring for their stack
 
-No code is shared between the two LangChain4j wiring layers. `casehubio/neural-text` is the only shared artifact between the two projects.
+No code is shared between the two LangChain4j wiring layers. `casehubio/neocortex` is the only shared artifact between the two projects.
 
 ---
 
@@ -90,4 +90,4 @@ The prototype is the first deliverable. If it fails, `inference-quarkus` is JVM-
 4. `inference-quarkus` — conditional on prototype
 5. `inference-splade` — after native image validated; upstream LangChain4j contribution candidate (#1600)
 
-`casehub-rag` (#164) depends on `inference-splade` being available. It can proceed with the dense-only pipeline until `inference-splade` ships, then add the sparse leg.
+`casehub-neocortex-rag` (#164) depends on `inference-splade` being available. It can proceed with the dense-only pipeline until `inference-splade` ships, then add the sparse leg.

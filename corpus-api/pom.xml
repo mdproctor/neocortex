@@ -6,12 +6,12 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-corpus-api</artifactId>
-  <name>CaseHub Neural Text - Corpus API</name>
+  <artifactId>casehub-neocortex-corpus-api</artifactId>
+  <name>CaseHub Neocortex - Corpus API</name>
   <description>CorpusStore, CorpusReader, and ChangeSource SPIs — pure Java, zero deps. Hortora-eligible.</description>
 
   <dependencies>

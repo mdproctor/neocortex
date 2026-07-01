@@ -1,7 +1,7 @@
 # Native Image Gate — Design Spec
 
 **Date:** 2026-06-05
-**Issue:** casehubio/neural-text#2
+**Issue:** casehubio/neocortex#2
 **Chapter:** C2 ([ARC42STORIES §9.3](../../ARC42STORIES.MD))
 **Status:** Approved
 
@@ -69,14 +69,14 @@ No SPI interfaces, no `InferenceModel`, no `InferenceInput`/`InferenceOutput` ty
 
 ### inference-quarkus
 
-Gate test + native build profile. The `@QuarkusMain(name = "native-gate")` command-mode app lives in `src/main/java/` — it must be in main sources to be compiled into the native binary. The non-default name prevents conflicts when downstream Quarkus applications depend on `casehub-inference-quarkus` and have their own `@QuarkusMain` — Quarkus only runs the default-named main class unless overridden.
+Gate test + native build profile. The `@QuarkusMain(name = "native-gate")` command-mode app lives in `src/main/java/` — it must be in main sources to be compiled into the native binary. The non-default name prevents conflicts when downstream Quarkus applications depend on `casehub-neocortex-inference-quarkus` and have their own `@QuarkusMain` — Quarkus only runs the default-named main class unless overridden.
 
 ```
 inference-quarkus/src/main/java/io/casehub/inference/quarkus/gate/
   NativeImageGateCommand.java       — @QuarkusMain(name = "native-gate") command-mode diagnostic entry point
 
 inference-quarkus/src/main/resources/
-  META-INF/native-image/io.casehub/casehub-inference-quarkus/
+  META-INF/native-image/io.casehub/casehub-neocortex-inference-quarkus/
     reachability-metadata.json      — consolidated GraalVM 25 format
     native-image.properties         — --initialize-at-run-time entries
   NATIVE-IMAGE-NOTES.md             — companion doc explaining each config entry
@@ -377,7 +377,7 @@ GraalVM 25 supports a consolidated `reachability-metadata.json` format. **Standa
 
 JSON does not support comments. A companion `NATIVE-IMAGE-NOTES.md` in the same resources directory documents the rationale for each entry — what it fixes, when it was added, and what error appears without it.
 
-Located at: `inference-quarkus/src/main/resources/META-INF/native-image/io.casehub/casehub-inference-quarkus/`
+Located at: `inference-quarkus/src/main/resources/META-INF/native-image/io.casehub/casehub-neocortex-inference-quarkus/`
 
 ### Discovery process
 

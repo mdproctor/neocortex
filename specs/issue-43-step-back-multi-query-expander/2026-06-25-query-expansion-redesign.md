@@ -20,8 +20,8 @@ The existing module name (`rag-hyde`) and decorator name (`HydeCaseRetriever`) a
 ### 1. SPI Change — `QueryExpander` returns `List<RetrievalQuery>`
 
 ```java
-// rag-api: io.casehub.rag.QueryExpander
-package io.casehub.rag;
+// rag-api: io.casehub.neocortex.rag.QueryExpander
+package io.casehub.neocortex.rag;
 
 import java.util.List;
 
@@ -41,8 +41,8 @@ Single-query expansion returns `List.of(expanded)`. Multi-query returns N items.
 Application-level Reciprocal Rank Fusion for merging N result sets from N expanded queries. Pure Java, zero dependencies, operates on `List<RetrievedChunk>`.
 
 ```java
-// rag-api: io.casehub.rag.RrfFusion
-package io.casehub.rag;
+// rag-api: io.casehub.neocortex.rag.RrfFusion
+package io.casehub.neocortex.rag;
 
 import java.util.List;
 
@@ -67,10 +67,10 @@ public final class RrfFusion {
 | Before | After |
 |--------|-------|
 | Folder: `rag-hyde/` | Folder: `rag-expansion/` |
-| artifactId: `casehub-rag-hyde` | artifactId: `casehub-rag-expansion` |
-| Package: `io.casehub.rag.hyde` | Package: `io.casehub.rag.expansion` |
+| artifactId: `casehub-neocortex-rag-hyde` | artifactId: `casehub-neocortex-rag-expansion` |
+| Package: `io.casehub.neocortex.rag.hyde` | Package: `io.casehub.neocortex.rag.expansion` |
 
-Per maven-coordinate-standard (PP-20260512): `casehub-rag-expansion` follows `casehub-{repo}-{function}`. Folder `rag-expansion/` uses the short form.
+Per maven-coordinate-standard (PP-20260512): `casehub-neocortex-rag-expansion` follows `casehub-{repo}-{function}`. Folder `rag-expansion/` uses the short form.
 
 ### 4. Decorator Rename + Multi-Query Logic
 
@@ -320,7 +320,7 @@ Single-element list. Tests needing multi-query construct a custom lambda.
 |----------|--------|
 | Module tier structure (PP-20260512) | ✓ SPI in rag-api (Tier 1), impls in rag-expansion |
 | Optional module pattern (PP-20260508) | ✓ Jandex + @IfBuildProperty activation |
-| Maven coordinate standard (PP-20260512) | ✓ `casehub-rag-expansion`, folder `rag-expansion/` |
+| Maven coordinate standard (PP-20260512) | ✓ `casehub-neocortex-rag-expansion`, folder `rag-expansion/` |
 | Reactive parity (PP-20260521) | ✓ Both blocking and reactive decorators |
 | SPI adapter placement (PP-20260529) | ✓ All impls in host module |
 | Library JAR annotation deps (PP-20260604) | ✓ CDI/Arc as provided scope |
@@ -358,4 +358,4 @@ Single-element list. Tests needing multi-query construct a custom lambda.
 ## Deferred Concerns
 
 1. **Parallel LLM calls (#45)** — N sequential `chatModel.chat()` calls for multi-query HyDE. Each call is ~500ms–2s depending on model and prompt length. At `hypothetical-count=3`, expansion latency is 1.5–6s; at `hypothetical-count=5`, 2.5–10s — all before any retrieval begins. This is the dominant latency in the pipeline. Parallelization requires an async ChatModel API (not yet available in LangChain4j). Filed as #45.
-2. **Parent doc update** — `docs/repos/casehub-neural-text.md` in casehubio/parent needs QueryExpander, CRAG, expansion module added. Scope extends casehubio/parent#306.
+2. **Parent doc update** — `docs/repos/casehub-neocortex.md` in casehubio/parent needs QueryExpander, CRAG, expansion module added. Scope extends casehubio/parent#306.

@@ -6,12 +6,12 @@
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-inference-quarkus</artifactId>
-  <name>CaseHub Neural Text - Inference Quarkus</name>
+  <artifactId>casehub-neocortex-inference-quarkus</artifactId>
+  <name>CaseHub Neocortex - Inference Quarkus</name>
   <description>Quarkus CDI wiring for inference-* modules — @InferenceModel qualifier, @ApplicationScoped model beans, @QuarkusTest support</description>
 
   <!-- Native image mode: conditional on Chapter 2 prototype (ONNX JNI + HF Tokenizers in native) -->
@@ -20,19 +20,19 @@
 
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-api</artifactId>
+      <artifactId>casehub-neocortex-inference-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-runtime</artifactId>
+      <artifactId>casehub-neocortex-inference-runtime</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-tasks</artifactId>
+      <artifactId>casehub-neocortex-inference-tasks</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-splade</artifactId>
+      <artifactId>casehub-neocortex-inference-splade</artifactId>
     </dependency>
 
     <!-- CDI -->
@@ -62,7 +62,7 @@
     <!-- inference-inmem stubs activated in @QuarkusTest -->
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-inference-inmem</artifactId>
+      <artifactId>casehub-neocortex-inference-inmem</artifactId>
       <scope>test</scope>
     </dependency>
 

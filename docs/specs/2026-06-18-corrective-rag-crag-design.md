@@ -1,6 +1,6 @@
 # Corrective RAG (CRAG) — Self-Healing Retrieval with Relevance Evaluation
 
-**Issue:** casehubio/neural-text#33
+**Issue:** casehubio/neocortex#33
 **Date:** 2026-06-18
 **Status:** Approved (rev 4 — post code review round 3)
 
@@ -33,9 +33,9 @@ Three components:
 
 ### Activation
 
-Classpath presence — add `casehub-rag-crag` as a compile dependency. `CorrectiveCaseRetriever` is a CDI `@Decorator` — it intercepts the active `CaseRetriever` bean (whatever it is). Remove the dependency → zero cost, no CRAG code loaded.
+Classpath presence — add `casehub-neocortex-rag-crag` as a compile dependency. `CorrectiveCaseRetriever` is a CDI `@Decorator` — it intercepts the active `CaseRetriever` bean (whatever it is). Remove the dependency → zero cost, no CRAG code loaded.
 
-**Prerequisite:** Adding `casehub-rag-crag` to the classpath requires a `CrossEncoderReranker` bean to be available (the default `RelevanceEvaluator` delegates to it). If no cross-encoder model is configured, the application will fail at startup with a descriptive error. In test scope, `InMemoryRelevanceEvaluator` (from `rag-testing`) replaces the real evaluator — no cross-encoder required.
+**Prerequisite:** Adding `casehub-neocortex-rag-crag` to the classpath requires a `CrossEncoderReranker` bean to be available (the default `RelevanceEvaluator` delegates to it). If no cross-encoder model is configured, the application will fail at startup with a descriptive error. In test scope, `InMemoryRelevanceEvaluator` (from `rag-testing`) replaces the real evaluator — no cross-encoder required.
 
 ### CDI wiring — @Decorator, not @Alternative
 
@@ -161,8 +161,8 @@ Pure Java, Tier 1. No inference dependency — implementations bring their own. 
 | Element | Value |
 |---------|-------|
 | Folder | `rag-crag/` |
-| artifactId | `casehub-rag-crag` |
-| Package | `io.casehub.rag.crag` |
+| artifactId | `casehub-neocortex-rag-crag` |
+| Package | `io.casehub.neocortex.rag.crag` |
 
 ### CragConfig
 
@@ -431,7 +431,7 @@ Existing `HybridCaseRetrieverTest`, `BlockingToReactiveCaseRetrieverTest` — ve
 
 ### Integration test in example-rag-pipeline
 
-`RagPipelineIT` — existing test, verify returned chunks carry `UNGRADED` (no CRAG on classpath in default profile). New `CragPipelineIT` under `examples` profile — add `casehub-rag-crag` dependency, ingests documents, retrieves with CRAG active, verifies filtering and per-chunk grades. Smoke profile uses `InMemoryRelevanceEvaluator`.
+`RagPipelineIT` — existing test, verify returned chunks carry `UNGRADED` (no CRAG on classpath in default profile). New `CragPipelineIT` under `examples` profile — add `casehub-neocortex-rag-crag` dependency, ingests documents, retrieves with CRAG active, verifies filtering and per-chunk grades. Smoke profile uses `InMemoryRelevanceEvaluator`.
 
 ## ARC42STORIES Update Plan
 

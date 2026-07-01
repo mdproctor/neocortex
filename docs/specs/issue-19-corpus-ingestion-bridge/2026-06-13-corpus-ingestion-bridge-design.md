@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-13
 **Status:** Approved (rev 4)
-**Tracks:** casehubio/neural-text#19
+**Tracks:** casehubio/neocortex#19
 **Parent spec:** `specs/2026-06-11-corpus-storage-module-design.md` (rev 5, §rag/ — Ingestion Bridge)
 
 ## Problem
@@ -46,7 +46,7 @@ rag-api remains "pure Java, Mutiny provided" — no new module dependencies.
 ### MetadataExtractor SPI
 
 ```java
-package io.casehub.rag;
+package io.casehub.neocortex.rag;
 
 public interface MetadataExtractor {
     ExtractionResult extract(String path, byte[] content);
@@ -58,7 +58,7 @@ Returns both the cleaned body (frontmatter stripped) and the extracted metadata.
 ### ExtractionResult
 
 ```java
-package io.casehub.rag;
+package io.casehub.neocortex.rag;
 
 import java.util.Map;
 
@@ -74,7 +74,7 @@ public record ExtractionResult(String body, Map<String, String> metadata) {
 ### CursorStore SPI
 
 ```java
-package io.casehub.rag;
+package io.casehub.neocortex.rag;
 
 import java.util.Optional;
 
@@ -91,12 +91,12 @@ Persists the ChangeSource cursor per corpus. Pluggable backend — file-based de
 ### CorpusIngestionBinding
 
 ```java
-package io.casehub.rag.runtime;
+package io.casehub.neocortex.rag.runtime;
 
-import io.casehub.corpus.ChangeSource;
-import io.casehub.corpus.CorpusReader;
-import io.casehub.rag.CorpusRef;
-import io.casehub.rag.MetadataExtractor;
+import io.casehub.neocortex.corpus.ChangeSource;
+import io.casehub.neocortex.corpus.CorpusReader;
+import io.casehub.neocortex.rag.CorpusRef;
+import io.casehub.neocortex.rag.MetadataExtractor;
 import java.util.Objects;
 
 public record CorpusIngestionBinding(
@@ -254,7 +254,7 @@ casehub.rag.ingestion.corpora.legal.chunking-overlap-size=200
 ### IngestionMode
 
 ```java
-package io.casehub.rag.runtime;
+package io.casehub.neocortex.rag.runtime;
 
 public enum IngestionMode { AUTO, MANUAL, NONE }
 ```
@@ -263,7 +263,7 @@ public enum IngestionMode { AUTO, MANUAL, NONE }
 
 `@ApplicationScoped` bean (not a CDI producer). Exposes `List<CorpusIngestionBinding> bindings()` which reads `IngestionConfig.corpora()` map and constructs a binding per entry. For each named corpus entry, it creates the corpus implementation objects (`ZipCorpusStore`, `FlatCorpusStore`, or `CompositeCorpusStore` depending on corpus-level config at `casehub.corpus.<name>.*`). The corpus-level config (`casehub.corpus.<name>.source`, `casehub.corpus.<name>.mode`, etc.) is read via a separate `@ConfigMapping` within this class. Uses `YamlFrontmatterExtractor` as the default extractor for each binding.
 
-This is the only class in `rag/` that depends on `casehub-corpus` implementation types. The rest of the ingestion service depends only on corpus-api types via the binding.
+This is the only class in `rag/` that depends on `casehub-neocortex-corpus` implementation types. The rest of the ingestion service depends only on corpus-api types via the binding.
 
 **Design debt:** Corpus instance construction (choosing between `ZipCorpusStore`, `FlatCorpusStore`, `CompositeCorpusStore` based on config) is a corpus concern, not a RAG concern. It lives here because there is no corpus CDI integration layer yet (analogous to `inference-quarkus/` for inference). When the second consumer materialises (harvest via `CorpusReader`, engine fact retrieval), extract this to a dedicated `corpus-quarkus/` module. Track extraction as a follow-on issue.
 
@@ -305,7 +305,7 @@ No MetadataExtractor test stub — tests construct bindings with inline implemen
 <!-- NEW: Corpus implementation — used only by CorpusBindingProducer -->
 <dependency>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-corpus</artifactId>
+    <artifactId>casehub-neocortex-corpus</artifactId>
 </dependency>
 
 <!-- NEW: Quarkus scheduler — @Scheduled for polling loop -->

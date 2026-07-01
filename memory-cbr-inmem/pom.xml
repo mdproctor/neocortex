@@ -5,16 +5,16 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-neural-text-parent</artifactId>
+    <artifactId>casehub-neocortex-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
-  <artifactId>casehub-memory-cbr-inmem</artifactId>
-  <name>CaseHub Neural Text - Memory CBR In-Memory</name>
+  <artifactId>casehub-neocortex-memory-cbr-inmem</artifactId>
+  <name>CaseHub Neocortex - Memory CBR In-Memory</name>
   <description>In-memory CbrCaseMemoryStore for testing and dev. @Alternative @Priority(2).</description>
   <dependencies>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-memory-api</artifactId>
+      <artifactId>casehub-neocortex-memory-api</artifactId>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
@@ -26,7 +26,7 @@
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-memory-testing</artifactId>
+      <artifactId>casehub-neocortex-memory-testing</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

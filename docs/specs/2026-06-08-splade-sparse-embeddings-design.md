@@ -1,12 +1,12 @@
 # SPLADE Sparse Embeddings — inference-splade
 
-**Issue:** casehubio/neural-text#6
+**Issue:** casehubio/neocortex#6
 **Status:** Approved
 **Scope:** inference-splade module — pure Java, depends only on inference-api
 
 ## Design
 
-Single class `SparseEmbedder` in `io.casehub.inference.splade`. Follows the task adapter pattern (same as NliClassifier, TextClassifier).
+Single class `SparseEmbedder` in `io.casehub.neocortex.inference.splade`. Follows the task adapter pattern (same as NliClassifier, TextClassifier).
 
 ### API
 
