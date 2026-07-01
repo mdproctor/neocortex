@@ -1,8 +1,7 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.inference.tasks.CrossEncoderReranker;
+import io.casehub.inference.MatryoshkaMultiModalEmbedder;
+import io.casehub.inference.MultiModalEmbedder;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.qdrant.client.QdrantClient;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -15,21 +14,14 @@ public class RagBeanProducer {
 
     @Inject RagConfig config;
     @Inject QdrantClient client;
-    @Inject EmbeddingModel embeddingModel;
-    @Inject Instance<SparseEmbedder> sparseEmbedderInstance;
-    @Inject Instance<CrossEncoderReranker> rerankerInstance;
+    @Inject MultiModalEmbedder embedder;
     @Inject Instance<CurrentPrincipal> currentPrincipalInstance;
 
-    private EmbeddingModel effectiveEmbeddingModel() {
+    private MultiModalEmbedder effectiveEmbedder() {
         return config.matryoshka().dimension().isPresent()
-            ? new MatryoshkaEmbeddingModel(embeddingModel,
+            ? new MatryoshkaMultiModalEmbedder(embedder,
                 config.matryoshka().dimension().getAsInt())
-            : embeddingModel;
-    }
-
-    private SparseEmbedder resolveSparseEmbedder() {
-        return sparseEmbedderInstance.isResolvable()
-            ? sparseEmbedderInstance.get() : null;
+            : embedder;
     }
 
     private TenantGuard resolveTenantGuard() {
@@ -38,23 +30,17 @@ public class RagBeanProducer {
         return TenantGuard.of(principal);
     }
 
-    private CrossEncoderReranker resolveReranker() {
-        return rerankerInstance.isResolvable()
-            ? rerankerInstance.get() : null;
-    }
-
     @Produces
     @ApplicationScoped
     QdrantEmbeddingIngestor corpusStore() {
-        return new QdrantEmbeddingIngestor(client, effectiveEmbeddingModel(),
-            resolveSparseEmbedder(), resolveTenantGuard(), config);
+        return new QdrantEmbeddingIngestor(client, effectiveEmbedder(),
+            resolveTenantGuard(), config);
     }
 
     @Produces
     @ApplicationScoped
     HybridCaseRetriever caseRetriever() {
-        return new HybridCaseRetriever(client, effectiveEmbeddingModel(),
-            resolveSparseEmbedder(), resolveTenantGuard(),
-            resolveReranker(), config);
+        return new HybridCaseRetriever(client, effectiveEmbedder(),
+            resolveTenantGuard(), config);
     }
 }

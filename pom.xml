@@ -19,6 +19,7 @@
     <module>inference-tasks</module>
     <module>inference-splade</module>
     <module>inference-inmem</module>
+    <module>inference-bge-m3</module>
     <module>inference-quarkus</module>
     <module>rag-api</module>
     <module>rag</module>

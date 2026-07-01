@@ -26,6 +26,9 @@ public interface RagConfig {
     @WithDefault("bm25")
     String bm25VectorName();
 
+    @WithDefault("colbert")
+    String colbertVectorName();
+
     RetrievalConfig retrieval();
 
     @WithDefault("100")

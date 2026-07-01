@@ -1,13 +1,14 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
+import io.casehub.inference.EmbeddingMode;
+import io.casehub.inference.MultiModalEmbedder;
+import io.casehub.inference.MultiModalEmbedding;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
@@ -19,7 +20,7 @@ final class RagTestFixtures {
 
     /** Default stub config with sensible test defaults (bm25 disabled, no quantization). */
     static RagConfig stubConfig() {
-        return stubConfig("dense", "sparse", "bm25",
+        return stubConfig("dense", "sparse", "bm25", "colbert",
             TenancyStrategy.SEPARATE_COLLECTIONS,
             DenseQuantization.NONE, true, OptionalDouble.empty(),
             OptionalInt.empty(), Integer.MAX_VALUE,
@@ -29,6 +30,19 @@ final class RagTestFixtures {
 
     static RagConfig stubConfig(String denseVectorName, String sparseVectorName,
             String bm25VectorName,
+            TenancyStrategy tenancy, DenseQuantization quant, boolean alwaysRam,
+            OptionalDouble oversampling, OptionalInt matryoshkaDim,
+            int batchSize, int denseTopK, int sparseTopK, int bm25TopK, int rrfK,
+            boolean rerankEnabled, int rerankTopN,
+            boolean bm25Enabled) {
+        return stubConfig(denseVectorName, sparseVectorName, bm25VectorName, "colbert",
+            tenancy, quant, alwaysRam, oversampling, matryoshkaDim,
+            batchSize, denseTopK, sparseTopK, bm25TopK, rrfK,
+            rerankEnabled, rerankTopN, bm25Enabled);
+    }
+
+    static RagConfig stubConfig(String denseVectorName, String sparseVectorName,
+            String bm25VectorName, String colbertVectorName,
             TenancyStrategy tenancy, DenseQuantization quant, boolean alwaysRam,
             OptionalDouble oversampling, OptionalInt matryoshkaDim,
             int batchSize, int denseTopK, int sparseTopK, int bm25TopK, int rrfK,
@@ -48,6 +62,7 @@ final class RagTestFixtures {
             @Override public String sparseVectorName() { return sparseVectorName; }
             @Override public boolean bm25Enabled() { return bm25Enabled; }
             @Override public String bm25VectorName() { return bm25VectorName; }
+            @Override public String colbertVectorName() { return colbertVectorName; }
             @Override public RetrievalConfig retrieval() {
                 return new RetrievalConfig() {
                     @Override public int denseTopK() { return denseTopK; }
@@ -83,28 +98,65 @@ final class RagTestFixtures {
         };
     }
 
-    static final class StubEmbeddingModel implements EmbeddingModel {
+    /** Dense-only stub embedder. */
+    static StubMultiModalEmbedder stubEmbedder(int dim) {
+        return new StubMultiModalEmbedder(dim, false);
+    }
+
+    /** Dense + sparse stub embedder. */
+    static StubMultiModalEmbedder stubEmbedder(int dim, boolean sparse) {
+        return new StubMultiModalEmbedder(dim, sparse);
+    }
+
+    static final class StubMultiModalEmbedder implements MultiModalEmbedder {
 
         private final int dim;
+        private final boolean sparse;
 
-        StubEmbeddingModel(int dim) {
+        StubMultiModalEmbedder(int dim, boolean sparse) {
             this.dim = dim;
+            this.sparse = sparse;
         }
 
         @Override
-        public Response<List<Embedding>> embedAll(List<TextSegment> segments) {
-            List<Embedding> embeddings = new ArrayList<>(segments.size());
+        public MultiModalEmbedding embed(String text) {
+            return makeEmbedding();
+        }
+
+        @Override
+        public List<MultiModalEmbedding> embedBatch(List<String> texts) {
+            List<MultiModalEmbedding> result = new ArrayList<>(texts.size());
+            for (int i = 0; i < texts.size(); i++) {
+                result.add(makeEmbedding());
+            }
+            return result;
+        }
+
+        @Override
+        public Set<EmbeddingMode> supportedModes() {
+            if (sparse) {
+                return EnumSet.of(EmbeddingMode.DENSE, EmbeddingMode.SPARSE);
+            }
+            return EnumSet.of(EmbeddingMode.DENSE);
+        }
+
+        @Override
+        public int denseDimension() {
+            return dim;
+        }
+
+        @Override
+        public OptionalInt colbertDimension() {
+            return OptionalInt.empty();
+        }
+
+        private MultiModalEmbedding makeEmbedding() {
             float[] vec = new float[dim];
             for (int i = 0; i < dim; i++) vec[i] = 0.1f;
-            for (int i = 0; i < segments.size(); i++) {
-                embeddings.add(Embedding.from(vec));
-            }
-            return Response.from(embeddings);
-        }
-
-        @Override
-        public int dimension() {
-            return dim;
+            Map<Integer, Float> sparseMap = sparse
+                ? Map.of(0, 0.5f, 2, 0.3f, 4, 0.8f, 7, 0.2f)
+                : null;
+            return new MultiModalEmbedding(vec, sparseMap, null);
         }
     }
 }

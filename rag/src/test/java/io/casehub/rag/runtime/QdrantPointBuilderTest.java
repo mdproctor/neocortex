@@ -1,6 +1,6 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.data.embedding.Embedding;
+import io.casehub.inference.MultiModalEmbedding;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.qdrant.client.grpc.Points.PointStruct;
@@ -8,11 +8,15 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 class QdrantPointBuilderTest {
+
+    private static final RagConfig CONFIG = RagTestFixtures.stubConfig();
 
     @Test
     void computeChunkIndicesEmpty() {
@@ -62,12 +66,13 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointDeterministicUuid() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of());
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f, 0.3f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f, 0.3f}, null, null);
 
         PointStruct p1 = QdrantPointBuilder.buildPoint(
-            chunk, new CorpusRef("t1", "corpus"), embedding, null, 0, "dense", "sparse", false, "bm25");
+            chunk, new CorpusRef("t1", "corpus"), embedding, 0, CONFIG);
         PointStruct p2 = QdrantPointBuilder.buildPoint(
-            chunk, new CorpusRef("t1", "corpus"), embedding, null, 0, "dense", "sparse", false, "bm25");
+            chunk, new CorpusRef("t1", "corpus"), embedding, 0, CONFIG);
 
         assertThat(p1.getId()).isEqualTo(p2.getId());
     }
@@ -75,13 +80,14 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointDifferentChunkIndexProducesDifferentUuid() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of());
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f, 0.3f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f, 0.3f}, null, null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct p0 = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25");
+            chunk, corpus, embedding, 0, CONFIG);
         PointStruct p1 = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 1, "dense", "sparse", false, "bm25");
+            chunk, corpus, embedding, 1, CONFIG);
 
         assertThat(p0.getId()).isNotEqualTo(p1.getId());
     }
@@ -89,11 +95,12 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointDenseOnly() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of("key", "val"));
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f}, null, null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct point = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25");
+            chunk, corpus, embedding, 0, CONFIG);
 
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("dense");
         assertThat(point.getVectors().getVectors().getVectorsMap()).doesNotContainKey("sparse");
@@ -106,12 +113,12 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointWithSparse() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of());
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
-        Map<Integer, Float> sparse = Map.of(5, 0.9f, 10, 0.3f);
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f}, Map.of(5, 0.9f, 10, 0.3f), null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct point = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, sparse, 0, "dense", "sparse", false, "bm25");
+            chunk, corpus, embedding, 0, CONFIG);
 
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("dense");
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("sparse");
@@ -120,11 +127,12 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointRejectsTenantIdMetadata() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of("tenantId", "evil"));
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f}, null, null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         assertThat(catchThrowable(() -> QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25")))
+            chunk, corpus, embedding, 0, CONFIG)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("tenantId");
     }
@@ -133,11 +141,12 @@ class QdrantPointBuilderTest {
     void buildPointRejectsTenantIdInListMetadata() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of(),
             Map.of("tenantId", List.of("evil")));
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f}, null, null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         assertThat(catchThrowable(() -> QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25")))
+            chunk, corpus, embedding, 0, CONFIG)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("tenantId");
     }
@@ -145,11 +154,17 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointWithBm25Vector() {
         ChunkInput chunk = new ChunkInput("ConcurrentHashMap is useful", "doc-1", Map.of());
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f}, null, null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
+        RagConfig bm25Config = RagTestFixtures.stubConfig("dense", "sparse", "bm25",
+            TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true,
+            OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE,
+            64, 64, 40, 60, false, 10, true);
+
         PointStruct point = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse", true, "bm25");
+            chunk, corpus, embedding, 0, bm25Config);
 
         assertThat(point.getVectors().getVectors().getVectorsMap()).containsKey("bm25");
         var bm25Vector = point.getVectors().getVectors().getVectorsMap().get("bm25");
@@ -161,11 +176,12 @@ class QdrantPointBuilderTest {
     @Test
     void buildPointWithoutBm25WhenDisabled() {
         ChunkInput chunk = new ChunkInput("text", "doc-1", Map.of());
-        Embedding embedding = Embedding.from(new float[]{0.1f, 0.2f});
+        MultiModalEmbedding embedding = new MultiModalEmbedding(
+            new float[]{0.1f, 0.2f}, null, null);
         CorpusRef corpus = new CorpusRef("t1", "corpus");
 
         PointStruct point = QdrantPointBuilder.buildPoint(
-            chunk, corpus, embedding, null, 0, "dense", "sparse", false, "bm25");
+            chunk, corpus, embedding, 0, CONFIG);
 
         assertThat(point.getVectors().getVectors().getVectorsMap()).doesNotContainKey("bm25");
     }

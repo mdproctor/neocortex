@@ -1,8 +1,6 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.casehub.inference.inmem.InMemoryInferenceModel;
-import io.casehub.inference.splade.SparseEmbedder;
+import io.casehub.inference.MultiModalEmbedder;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.RetrievalQuery;
@@ -34,8 +32,6 @@ class ReactiveHybridCaseRetrieverTest {
 
     private static final int DENSE_DIM = 4;
     private static final String TENANT = "tenant-1";
-    private static final String DENSE_VECTOR_NAME = "dense";
-    private static final String SPARSE_VECTOR_NAME = "sparse";
     private static final AtomicInteger corpusCounter = new AtomicInteger();
 
     private QdrantClient                client;
@@ -52,25 +48,20 @@ class ReactiveHybridCaseRetrieverTest {
             ).build()
         );
 
-        EmbeddingModel embeddingModel = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
-
-        InMemoryInferenceModel spladeModel = InMemoryInferenceModel.returning(
-            0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f
-        );
-        SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
+        MultiModalEmbedder embedder = RagTestFixtures.stubEmbedder(DENSE_DIM, true);
 
         TenantGuard guard = TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT));
 
         RagConfig config = RagTestFixtures.stubConfig();
 
         store = new QdrantEmbeddingIngestor(
-            client, embeddingModel, sparseEmbedder,
+            client, embedder,
             guard, config
         );
 
         retriever = new ReactiveHybridCaseRetriever(
-            client, embeddingModel, sparseEmbedder,
-            guard, null, config
+            client, embedder,
+            guard, config
         );
     }
 
@@ -135,12 +126,12 @@ class ReactiveHybridCaseRetrieverTest {
     @Test
     void retrieveWorksWithoutCurrentPrincipal() {
         TenantGuard noTenantGuard = TenantGuard.of(null);
-        EmbeddingModel model = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
+        MultiModalEmbedder embedder = RagTestFixtures.stubEmbedder(DENSE_DIM);
 
         RagConfig noTenantConfig = RagTestFixtures.stubConfig();
 
         QdrantEmbeddingIngestor noTenantStore = new QdrantEmbeddingIngestor(
-            client, model, null,
+            client, embedder,
             noTenantGuard, noTenantConfig
         );
 
@@ -150,8 +141,8 @@ class ReactiveHybridCaseRetrieverTest {
         ));
 
         ReactiveHybridCaseRetriever noTenantRetriever = new ReactiveHybridCaseRetriever(
-            client, model, null,
-            noTenantGuard, null, noTenantConfig
+            client, embedder,
+            noTenantGuard, noTenantConfig
         );
 
         List<RetrievedChunk> results = noTenantRetriever.retrieve(
@@ -167,14 +158,15 @@ class ReactiveHybridCaseRetrieverTest {
             OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE,
             64, 64, 40, 60, false, 10, true);
 
+        MultiModalEmbedder embedder = RagTestFixtures.stubEmbedder(DENSE_DIM);
+
         QdrantEmbeddingIngestor bm25Store = new QdrantEmbeddingIngestor(
-            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)), bm25Config);
+            client, embedder,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)), bm25Config);
 
         ReactiveHybridCaseRetriever bm25Retriever = new ReactiveHybridCaseRetriever(
-            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            null, bm25Config);
+            client, embedder,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)), bm25Config);
 
         CorpusRef corpus = uniqueCorpus();
         bm25Store.ingest(corpus, List.of(
@@ -194,9 +186,7 @@ class ReactiveHybridCaseRetrieverTest {
     @Test
     void threeWayRrfIngestAndRetrieve() {
         // Dense + SPLADE + BM25
-        InMemoryInferenceModel spladeModel = InMemoryInferenceModel.returning(
-            0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f);
-        SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
+        MultiModalEmbedder sparseEmbedder = RagTestFixtures.stubEmbedder(DENSE_DIM, true);
 
         RagConfig threeWayConfig = RagTestFixtures.stubConfig("dense", "sparse", "bm25",
             TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true,
@@ -204,14 +194,14 @@ class ReactiveHybridCaseRetrieverTest {
             64, 64, 40, 60, false, 10, true);
 
         QdrantEmbeddingIngestor store3 = new QdrantEmbeddingIngestor(
-            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            sparseEmbedder, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            client, sparseEmbedder,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             threeWayConfig);
 
         ReactiveHybridCaseRetriever retriever3 = new ReactiveHybridCaseRetriever(
-            client, new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            sparseEmbedder, TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            null, threeWayConfig);
+            client, sparseEmbedder,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            threeWayConfig);
 
         CorpusRef corpus = uniqueCorpus();
         store3.ingest(corpus, List.of(

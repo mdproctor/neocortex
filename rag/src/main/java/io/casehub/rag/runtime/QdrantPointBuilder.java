@@ -1,6 +1,6 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.data.embedding.Embedding;
+import io.casehub.inference.MultiModalEmbedding;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.qdrant.client.PointIdFactory;
@@ -45,18 +45,18 @@ final class QdrantPointBuilder {
 
     static PointStruct buildPoint(
             ChunkInput chunk, CorpusRef corpus,
-            Embedding denseEmbedding, Map<Integer, Float> sparseMap,
-            int chunkIndex, String denseVectorName, String sparseVectorName,
-            boolean bm25Enabled, String bm25VectorName) {
+            MultiModalEmbedding embedding,
+            int chunkIndex, RagConfig config) {
 
         String idInput = chunk.sourceDocumentId() + "#" + chunkIndex;
         UUID pointId = UUID.nameUUIDFromBytes(idInput.getBytes(StandardCharsets.UTF_8));
 
-        Vector denseVector = VectorFactory.vector(denseEmbedding.vectorAsList());
+        Vector denseVector = VectorFactory.vector(floatListFrom(embedding.dense()));
 
         Map<String, Vector> namedVectors = new HashMap<>();
-        namedVectors.put(denseVectorName, denseVector);
-        if (sparseMap != null) {
+        namedVectors.put(config.denseVectorName(), denseVector);
+        if (embedding.sparse() != null) {
+            Map<Integer, Float> sparseMap = embedding.sparse();
             List<Float> sparseValues = new ArrayList<>(sparseMap.size());
             List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
             for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
@@ -64,16 +64,20 @@ final class QdrantPointBuilder {
                 sparseValues.add(entry.getValue());
             }
             Vector sparseVector = VectorFactory.vector(sparseValues, sparseIndices);
-            namedVectors.put(sparseVectorName, sparseVector);
+            namedVectors.put(config.sparseVectorName(), sparseVector);
         }
-        if (bm25Enabled) {
+        if (config.bm25Enabled()) {
             String expanded = CamelCaseExpander.expand(chunk.content());
             Vector bm25Vector = VectorFactory.vector(
                 Document.newBuilder()
                     .setText(expanded)
                     .setModel(BM25_MODEL)
                     .build());
-            namedVectors.put(bm25VectorName, bm25Vector);
+            namedVectors.put(config.bm25VectorName(), bm25Vector);
+        }
+        if (embedding.colbert() != null) {
+            namedVectors.put(config.colbertVectorName(),
+                VectorFactory.multiVector(embedding.colbert()));
         }
 
         Map<String, Value> payload = new HashMap<>();
@@ -107,5 +111,13 @@ final class QdrantPointBuilder {
             .setVectors(VectorsFactory.namedVectors(namedVectors))
             .putAllPayload(payload)
             .build();
+    }
+
+    static List<Float> floatListFrom(float[] array) {
+        List<Float> list = new ArrayList<>(array.length);
+        for (float f : array) {
+            list.add(f);
+        }
+        return list;
     }
 }

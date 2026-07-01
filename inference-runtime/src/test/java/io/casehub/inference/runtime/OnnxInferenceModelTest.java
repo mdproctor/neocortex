@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -31,6 +32,9 @@ class OnnxInferenceModelTest {
     private static final Path TOKENIZER_PATH = TEST_MODEL_DIR.resolve("tokenizer.json");
     private static final Path WRONG_INPUTS_MODEL = TEST_MODEL_DIR.resolve("wrong-inputs-model.onnx");
     private static final Path BERT_MODEL_PATH = TEST_MODEL_DIR.resolve("bert-model.onnx");
+    private static final Path MULTI_OUTPUT_MODEL = TEST_MODEL_DIR.resolve("multi-output-model.onnx");
+    private static final Path RANK3_OUTPUT_MODEL = TEST_MODEL_DIR.resolve("rank3-output-model.onnx");
+    private static final Path MULTI_RANK3_MODEL = TEST_MODEL_DIR.resolve("multi-rank3-model.onnx");
 
     // ── load + run ─────────────────────────────────────────────────────
 
@@ -421,6 +425,197 @@ class OnnxInferenceModelTest {
             } finally {
                 model.close();
             }
+        }
+    }
+
+    // ── multi-output models ──────────────────────────────────────────
+
+    @Nested
+    @DisplayName("multi-output models")
+    class MultiOutput {
+
+        private OnnxInferenceModel model;
+
+        @BeforeEach
+        void setUp() {
+            model = new OnnxInferenceModel(new ModelConfig(MULTI_OUTPUT_MODEL, TOKENIZER_PATH));
+        }
+
+        @AfterEach
+        void tearDown() {
+            if (model != null) model.close();
+        }
+
+        @Test
+        void loadsMultiOutputModel() {
+            assertThat(model.outputSize()).isEqualTo(OptionalInt.empty());
+        }
+
+        @Test
+        void runReturnsAllNamedOutputs() {
+            InferenceOutput out = model.run(InferenceInput.of("hello world"));
+            assertThat(out.outputNames()).isEqualTo(Set.of("dense", "sparse"));
+            assertThat(out.vector("dense")).hasSize(4);
+            assertThat(out.vector("sparse")).hasSize(3);
+        }
+
+        @Test
+        void runBatchReturnsAllNamedOutputsPerSample() {
+            List<InferenceOutput> outputs = model.runBatch(List.of(
+                InferenceInput.of("first"),
+                InferenceInput.of("second")
+            ));
+            assertThat(outputs).hasSize(2);
+            for (InferenceOutput out : outputs) {
+                assertThat(out.outputNames()).isEqualTo(Set.of("dense", "sparse"));
+                assertThat(out.vector("dense")).hasSize(4);
+                assertThat(out.vector("sparse")).hasSize(3);
+            }
+        }
+
+        @Test
+        void valuesThrowsForMultiOutputModel() {
+            InferenceOutput out = model.run(InferenceInput.of("hello world"));
+            assertThatThrownBy(out::values)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("single-output");
+        }
+    }
+
+    // ── rank-3 output models ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("rank-3 output models")
+    class Rank3Output {
+
+        private OnnxInferenceModel model;
+
+        @BeforeEach
+        void setUp() {
+            model = new OnnxInferenceModel(new ModelConfig(RANK3_OUTPUT_MODEL, TOKENIZER_PATH));
+        }
+
+        @AfterEach
+        void tearDown() {
+            if (model != null) model.close();
+        }
+
+        @Test
+        void outputSizeEmptyForRank3() {
+            assertThat(model.outputSize()).isEqualTo(OptionalInt.empty());
+        }
+
+        @Test
+        void runReturnsRank3AsTokenLevelVectors() {
+            InferenceOutput out = model.run(InferenceInput.of("hello world"));
+            assertThat(out.outputNames()).isEqualTo(Set.of("colbert"));
+            // rank-3 output: [seq_len, dim] per sample — seq_len varies with tokenization
+            float[][] colbert = out.output("colbert");
+            assertThat(colbert.length).isGreaterThan(0);
+            for (float[] vec : colbert) {
+                assertThat(vec).hasSize(5);
+            }
+        }
+
+        @Test
+        void runBatchStripsPaddingFromRank3() {
+            // Different-length inputs will be padded to batch-max in the model
+            // but runBatch should strip padding based on attention mask
+            InferenceOutput single1 = model.run(InferenceInput.of("hi"));
+            InferenceOutput single2 = model.run(InferenceInput.of("hello world this is a longer sentence for testing"));
+
+            List<InferenceOutput> batch = model.runBatch(List.of(
+                InferenceInput.of("hi"),
+                InferenceInput.of("hello world this is a longer sentence for testing")
+            ));
+
+            assertThat(batch).hasSize(2);
+
+            // After padding stripping, each batch output should have the same number
+            // of token vectors as the corresponding single-input run
+            float[][] batchColbert1 = batch.get(0).output("colbert");
+            float[][] singleColbert1 = single1.output("colbert");
+            assertThat(batchColbert1.length).isEqualTo(singleColbert1.length);
+
+            float[][] batchColbert2 = batch.get(1).output("colbert");
+            float[][] singleColbert2 = single2.output("colbert");
+            assertThat(batchColbert2.length).isEqualTo(singleColbert2.length);
+        }
+    }
+
+    // ── multi-output with rank-3 (BGE-M3 style) ─────────────────────
+
+    @Nested
+    @DisplayName("multi-output with rank-3 (BGE-M3 style)")
+    class MultiOutputRank3 {
+
+        private OnnxInferenceModel model;
+
+        @BeforeEach
+        void setUp() {
+            model = new OnnxInferenceModel(new ModelConfig(MULTI_RANK3_MODEL, TOKENIZER_PATH));
+        }
+
+        @AfterEach
+        void tearDown() {
+            if (model != null) model.close();
+        }
+
+        @Test
+        void outputSizeEmptyForMultiRank3() {
+            assertThat(model.outputSize()).isEqualTo(OptionalInt.empty());
+        }
+
+        @Test
+        void runReturnsDenseSparseAndColbert() {
+            InferenceOutput out = model.run(InferenceInput.of("hello world"));
+            assertThat(out.outputNames()).isEqualTo(Set.of("dense", "sparse", "colbert"));
+            assertThat(out.vector("dense")).hasSize(4);
+            assertThat(out.vector("sparse")).hasSize(3);
+            float[][] colbert = out.output("colbert");
+            assertThat(colbert.length).isGreaterThan(0);
+            for (float[] vec : colbert) {
+                assertThat(vec).hasSize(5);
+            }
+        }
+
+        @Test
+        void runBatchHandlesMixedRanks() {
+            List<InferenceOutput> outputs = model.runBatch(List.of(
+                InferenceInput.of("first"),
+                InferenceInput.of("second sentence is longer")
+            ));
+            assertThat(outputs).hasSize(2);
+            for (InferenceOutput out : outputs) {
+                assertThat(out.outputNames()).isEqualTo(Set.of("dense", "sparse", "colbert"));
+                assertThat(out.vector("dense")).hasSize(4);
+                assertThat(out.vector("sparse")).hasSize(3);
+                float[][] colbert = out.output("colbert");
+                assertThat(colbert.length).isGreaterThan(0);
+                for (float[] vec : colbert) {
+                    assertThat(vec).hasSize(5);
+                }
+            }
+        }
+
+        @Test
+        void batchColbertPaddingStripping() {
+            // Verify that ColBERT vectors are stripped to actual token count per sample
+            InferenceOutput single = model.run(InferenceInput.of("short"));
+
+            List<InferenceOutput> batch = model.runBatch(List.of(
+                InferenceInput.of("short"),
+                InferenceInput.of("a much longer sentence for padding verification")
+            ));
+
+            // The shorter input should have the same colbert length in both modes
+            float[][] singleColbert = single.output("colbert");
+            float[][] batchColbert = batch.get(0).output("colbert");
+            assertThat(batchColbert.length).isEqualTo(singleColbert.length);
+
+            // The longer input should have more colbert vectors than the shorter one
+            float[][] longerColbert = batch.get(1).output("colbert");
+            assertThat(longerColbert.length).isGreaterThan(batchColbert.length);
         }
     }
 }

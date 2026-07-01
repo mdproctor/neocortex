@@ -1,11 +1,8 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.casehub.inference.splade.SparseEmbedder;
-import io.casehub.inference.tasks.CrossEncoderReranker;
-import io.casehub.inference.tasks.RankedResult;
+import io.casehub.inference.EmbeddingMode;
+import io.casehub.inference.MultiModalEmbedder;
+import io.casehub.inference.MultiModalEmbedding;
 import io.casehub.rag.CaseRetriever;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.PayloadFilter;
@@ -35,24 +32,18 @@ import java.util.concurrent.ExecutionException;
 public class HybridCaseRetriever implements CaseRetriever {
 
     private final QdrantClient client;
-    private final EmbeddingModel embeddingModel;
-    private final SparseEmbedder sparseEmbedder;
+    private final MultiModalEmbedder embedder;
     private final TenantGuard tenantGuard;
-    private final CrossEncoderReranker reranker;
     private final RagConfig config;
 
     HybridCaseRetriever(
             QdrantClient client,
-            EmbeddingModel embeddingModel,
-            SparseEmbedder sparseEmbedder,
+            MultiModalEmbedder embedder,
             TenantGuard tenantGuard,
-            CrossEncoderReranker reranker,
             RagConfig config) {
         this.client = client;
-        this.embeddingModel = embeddingModel;
-        this.sparseEmbedder = sparseEmbedder;
+        this.embedder = embedder;
         this.tenantGuard = tenantGuard;
-        this.reranker = reranker;
         this.config = config;
     }
 
@@ -75,34 +66,30 @@ public class HybridCaseRetriever implements CaseRetriever {
             return List.of();
         }
 
-        // Embed query: dense (always) + sparse (when available)
-        Embedding denseEmbedding = embeddingModel.embed(TextSegment.from(query.searchText())).content();
-
-        // Determine query limit: fetch more candidates if reranking
-        int queryLimit = config.retrieval().rerankEnabled() && reranker != null
-            ? Math.max(maxResults, config.retrieval().rerankTopN())
-            : maxResults;
+        // Embed query: single call produces dense + optional sparse/colbert
+        MultiModalEmbedding embedding = embedder.embed(query.searchText());
+        List<Float> denseVector = QdrantPointBuilder.floatListFrom(embedding.dense());
 
         QueryPoints queryPoints;
-        boolean useRrf = sparseEmbedder != null || config.bm25Enabled();
+        boolean hasSparse = embedding.sparse() != null;
+        boolean useRrf = hasSparse || config.bm25Enabled();
         if (useRrf) {
-            QueryPoints.Builder qb = QueryPoints.newBuilder()
-                .setCollectionName(collection);
+            List<PrefetchQuery> prefetchLegs = new ArrayList<>();
 
             // Dense prefetch (always present in RRF mode)
             PrefetchQuery.Builder densePrefetch = PrefetchQuery.newBuilder()
-                .setQuery(QueryFactory.nearest(denseEmbedding.vectorAsList()))
+                .setQuery(QueryFactory.nearest(denseVector))
                 .setUsing(config.denseVectorName())
                 .setLimit(config.retrieval().denseTopK());
             if (config.quantization().type() != DenseQuantization.NONE && config.quantization().oversampling().isPresent()) {
                 densePrefetch.setParams(quantizationSearchParams());
             }
             mergedFilter.ifPresent(densePrefetch::setFilter);
-            qb.addPrefetch(densePrefetch);
+            prefetchLegs.add(densePrefetch.build());
 
             // SPLADE prefetch (when available)
-            if (sparseEmbedder != null) {
-                Map<Integer, Float> sparseMap = sparseEmbedder.embed(query.text());
+            if (hasSparse) {
+                Map<Integer, Float> sparseMap = embedding.sparse();
                 List<Float> sparseValues = new ArrayList<>(sparseMap.size());
                 List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
                 for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
@@ -115,7 +102,7 @@ public class HybridCaseRetriever implements CaseRetriever {
                     .setUsing(config.sparseVectorName())
                     .setLimit(config.retrieval().sparseTopK());
                 mergedFilter.ifPresent(sparsePrefetch::setFilter);
-                qb.addPrefetch(sparsePrefetch);
+                prefetchLegs.add(sparsePrefetch.build());
             }
 
             // BM25 prefetch (when enabled)
@@ -130,20 +117,40 @@ public class HybridCaseRetriever implements CaseRetriever {
                     .setUsing(config.bm25VectorName())
                     .setLimit(config.retrieval().bm25TopK());
                 mergedFilter.ifPresent(bm25Prefetch::setFilter);
-                qb.addPrefetch(bm25Prefetch);
+                prefetchLegs.add(bm25Prefetch.build());
             }
 
-            qb.setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(config.retrieval().rrfK()).build()))
-               .setLimit(queryLimit)
-               .setWithPayload(WithPayloadSelectorFactory.enable(true));
-            queryPoints = qb.build();
+            // ColBERT MAX_SIM two-stage: RRF as prefetch, ColBERT as outer query
+            if (embedder.supportedModes().contains(EmbeddingMode.COLBERT)
+                    && embedding.colbert() != null
+                    && config.retrieval().rerankEnabled()) {
+                queryPoints = QueryPoints.newBuilder()
+                    .setCollectionName(collection)
+                    .addPrefetch(PrefetchQuery.newBuilder()
+                        .setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(config.retrieval().rrfK()).build()))
+                        .setLimit(config.retrieval().rerankTopN())
+                        .addAllPrefetch(prefetchLegs))
+                    .setQuery(QueryFactory.nearest(embedding.colbert()))
+                    .setUsing(config.colbertVectorName())
+                    .setLimit(maxResults)
+                    .setWithPayload(WithPayloadSelectorFactory.enable(true))
+                    .build();
+            } else {
+                QueryPoints.Builder qb = QueryPoints.newBuilder()
+                    .setCollectionName(collection);
+                qb.addAllPrefetch(prefetchLegs);
+                qb.setQuery(QueryFactory.rrf(Rrf.newBuilder().setK(config.retrieval().rrfK()).build()))
+                   .setLimit(maxResults)
+                   .setWithPayload(WithPayloadSelectorFactory.enable(true));
+                queryPoints = qb.build();
+            }
         } else {
             // Dense-only mode: direct nearest-neighbor query (no fusion)
             QueryPoints.Builder builder = QueryPoints.newBuilder()
                 .setCollectionName(collection)
-                .setQuery(QueryFactory.nearest(denseEmbedding.vectorAsList()))
+                .setQuery(QueryFactory.nearest(denseVector))
                 .setUsing(config.denseVectorName())
-                .setLimit(queryLimit)
+                .setLimit(maxResults)
                 .setWithPayload(WithPayloadSelectorFactory.enable(true));
             if (config.quantization().type() != DenseQuantization.NONE && config.quantization().oversampling().isPresent()) {
                 builder.setParams(quantizationSearchParams());
@@ -178,26 +185,6 @@ public class HybridCaseRetriever implements CaseRetriever {
 
             chunks.add(new RetrievedChunk(content, sourceDocumentId,
                 point.getScore(), Map.copyOf(metadata)));
-        }
-
-        // Optional cross-encoder reranking
-        if (config.retrieval().rerankEnabled() && reranker != null && !chunks.isEmpty()) {
-            List<String> texts = new ArrayList<>(chunks.size());
-            for (RetrievedChunk chunk : chunks) {
-                texts.add(chunk.content());
-            }
-
-            List<RankedResult> ranked = reranker.rerank(query.text(), texts);
-
-            List<RetrievedChunk> reranked = new ArrayList<>(Math.min(ranked.size(), maxResults));
-            for (int i = 0; i < Math.min(ranked.size(), maxResults); i++) {
-                RankedResult r = ranked.get(i);
-                RetrievedChunk original = chunks.get(r.originalIndex());
-                reranked.add(new RetrievedChunk(
-                    original.content(), original.sourceDocumentId(),
-                    r.score(), original.metadata()));
-            }
-            return Collections.unmodifiableList(reranked);
         }
 
         // Sort by descending relevance and return

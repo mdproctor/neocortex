@@ -8,6 +8,7 @@ import io.casehub.inference.InferenceOutput;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.function.Function;
@@ -20,11 +21,19 @@ public final class InMemoryInferenceModel implements InferenceModel {
 
     private final Function<InferenceInput, float[]> fn;
     private final int outputSize;
+    private final Map<String, float[][]> multiOutputs;
     private volatile boolean closed;
 
     private InMemoryInferenceModel(Function<InferenceInput, float[]> fn, int outputSize) {
         this.fn = fn;
         this.outputSize = outputSize;
+        this.multiOutputs = null;
+    }
+
+    private InMemoryInferenceModel(Map<String, float[][]> multiOutputs) {
+        this.fn = null;
+        this.outputSize = -1;
+        this.multiOutputs = multiOutputs;
     }
 
     /**
@@ -49,11 +58,26 @@ public final class InMemoryInferenceModel implements InferenceModel {
         return new InMemoryInferenceModel(fn, outputSize);
     }
 
+    /**
+     * Creates a stub that always returns the same multi-output map regardless of input.
+     * Useful for testing multi-output models (e.g., BGE-M3 dense+sparse+colbert).
+     */
+    public static InMemoryInferenceModel returningMulti(Map<String, float[][]> outputs) {
+        Objects.requireNonNull(outputs, "outputs must not be null");
+        if (outputs.isEmpty()) {
+            throw new IllegalArgumentException("outputs must not be empty");
+        }
+        return new InMemoryInferenceModel(outputs);
+    }
+
     @Override
     public InferenceOutput run(InferenceInput input) {
         if (closed) throw new InferenceException("Model is closed");
         Objects.requireNonNull(input, "input must not be null");
-        return new InferenceOutput(fn.apply(input));
+        if (multiOutputs != null) {
+            return new InferenceOutput(multiOutputs);
+        }
+        return InferenceOutput.of(fn.apply(input));
     }
 
     @Override
@@ -67,14 +91,24 @@ public final class InMemoryInferenceModel implements InferenceModel {
             }
         }
         List<InferenceOutput> results = new ArrayList<>(inputs.size());
-        for (InferenceInput input : inputs) {
-            results.add(new InferenceOutput(fn.apply(input)));
+        if (multiOutputs != null) {
+            InferenceOutput sharedOutput = new InferenceOutput(multiOutputs);
+            for (int i = 0; i < inputs.size(); i++) {
+                results.add(sharedOutput);
+            }
+        } else {
+            for (InferenceInput input : inputs) {
+                results.add(InferenceOutput.of(fn.apply(input)));
+            }
         }
         return Collections.unmodifiableList(results);
     }
 
     @Override
     public OptionalInt outputSize() {
+        if (multiOutputs != null) {
+            return OptionalInt.empty();
+        }
         return OptionalInt.of(outputSize);
     }
 

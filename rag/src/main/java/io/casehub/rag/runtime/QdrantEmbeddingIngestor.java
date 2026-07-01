@@ -1,10 +1,8 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import io.casehub.inference.splade.SparseEmbedder;
+import io.casehub.inference.EmbeddingMode;
+import io.casehub.inference.MultiModalEmbedder;
+import io.casehub.inference.MultiModalEmbedding;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.casehub.rag.EmbeddingIngestor;
@@ -12,6 +10,8 @@ import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Collections.Distance;
+import io.qdrant.client.grpc.Collections.MultiVectorComparator;
+import io.qdrant.client.grpc.Collections.MultiVectorConfig;
 import io.qdrant.client.grpc.Collections.PayloadIndexParams;
 import io.qdrant.client.grpc.Collections.PayloadSchemaInfo;
 import io.qdrant.client.grpc.Collections.PayloadSchemaType;
@@ -44,8 +44,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
     private static final Logger LOG = Logger.getLogger(QdrantEmbeddingIngestor.class.getName());
 
     private final QdrantClient client;
-    private final EmbeddingModel embeddingModel;
-    private final SparseEmbedder sparseEmbedder;
+    private final MultiModalEmbedder embedder;
     private final TenantGuard tenantGuard;
     private final RagConfig config;
 
@@ -53,16 +52,14 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
     QdrantEmbeddingIngestor(
             QdrantClient client,
-            EmbeddingModel embeddingModel,
-            SparseEmbedder sparseEmbedder,
+            MultiModalEmbedder embedder,
             TenantGuard tenantGuard,
             RagConfig config) {
         if (config.embeddingBatchSize() <= 0) {
             throw new IllegalArgumentException("batchSize must be positive, got: " + config.embeddingBatchSize());
         }
         this.client = client;
-        this.embeddingModel = embeddingModel;
-        this.sparseEmbedder = sparseEmbedder;
+        this.embedder = embedder;
         this.tenantGuard = tenantGuard;
         this.config = config;
     }
@@ -84,25 +81,17 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             int end = Math.min(start + effectiveBatchSize, chunks.size());
             List<ChunkInput> batch = chunks.subList(start, end);
 
-            List<TextSegment> segments = new ArrayList<>(batch.size());
             List<String> texts = new ArrayList<>(batch.size());
             for (ChunkInput chunk : batch) {
-                segments.add(TextSegment.from(chunk.content()));
                 texts.add(chunk.content());
             }
-            Response<List<Embedding>> denseResponse = embeddingModel.embedAll(segments);
-            List<Embedding> denseEmbeddings = denseResponse.content();
-
-            List<Map<Integer, Float>> sparseEmbeddings = sparseEmbedder != null
-                ? sparseEmbedder.embedBatch(texts) : null;
+            List<MultiModalEmbedding> embeddings = embedder.embedBatch(texts);
 
             List<PointStruct> points = new ArrayList<>(batch.size());
             for (int i = 0; i < batch.size(); i++) {
                 points.add(QdrantPointBuilder.buildPoint(batch.get(i), corpus,
-                    denseEmbeddings.get(i),
-                    sparseEmbeddings != null ? sparseEmbeddings.get(i) : null,
-                    chunkIndices[start + i], config.denseVectorName(), config.sparseVectorName(),
-                    config.bm25Enabled(), config.bm25VectorName()));
+                    embeddings.get(i),
+                    chunkIndices[start + i], config));
             }
 
             try {
@@ -236,7 +225,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                 var info = client.getCollectionInfoAsync(collection).get();
                 int existingDim = (int) info.getConfig().getParams().getVectorsConfig()
                     .getParamsMap().getMapMap().get(config.denseVectorName()).getSize();
-                int configuredDim = embeddingModel.dimension();
+                int configuredDim = embedder.denseDimension();
                 if (existingDim != configuredDim) {
                     throw new IllegalStateException(
                         "Configured embedding dimension (" + configuredDim
@@ -246,7 +235,8 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                 }
                 var existingSparse = info.getConfig().getParams()
                     .getSparseVectorsConfig().getMapMap();
-                if (sparseEmbedder != null && !existingSparse.containsKey(config.sparseVectorName())) {
+                if (embedder.supportedModes().contains(EmbeddingMode.SPARSE)
+                        && !existingSparse.containsKey(config.sparseVectorName())) {
                     throw new IllegalStateException(
                         "Existing collection '" + collection
                             + "' is missing required sparse vector '" + config.sparseVectorName()
@@ -264,7 +254,7 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
             }
 
             VectorParams.Builder denseParamsBuilder = VectorParams.newBuilder()
-                .setSize(embeddingModel.dimension())
+                .setSize(embedder.denseDimension())
                 .setDistance(Distance.Cosine);
 
             if (config.quantization().type() == DenseQuantization.BINARY) {
@@ -286,9 +276,20 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
 
             VectorParams denseParams = denseParamsBuilder.build();
 
-            VectorParamsMap paramsMap = VectorParamsMap.newBuilder()
-                .putMap(config.denseVectorName(), denseParams)
-                .build();
+            VectorParamsMap.Builder paramsMapBuilder = VectorParamsMap.newBuilder()
+                .putMap(config.denseVectorName(), denseParams);
+
+            if (embedder.supportedModes().contains(EmbeddingMode.COLBERT)) {
+                VectorParams colbertParams = VectorParams.newBuilder()
+                    .setSize(embedder.colbertDimension().orElseThrow())
+                    .setDistance(Distance.Cosine)
+                    .setMultivectorConfig(MultiVectorConfig.newBuilder()
+                        .setComparator(MultiVectorComparator.MaxSim).build())
+                    .build();
+                paramsMapBuilder.putMap(config.colbertVectorName(), colbertParams);
+            }
+
+            VectorParamsMap paramsMap = paramsMapBuilder.build();
 
             CreateCollection.Builder createBuilder = CreateCollection.newBuilder()
                 .setCollectionName(collection)
@@ -296,9 +297,9 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                     .setParamsMap(paramsMap)
                     .build());
 
-            if (sparseEmbedder != null || config.bm25Enabled()) {
+            if (embedder.supportedModes().contains(EmbeddingMode.SPARSE) || config.bm25Enabled()) {
                 SparseVectorConfig.Builder sparseConfigBuilder = SparseVectorConfig.newBuilder();
-                if (sparseEmbedder != null) {
+                if (embedder.supportedModes().contains(EmbeddingMode.SPARSE)) {
                     sparseConfigBuilder.putMap(config.sparseVectorName(), SparseVectorParams.getDefaultInstance());
                 }
                 if (config.bm25Enabled()) {

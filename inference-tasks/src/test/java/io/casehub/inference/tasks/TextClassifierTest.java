@@ -125,7 +125,7 @@ class TextClassifierTest {
         void acceptsUnknownOutputSize() {
             InferenceModel model = new InferenceModel() {
                 @Override public InferenceOutput run(final InferenceInput input) {
-                    return new InferenceOutput(new float[]{1.0f, 2.0f});
+                    return InferenceOutput.of(1.0f, 2.0f);
                 }
                 @Override public List<InferenceOutput> runBatch(final List<InferenceInput> inputs) {
                     return inputs.stream().map(this::run).toList();

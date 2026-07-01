@@ -68,7 +68,7 @@ class ScalarRegressorTest {
         void acceptsUnknownOutputSize() {
             InferenceModel model = new InferenceModel() {
                 @Override public InferenceOutput run(final InferenceInput input) {
-                    return new InferenceOutput(new float[]{0.42f});
+                    return InferenceOutput.of(0.42f);
                 }
                 @Override public List<InferenceOutput> runBatch(final List<InferenceInput> inputs) {
                     return inputs.stream().map(this::run).toList();

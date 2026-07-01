@@ -1,8 +1,6 @@
 package io.casehub.rag.runtime;
 
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.casehub.inference.inmem.InMemoryInferenceModel;
-import io.casehub.inference.splade.SparseEmbedder;
+import io.casehub.inference.MultiModalEmbedder;
 import io.casehub.rag.ChunkInput;
 import io.casehub.rag.CorpusRef;
 import io.qdrant.client.QdrantClient;
@@ -49,18 +47,10 @@ class QdrantEmbeddingIngestorTest {
             ).build()
         );
 
-        EmbeddingModel embeddingModel = new RagTestFixtures.StubEmbeddingModel(DENSE_DIM);
-
-        // SPLADE stub: 8-element output, some above threshold (0.01), some not.
-        // log1p(max(0, v)) ≥ 0.01 when v ≥ ~0.01005.
-        // Values: 0.5, 0.0, 0.3, 0.0, 0.8, 0.0, 0.0, 0.2 → indices 0,2,4,7 survive threshold
-        InMemoryInferenceModel spladeModel = InMemoryInferenceModel.returning(
-            0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f
-        );
-        SparseEmbedder sparseEmbedder = new SparseEmbedder(spladeModel);
+        MultiModalEmbedder embedder = RagTestFixtures.stubEmbedder(DENSE_DIM, true);
 
         store = new QdrantEmbeddingIngestor(
-            client, embeddingModel, sparseEmbedder,
+            client, embedder,
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig()
         );
@@ -167,11 +157,10 @@ class QdrantEmbeddingIngestorTest {
 
     @Test
     void ingestDenseOnlyMode() throws Exception {
-        // Create ingestor with null SparseEmbedder — dense-only mode
+        // Create ingestor with dense-only embedder
         QdrantEmbeddingIngestor denseOnlyStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null, // no sparse embedder
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig()
         );
@@ -229,8 +218,7 @@ class QdrantEmbeddingIngestorTest {
     void ingestWorksWithoutCurrentPrincipal() throws Exception {
         QdrantEmbeddingIngestor noTenantStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(null),
             RagTestFixtures.stubConfig()
         );
@@ -250,9 +238,7 @@ class QdrantEmbeddingIngestorTest {
         // batchSize=2, 5 chunks → 3 batches (2+2+1)
         QdrantEmbeddingIngestor batchedStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            new SparseEmbedder(InMemoryInferenceModel.returning(
-                0.5f, 0.0f, 0.3f, 0.0f, 0.8f, 0.0f, 0.0f, 0.2f)),
+            RagTestFixtures.stubEmbedder(DENSE_DIM, true),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 2, 64, 64, 40, 60, false, 10, false));
 
@@ -273,8 +259,7 @@ class QdrantEmbeddingIngestorTest {
         // doc-A has chunks in both batch 1 and batch 2 — indices must be continuous
         QdrantEmbeddingIngestor batchedStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null, // dense-only for simplicity
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 2, 64, 64, 40, 60, false, 10, false));
 
@@ -300,8 +285,7 @@ class QdrantEmbeddingIngestorTest {
     void ingestBatchSizeOne() {
         QdrantEmbeddingIngestor batchedStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 1, 64, 64, 40, 60, false, 10, false));
 
@@ -319,8 +303,7 @@ class QdrantEmbeddingIngestorTest {
     void constructorRejectsBatchSizeZero() {
         assertThatThrownBy(() -> new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), 0, 64, 64, 40, 60, false, 10, false)))
             .isInstanceOf(IllegalArgumentException.class)
@@ -331,8 +314,7 @@ class QdrantEmbeddingIngestorTest {
     void ensureCollectionAppliesBinaryQuantization() throws Exception {
         QdrantEmbeddingIngestor quantizedStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.BINARY, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, false)
         );
@@ -355,8 +337,7 @@ class QdrantEmbeddingIngestorTest {
     void ensureCollectionAppliesScalarQuantization() throws Exception {
         QdrantEmbeddingIngestor quantizedStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.SCALAR, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, false)
         );
@@ -403,8 +384,7 @@ class QdrantEmbeddingIngestorTest {
         // Try to ingest with dim=2 — should fail with dimension mismatch
         QdrantEmbeddingIngestor wrongDimStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(2),
-            null,
+            RagTestFixtures.stubEmbedder(2),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig()
         );
@@ -492,8 +472,7 @@ class QdrantEmbeddingIngestorTest {
         // Fresh ingestor — knownCollections cache is empty, forces re-check
         QdrantEmbeddingIngestor freshStore = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig()
         );
@@ -548,8 +527,7 @@ class QdrantEmbeddingIngestorTest {
     void ensureCollectionCreatesBm25SparseVector() throws Exception {
         QdrantEmbeddingIngestor bm25Store = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, true));
 
@@ -586,8 +564,7 @@ class QdrantEmbeddingIngestorTest {
         // Try ingesting with BM25 enabled — should fail
         QdrantEmbeddingIngestor bm25Store = new QdrantEmbeddingIngestor(
             client,
-            new RagTestFixtures.StubEmbeddingModel(DENSE_DIM),
-            null,
+            RagTestFixtures.stubEmbedder(DENSE_DIM),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig("dense", "sparse", "bm25", TenancyStrategy.SEPARATE_COLLECTIONS, DenseQuantization.NONE, true, OptionalDouble.empty(), OptionalInt.empty(), Integer.MAX_VALUE, 64, 64, 40, 60, false, 10, true));
 

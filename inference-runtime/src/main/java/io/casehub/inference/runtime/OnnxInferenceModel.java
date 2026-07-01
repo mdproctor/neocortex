@@ -2,11 +2,12 @@ package io.casehub.inference.runtime;
 
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
+import ai.onnxruntime.NodeInfo;
 import ai.onnxruntime.OnnxTensor;
+import ai.onnxruntime.OnnxValue;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
-import ai.onnxruntime.NodeInfo;
 import ai.onnxruntime.TensorInfo;
 import io.casehub.inference.InferenceException;
 import io.casehub.inference.InferenceInput;
@@ -15,8 +16,10 @@ import io.casehub.inference.InferenceOutput;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,12 +40,16 @@ public final class OnnxInferenceModel implements InferenceModel {
     private final HuggingFaceTokenizer tokenizer;
     private final boolean requiresTokenTypeIds;
     private final OptionalInt outputSize;
+    private final boolean hasRank3Output;
     private volatile boolean closed;
 
     /**
      * Creates a new model from the given configuration. Loads the ONNX model,
      * validates its inputs (must have {@code input_ids} and {@code attention_mask}),
-     * validates its outputs (at least one, rank 2), and creates the tokenizer.
+     * validates its outputs (at least one, each rank 2 or 3), and creates the tokenizer.
+     *
+     * <p>Supports multi-output models (e.g., BGE-M3 with dense, sparse, and ColBERT heads)
+     * and rank-3 {@code [batch, seq_len, dim]} outputs (e.g., ColBERT token-level embeddings).
      *
      * @throws ModelLoadException if the model or tokenizer cannot be loaded,
      *         or if the model's input/output schema is invalid
@@ -78,24 +85,36 @@ public final class OnnxInferenceModel implements InferenceModel {
             }
             this.requiresTokenTypeIds = inputNames.contains("token_type_ids");
 
-            // Validate outputs: at least one, rank 2
+            // Validate outputs: at least one, each must be rank 2 or rank 3
             Map<String, NodeInfo> outputInfo = session.getOutputInfo();
             if (outputInfo.isEmpty()) {
                 throw new ModelLoadException("Model must have at least one output");
             }
-            NodeInfo firstOutput = outputInfo.values().iterator().next();
-            if (!(firstOutput.getInfo() instanceof TensorInfo tensorInfo)) {
-                throw new ModelLoadException("First output must be a tensor");
+            boolean anyRank3 = false;
+            for (Map.Entry<String, NodeInfo> entry : outputInfo.entrySet()) {
+                if (!(entry.getValue().getInfo() instanceof TensorInfo ti)) {
+                    throw new ModelLoadException(
+                        "Output '" + entry.getKey() + "' must be a tensor");
+                }
+                int rank = ti.getShape().length;
+                if (rank < 2 || rank > 3) {
+                    throw new ModelLoadException(
+                        "Output '" + entry.getKey() + "' must be rank 2 or 3, got rank " + rank);
+                }
+                if (rank == 3) anyRank3 = true;
             }
-            long[] shape = tensorInfo.getShape();
-            if (shape.length != 2) {
-                throw new ModelLoadException(
-                    "Output must be rank 2 [batch, values], got rank " + shape.length);
+            this.hasRank3Output = anyRank3;
+
+            // outputSize: only meaningful for single-output rank-2 models with known dimension
+            if (outputInfo.size() == 1 && !anyRank3) {
+                TensorInfo tensorInfo = (TensorInfo) outputInfo.values().iterator().next().getInfo();
+                long[] shape = tensorInfo.getShape();
+                this.outputSize = shape[1] >= 0
+                    ? OptionalInt.of((int) shape[1])
+                    : OptionalInt.empty();
+            } else {
+                this.outputSize = OptionalInt.empty();
             }
-            // shape[1] == -1 means dynamic dimension
-            this.outputSize = shape[1] >= 0
-                ? OptionalInt.of((int) shape[1])
-                : OptionalInt.empty();
 
             // Create tokenizer with truncation, no padding
             openedTokenizer = HuggingFaceTokenizer.newInstance(
@@ -156,8 +175,16 @@ public final class OnnxInferenceModel implements InferenceModel {
             }
 
             try (OrtSession.Result result = session.run(inputMap)) {
-                float[][] logits = (float[][]) result.get(0).getValue();
-                return new InferenceOutput(logits[0]);
+                Map<String, float[][]> outputs = new LinkedHashMap<>();
+                for (Map.Entry<String, OnnxValue> entry : result) {
+                    Object value = entry.getValue().getValue();
+                    if (value instanceof float[][] rank2) {
+                        outputs.put(entry.getKey(), new float[][] { rank2[0] });
+                    } else if (value instanceof float[][][] rank3) {
+                        outputs.put(entry.getKey(), rank3[0]);
+                    }
+                }
+                return new InferenceOutput(outputs);
             }
         } catch (OrtException e) {
             throw new InferenceException("Inference failed: " + e.getMessage(), e);
@@ -231,10 +258,29 @@ public final class OnnxInferenceModel implements InferenceModel {
             }
 
             try (OrtSession.Result result = session.run(inputMap)) {
-                float[][] logits = (float[][]) result.get(0).getValue();
+                // Extract all named outputs from the session result
+                Map<String, Object> rawOutputs = new LinkedHashMap<>();
+                for (Map.Entry<String, OnnxValue> entry : result) {
+                    rawOutputs.put(entry.getKey(), entry.getValue().getValue());
+                }
+
+                // Build per-sample InferenceOutput from all outputs
                 List<InferenceOutput> outputs = new ArrayList<>(batchSize);
                 for (int i = 0; i < batchSize; i++) {
-                    outputs.add(new InferenceOutput(logits[i]));
+                    Map<String, float[][]> sampleOutputs = new LinkedHashMap<>();
+                    for (Map.Entry<String, Object> entry : rawOutputs.entrySet()) {
+                        Object value = entry.getValue();
+                        if (value instanceof float[][] rank2) {
+                            sampleOutputs.put(entry.getKey(), new float[][] { rank2[i] });
+                        } else if (value instanceof float[][][] rank3) {
+                            // Strip padding vectors using attention mask
+                            int actualLen = 0;
+                            for (long v : batchMask[i]) actualLen += (int) v;
+                            float[][] stripped = Arrays.copyOf(rank3[i], actualLen);
+                            sampleOutputs.put(entry.getKey(), stripped);
+                        }
+                    }
+                    outputs.add(new InferenceOutput(sampleOutputs));
                 }
                 return Collections.unmodifiableList(outputs);
             }

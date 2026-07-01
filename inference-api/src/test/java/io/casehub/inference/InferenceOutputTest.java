@@ -1,82 +1,129 @@
 package io.casehub.inference;
 
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 class InferenceOutputTest {
 
-    // --- null rejection ---
-
     @Test
-    void null_values_throws() {
-        assertThatNullPointerException()
-            .isThrownBy(() -> new InferenceOutput(null))
-            .withMessageContaining("null");
-    }
-
-    // --- defensive copy on construction ---
-
-    @Test
-    void constructor_clones_array() {
-        float[] original = {1.0f, 2.0f, 3.0f};
-        var output = new InferenceOutput(original);
-        original[0] = 99.0f;
-        assertThat(output.values()[0]).isEqualTo(1.0f);
-    }
-
-    // --- defensive copy on access ---
-
-    @Test
-    void values_returns_clone() {
-        var output = new InferenceOutput(new float[]{1.0f, 2.0f});
-        float[] first = output.values();
-        float[] second = output.values();
-        assertThat(first).isNotSameAs(second);
-        assertThat(first).isEqualTo(second);
-
-        first[0] = 99.0f;
-        assertThat(output.values()[0]).isEqualTo(1.0f);
-    }
-
-    // --- equality and hashCode ---
-
-    @Test
-    void equal_values_are_equal() {
-        var a = new InferenceOutput(new float[]{1.0f, 2.0f});
-        var b = new InferenceOutput(new float[]{1.0f, 2.0f});
-        assertThat(a).isEqualTo(b);
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
+    void singleOutputFactory() {
+        InferenceOutput out = InferenceOutput.of(1f, 2f, 3f);
+        assertArrayEquals(new float[]{1f, 2f, 3f}, out.values());
     }
 
     @Test
-    void different_values_are_not_equal() {
-        var a = new InferenceOutput(new float[]{1.0f, 2.0f});
-        var b = new InferenceOutput(new float[]{1.0f, 3.0f});
-        assertThat(a).isNotEqualTo(b);
-    }
-
-    // --- toString ---
-
-    @Test
-    void toString_short_array() {
-        var output = new InferenceOutput(new float[]{0.1f, 0.9f});
-        assertThat(output.toString()).contains("0.1").contains("0.9");
+    void singleOutputDefensiveCopy() {
+        float[] input = {1f, 2f};
+        InferenceOutput out = InferenceOutput.of(input);
+        input[0] = 999f;
+        assertEquals(1f, out.values()[0]);
+        out.values()[0] = 999f;
+        assertEquals(1f, out.values()[0]);
     }
 
     @Test
-    void toString_truncates_long_array() {
-        var output = new InferenceOutput(new float[]{1, 2, 3, 4, 5, 6, 7, 8});
-        String s = output.toString();
-        // Should show first 3 values and total count, not all 8
-        assertThat(s).contains("8 values");
-        assertThat(s).contains("...");
+    void multiOutputConstruction() {
+        var outputs = Map.of(
+            "dense", new float[][]{{1f, 2f}},
+            "sparse", new float[][]{{3f, 4f, 5f}}
+        );
+        InferenceOutput out = new InferenceOutput(outputs);
+        assertArrayEquals(new float[]{1f, 2f}, out.vector("dense"));
+        assertArrayEquals(new float[]{3f, 4f, 5f}, out.vector("sparse"));
     }
 
     @Test
-    void toString_five_elements_not_truncated() {
-        var output = new InferenceOutput(new float[]{1, 2, 3, 4, 5});
-        String s = output.toString();
-        assertThat(s).doesNotContain("...");
+    void multiOutputDefensiveCopy() {
+        float[][] data = {{1f, 2f}};
+        var outputs = Map.of("a", data);
+        InferenceOutput out = new InferenceOutput(outputs);
+        data[0][0] = 999f;
+        assertEquals(1f, out.vector("a")[0]);
+    }
+
+    @Test
+    void valuesThrowsForMultiOutput() {
+        var outputs = Map.of(
+            "a", new float[][]{{1f}},
+            "b", new float[][]{{2f}}
+        );
+        InferenceOutput out = new InferenceOutput(outputs);
+        assertThrows(IllegalStateException.class, out::values);
+    }
+
+    @Test
+    void outputThrowsForUnknownName() {
+        InferenceOutput out = InferenceOutput.of(1f);
+        assertThrows(IllegalArgumentException.class, () -> out.output("missing"));
+    }
+
+    @Test
+    void rank2OutputPreserved() {
+        float[][] colbert = {{1f, 2f}, {3f, 4f}, {5f, 6f}};
+        var outputs = Map.of("colbert", colbert);
+        InferenceOutput out = new InferenceOutput(outputs);
+        float[][] result = out.output("colbert");
+        assertEquals(3, result.length);
+        assertArrayEquals(new float[]{3f, 4f}, result[1]);
+    }
+
+    @Test
+    void outputNamesReturnsKeySet() {
+        var outputs = Map.of(
+            "dense", new float[][]{{1f}},
+            "sparse", new float[][]{{2f}}
+        );
+        InferenceOutput out = new InferenceOutput(outputs);
+        assertEquals(Set.of("dense", "sparse"), out.outputNames());
+    }
+
+    @Test
+    void emptyOutputsRejected() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new InferenceOutput(Map.of()));
+    }
+
+    @Test
+    void nullOutputsRejected() {
+        assertThrows(NullPointerException.class,
+            () -> new InferenceOutput(null));
+    }
+
+    @Test
+    void equalityAndHashCode() {
+        InferenceOutput a = InferenceOutput.of(1f, 2f);
+        InferenceOutput b = InferenceOutput.of(1f, 2f);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+
+        InferenceOutput c = InferenceOutput.of(1f, 3f);
+        assertNotEquals(a, c);
+    }
+
+    @Test
+    void outputDefensiveCopyOnAccess() {
+        var outputs = Map.of("a", new float[][]{{1f, 2f}});
+        InferenceOutput out = new InferenceOutput(outputs);
+        float[][] returned = out.output("a");
+        returned[0][0] = 999f;
+        assertEquals(1f, out.output("a")[0][0]);
+    }
+
+    @Test
+    void vectorDefensiveCopyOnAccess() {
+        var outputs = Map.of("a", new float[][]{{1f, 2f}});
+        InferenceOutput out = new InferenceOutput(outputs);
+        float[] returned = out.vector("a");
+        returned[0] = 999f;
+        assertEquals(1f, out.vector("a")[0]);
+    }
+
+    @Test
+    void outputNamesIsUnmodifiable() {
+        var outputs = Map.of("a", new float[][]{{1f}});
+        InferenceOutput out = new InferenceOutput(outputs);
+        Set<String> names = out.outputNames();
+        assertThrows(UnsupportedOperationException.class, () -> names.add("hacked"));
     }
 }

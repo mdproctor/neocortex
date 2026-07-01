@@ -77,15 +77,15 @@ class AssertTenantReactiveTest {
 
     private ReactiveQdrantEmbeddingIngestor createIngestor() {
         return new ReactiveQdrantEmbeddingIngestor(
-            null, new RagTestFixtures.StubEmbeddingModel(4), null,
+            null, RagTestFixtures.stubEmbedder(4),
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
             RagTestFixtures.stubConfig());
     }
 
     private ReactiveHybridCaseRetriever createRetriever() {
         return new ReactiveHybridCaseRetriever(
-            null, null, null,
+            null, null,
             TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
-            null, RagTestFixtures.stubConfig());
+            RagTestFixtures.stubConfig());
     }
 }

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,6 +63,55 @@ class InMemoryInferenceModelTest {
             // InferenceOutput defensively copies, so values() returns distinct arrays
             assertThat(out1.values()).isNotSameAs(out2.values());
             assertThat(out1).isEqualTo(out2);
+        }
+    }
+
+    // ── returningMulti() factory ────────────────────────────────────
+
+    @Nested
+    @DisplayName("returningMulti()")
+    class ReturningMultiFactory {
+
+        @Test
+        void returnsMultiOutputs() {
+            var outputs = Map.of(
+                "dense", new float[][]{{1f, 2f}},
+                "sparse", new float[][]{{3f, 4f, 5f}}
+            );
+            var model = InMemoryInferenceModel.returningMulti(outputs);
+            InferenceOutput out = model.run(InferenceInput.of("anything"));
+            assertThat(out.outputNames()).isEqualTo(Set.of("dense", "sparse"));
+            assertThat(out.vector("dense")).containsExactly(1f, 2f);
+            assertThat(out.vector("sparse")).containsExactly(3f, 4f, 5f);
+        }
+
+        @Test
+        void outputSizeIsEmpty() {
+            var outputs = Map.of("a", new float[][]{{1f}});
+            var model = InMemoryInferenceModel.returningMulti(outputs);
+            assertThat(model.outputSize()).isEmpty();
+        }
+
+        @Test
+        void sameOutputRegardlessOfInput() {
+            var outputs = Map.of("vec", new float[][]{{0.5f}});
+            var model = InMemoryInferenceModel.returningMulti(outputs);
+            InferenceOutput out1 = model.run(InferenceInput.of("hello"));
+            InferenceOutput out2 = model.run(InferenceInput.of("goodbye"));
+            assertThat(out1).isEqualTo(out2);
+        }
+
+        @Test
+        void rejectsNullOutputs() {
+            assertThatThrownBy(() -> InMemoryInferenceModel.returningMulti(null))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void rejectsEmptyOutputs() {
+            assertThatThrownBy(() -> InMemoryInferenceModel.returningMulti(Map.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outputs must not be empty");
         }
     }
 
@@ -187,7 +238,7 @@ class InMemoryInferenceModelTest {
         void resultListIsUnmodifiable() {
             var model = InMemoryInferenceModel.returning(1.0f);
             List<InferenceOutput> results = model.runBatch(List.of(InferenceInput.of("a")));
-            assertThatThrownBy(() -> results.add(new InferenceOutput(new float[]{0f})))
+            assertThatThrownBy(() -> results.add(InferenceOutput.of(0f)))
                 .isInstanceOf(UnsupportedOperationException.class);
         }
     }
