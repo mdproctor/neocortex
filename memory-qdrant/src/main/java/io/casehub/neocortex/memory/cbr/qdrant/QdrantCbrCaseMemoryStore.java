@@ -44,6 +44,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     private static final Logger LOG = Logger.getLogger(QdrantCbrCaseMemoryStore.class.getName());
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<PlanTrace>> PLAN_TRACE_TYPE = new TypeReference<>() {};
 
     private final CbrCollectionManager collectionManager;
     private final EmbeddingModel embeddingModel; // nullable
@@ -135,11 +136,19 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         attributes.put("cbr.type", cbrCase.cbrType());
-        if (cbrCase instanceof FeatureVectorCbrCase fv) {
+        Map<String, Object> features = cbrCase.features();
+        if (!features.isEmpty()) {
             try {
-                attributes.put("cbr.features", MAPPER.writeValueAsString(fv.features()));
+                attributes.put("cbr.features", MAPPER.writeValueAsString(features));
             } catch (JsonProcessingException e) {
                 throw new RuntimeException("Failed to serialize features to JSON", e);
+            }
+        }
+        if (cbrCase instanceof PlanCbrCase plan) {
+            try {
+                attributes.put("cbr.planTrace", MAPPER.writeValueAsString(plan.planTrace()));
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("Failed to serialize plan trace to JSON", e);
             }
         }
 
@@ -302,6 +311,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         CbrCase reconstructed = switch (cbrType) {
             case FeatureVectorCbrCase.CBR_TYPE -> reconstructFeatureVector(payload, problem, solution, outcome, confidence);
+            case PlanCbrCase.CBR_TYPE -> reconstructPlanCase(payload, problem, solution, outcome, confidence);
             case TextualCbrCase.CBR_TYPE -> new TextualCbrCase(problem, solution, outcome, confidence);
             case null -> throw new IllegalStateException("Missing _cbr_type in CBR point");
             default -> throw new IllegalArgumentException("Unknown CBR type: " + cbrType);
@@ -309,6 +319,32 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         if (!caseClass.isInstance(reconstructed)) return null;
         return caseClass.cast(reconstructed);
+    }
+
+    private CbrCase reconstructPlanCase(Map<String, Value> payload,
+                                          String problem, String solution,
+                                          String outcome, Double confidence) {
+        Map<String, Object> features = Map.of();
+        String featuresJson = extractString(payload, "_features_json");
+        if (featuresJson != null) {
+            try {
+                features = MAPPER.readValue(featuresJson, MAP_TYPE);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("Corrupted _features_json in CBR point", e);
+            }
+        }
+
+        List<PlanTrace> planTrace = List.of();
+        String planTraceJson = extractString(payload, "_plan_trace_json");
+        if (planTraceJson != null) {
+            try {
+                planTrace = MAPPER.readValue(planTraceJson, PLAN_TRACE_TYPE);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("Corrupted _plan_trace_json in CBR point", e);
+            }
+        }
+
+        return new PlanCbrCase(problem, solution, outcome, confidence, features, planTrace);
     }
 
     private CbrCase reconstructFeatureVector(Map<String, Value> payload,

@@ -79,12 +79,13 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     private boolean matchesFeatures(CbrCase stored, Map<String, Object> queryFeatures,
                                      CbrFeatureSchema schema) {
         if (queryFeatures.isEmpty()) return true;
-        if (!(stored instanceof FeatureVectorCbrCase fv)) return true;
+        Map<String, Object> storedFeatures = stored.features();
+        if (storedFeatures.isEmpty()) return true;
 
         for (var entry : queryFeatures.entrySet()) {
             String name = entry.getKey();
             Object queryValue = entry.getValue();
-            Object storedValue = fv.features().get(name);
+            Object storedValue = storedFeatures.get(name);
             if (storedValue == null) continue;
 
             FeatureField field = schema != null

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.embedding.Embedding;
 import io.casehub.neocortex.memory.cbr.CbrCase;
-import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
+import io.casehub.neocortex.memory.cbr.PlanCbrCase;
 import io.qdrant.client.PointIdFactory;
 import io.qdrant.client.ValueFactory;
 import io.qdrant.client.VectorFactory;
@@ -69,24 +69,27 @@ final class CbrPointBuilder {
             payload.put("confidence", ValueFactory.value(cbrCase.confidence()));
         }
 
-        if (cbrCase instanceof FeatureVectorCbrCase fv) {
-            // Always store features JSON for reconstruction (even empty)
-            try {
-                payload.put("_features_json", ValueFactory.value(MAPPER.writeValueAsString(fv.features())));
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException("Failed to serialize features", e);
+        Map<String, Object> features = cbrCase.features();
+        try {
+            payload.put("_features_json", ValueFactory.value(MAPPER.writeValueAsString(features)));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize features", e);
+        }
+        for (Map.Entry<String, Object> entry : features.entrySet()) {
+            String key = "f_" + entry.getKey();
+            Object val = entry.getValue();
+            if (val instanceof String s) {
+                payload.put(key, ValueFactory.value(s));
+            } else if (val instanceof Number n) {
+                payload.put(key, ValueFactory.value(n.doubleValue()));
             }
-            // Individual fields for Qdrant filtering — only when non-empty
-            if (!fv.features().isEmpty()) {
-                for (Map.Entry<String, Object> entry : fv.features().entrySet()) {
-                    String key = "f_" + entry.getKey();
-                    Object val = entry.getValue();
-                    if (val instanceof String s) {
-                        payload.put(key, ValueFactory.value(s));
-                    } else if (val instanceof Number n) {
-                        payload.put(key, ValueFactory.value(n.doubleValue()));
-                    }
-                }
+        }
+
+        if (cbrCase instanceof PlanCbrCase plan) {
+            try {
+                payload.put("_plan_trace_json", ValueFactory.value(MAPPER.writeValueAsString(plan.planTrace())));
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("Failed to serialize plan trace", e);
             }
         }
 

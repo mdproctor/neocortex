@@ -5,6 +5,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 
@@ -121,6 +122,92 @@ public abstract class CbrCaseMemoryStoreContractTest {
             "starcraft-game", ENTITY, CBR, TENANT, "case-2");
         int erased = store().eraseEntity(ENTITY, TENANT);
         assertThat(erased).isGreaterThanOrEqualTo(0);
+    }
+
+    // --- PlanCbrCase tests ---
+
+    @Test
+    void planCbrCase_storeAndRetrieve() {
+        var trace = new PlanTrace("scout", "reconnaissance", "drone-scout", "SUCCESS", 1, Map.of());
+        var c = new PlanCbrCase("Zerg roach rush", "early pressure", "WIN", 0.85,
+            Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH"),
+            List.of(trace));
+        store().store(c, "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 5);
+        var results = store().retrieveSimilar(q, PlanCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().problem()).isEqualTo("Zerg roach rush");
+        assertThat(results.getFirst().cbrType()).isEqualTo("plan");
+    }
+
+    @Test
+    void planCbrCase_featureMatchFilters() {
+        var trace = new PlanTrace("b", "c", "w", "OK", 1, Map.of());
+        store().store(new PlanCbrCase("Zerg game", "rush", "WIN", null,
+            Map.of("opponent_race", "Zerg"), List.of(trace)),
+            "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
+        store().store(new PlanCbrCase("Protoss game", "expand", "LOSS", null,
+            Map.of("opponent_race", "Protoss"), List.of(trace)),
+            "starcraft-game", ENTITY, CBR, TENANT, "plan-2");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 5);
+        var results = store().retrieveSimilar(q, PlanCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().features()).containsEntry("opponent_race", "Zerg");
+    }
+
+    @Test
+    void planCbrCase_planTraceRoundTrip() {
+        var trace1 = new PlanTrace("scout", "reconnaissance", "drone-scout", "SUCCESS", 1,
+            Map.of("duration", 30));
+        var trace2 = new PlanTrace("attack", "aggression", "roach-push", "SUCCESS", 2,
+            Map.of("supply", 44));
+        var c = new PlanCbrCase("Zerg game", "rush", "WIN", 0.9,
+            Map.of("opponent_race", "Zerg"),
+            List.of(trace1, trace2));
+        store().store(c, "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
+
+        var results = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 5),
+            PlanCbrCase.class);
+        assertThat(results).hasSize(1);
+        var retrieved = results.getFirst();
+        assertThat(retrieved.planTrace()).hasSize(2);
+        assertThat(retrieved.planTrace().get(0).bindingName()).isEqualTo("scout");
+        assertThat(retrieved.planTrace().get(0).capabilityName()).isEqualTo("reconnaissance");
+        assertThat(retrieved.planTrace().get(1).bindingName()).isEqualTo("attack");
+        assertThat(retrieved.planTrace().get(1).parameters()).containsEntry("supply", 44);
+    }
+
+    @Test
+    void planCbrCase_coexistsWithFeatureVector() {
+        store().store(new FeatureVectorCbrCase("FV game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "fv-1");
+        store().store(new PlanCbrCase("Plan game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg"),
+            List.of(new PlanTrace("b", "c", "w", "OK", 1, Map.of()))),
+            "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
+
+        var fvResults = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
+            FeatureVectorCbrCase.class);
+        assertThat(fvResults).hasSize(1);
+        assertThat(fvResults.getFirst().problem()).isEqualTo("FV game");
+
+        var planResults = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
+            PlanCbrCase.class);
+        assertThat(planResults).hasSize(1);
+        assertThat(planResults.getFirst().problem()).isEqualTo("Plan game");
+
+        var allResults = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
+            CbrCase.class);
+        assertThat(allResults).hasSize(2);
     }
 
     @Test
