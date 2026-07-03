@@ -31,7 +31,7 @@ public class BlockingToReactiveCbrBridge implements ReactiveCbrCaseMemoryStore {
     }
 
     @Override
-    public <C extends CbrCase> Uni<List<C>> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
+    public <C extends CbrCase> Uni<List<ScoredCbrCase<C>>> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
         return Uni.createFrom().item(() -> delegate.retrieveSimilar(query, caseClass))
             .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }

@@ -167,11 +167,11 @@ rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever and Reac
 rag-expansion/      — Query expansion: HyDE (hypothetical documents), step-back prompting (abstract reformulation), multi-query fan-out with RRF fusion; @Decorator on CaseRetriever + ReactiveCaseRetriever, classpath + config activated
 corpus-api/         — CorpusStore + CorpusReader + ChangeSource + WatchableChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
 corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
-memory-api/         — CbrCaseMemoryStore + ReactiveCbrCaseMemoryStore SPIs, CbrCase hierarchy, CbrQuery, CbrFeatureSchema, FeatureField, NumericRange — Mutiny provided
+memory-api/         — CbrCaseMemoryStore + ReactiveCbrCaseMemoryStore SPIs, CbrCase hierarchy, CbrQuery, CbrFeatureSchema, FeatureField, NumericRange, ScoredCbrCase — Mutiny provided
 memory/             — NoOpCbrCaseMemoryStore @DefaultBean, BlockingToReactiveCbrBridge
-memory-testing/     — CbrCaseMemoryStoreContractTest abstract base (23 tests)
+memory-testing/     — CbrCaseMemoryStoreContractTest abstract base (26 tests)
 memory-cbr-inmem/   — InMemoryCbrCaseMemoryStore @Alternative @Priority(2) — in-memory stub for tests
-memory-qdrant/      — QdrantCbrCaseMemoryStore + QdrantCbrBeanProducer CDI wiring — Qdrant-backed CBR with payload filters (categorical/numeric/text) + optional dense vector + notBefore temporal filtering, auto-wires when on classpath (optional EmbeddingModel + CaseMemoryStore via Instance), Testcontainers integration tests
+memory-qdrant/      — QdrantCbrCaseMemoryStore + QdrantCbrBeanProducer CDI wiring — Qdrant-backed CBR with payload filters (categorical/numeric/text) + dense vector search (cosine similarity on problem() via EmbeddingModel, with minSimilarity threshold) + notBefore temporal filtering + dimension validation, auto-wires when on classpath (optional EmbeddingModel + CaseMemoryStore via Instance), Testcontainers integration tests
 memory-inmem/       — InMemoryMemoryStore @Alternative @Priority(10) — volatile ConcurrentHashMap, test + ephemeral
 memory-jpa/         — JpaMemoryStore @ApplicationScoped — PostgreSQL + Flyway V1000 + FTS via websearch_to_tsquery
 memory-sqlite/      — SqliteMemoryStore @Alternative @Priority(1) — SQLite + HikariCP WAL + FTS5

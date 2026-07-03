@@ -12,7 +12,7 @@ public interface ReactiveCbrCaseMemoryStore {
     Uni<String> store(CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
                       String tenantId, String caseId);
 
-    <C extends CbrCase> Uni<List<C>> retrieveSimilar(CbrQuery query, Class<C> caseType);
+    <C extends CbrCase> Uni<List<ScoredCbrCase<C>>> retrieveSimilar(CbrQuery query, Class<C> caseType);
 
     Uni<Integer> erase(EraseRequest request);
 

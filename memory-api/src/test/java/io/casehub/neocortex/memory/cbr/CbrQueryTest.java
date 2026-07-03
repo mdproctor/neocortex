@@ -19,6 +19,7 @@ class CbrQueryTest {
         assertThat(q.topK()).isEqualTo(5);
         assertThat(q.minSimilarity()).isEqualTo(0.0);
         assertThat(q.notBefore()).isNull();
+        assertThat(q.problem()).isNull();
     }
 
     @Test
@@ -41,7 +42,7 @@ class CbrQueryTest {
 
     @Test
     void minSimilarityOutOfRangeRejected() {
-        assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), 5, 1.5, null))
+        assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), 5, 1.5, null, null))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -52,5 +53,31 @@ class CbrQueryTest {
         var q = CbrQuery.of("t", CBR, "type", features, 5);
         features.put("extra", "value");
         assertThat(q.features()).doesNotContainKey("extra");
+    }
+
+    @Test
+    void blankProblemRejected() {
+        assertThatThrownBy(() -> CbrQuery.of("t", CBR, "type", Map.of(), 5).withProblem(""))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("problem must not be blank");
+    }
+
+    @Test
+    void withProblem_setsNonNullProblem() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5).withProblem("Zerg rush");
+        assertThat(q.problem()).isEqualTo("Zerg rush");
+    }
+
+    @Test
+    void withMinSimilarity_updatesThreshold() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5).withMinSimilarity(0.7);
+        assertThat(q.minSimilarity()).isEqualTo(0.7);
+    }
+
+    @Test
+    void withNotBefore_updatesTimeBoundary() {
+        var now = java.time.Instant.now();
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5).withNotBefore(now);
+        assertThat(q.notBefore()).isEqualTo(now);
     }
 }

@@ -105,7 +105,7 @@ class CbrQueryTranslatorTest {
     void toFilter_notBefore_addsStoredAtRangeCondition() {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
-            Map.of(), 5, 0.0, notBefore);
+            Map.of(), 5, 0.0, notBefore, null);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         assertThat(filter.getMustCount()).isEqualTo(4);

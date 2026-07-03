@@ -40,22 +40,25 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <C extends CbrCase> List<C> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
+    public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
         CbrFeatureSchema schema = schemas.get(query.caseType());
         if (schema != null) {
             validateQueryFeatures(query.features(), schema);
         }
 
-        return cases.stream()
-            .filter(sc -> sc.tenantId().equals(query.tenantId()))
-            .filter(sc -> sc.domain().equals(query.domain()))
-            .filter(sc -> sc.caseType().equals(query.caseType()))
-            .filter(sc -> query.notBefore() == null || !sc.storedAt().isBefore(query.notBefore()))
-            .filter(sc -> caseClass.isInstance(sc.cbrCase()))
-            .filter(sc -> matchesFeatures(sc.cbrCase(), query.features(), schema))
-            .limit(query.topK())
-            .map(sc -> (C) sc.cbrCase())
-            .toList();
+        List<ScoredCbrCase<C>> results = new ArrayList<>();
+        for (StoredCase stored : cases) {
+            if (!stored.tenantId().equals(query.tenantId())) continue;
+            if (!stored.domain().equals(query.domain())) continue;
+            if (!stored.caseType().equals(query.caseType())) continue;
+            if (query.notBefore() != null && stored.storedAt().isBefore(query.notBefore())) continue;
+            if (!caseClass.isInstance(stored.cbrCase())) continue;
+            if (schema != null && !matchesFeatures(stored.cbrCase(), query.features(), schema)) continue;
+
+            results.add(new ScoredCbrCase<>((C) stored.cbrCase(), 1.0));
+            if (results.size() >= query.topK()) break;
+        }
+        return Collections.unmodifiableList(results);
     }
 
     @Override

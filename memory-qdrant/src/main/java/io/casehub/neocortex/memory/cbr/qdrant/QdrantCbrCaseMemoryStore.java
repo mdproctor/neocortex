@@ -18,6 +18,7 @@ import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScoredPoint;
+import io.qdrant.client.grpc.Points.SearchPoints;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -160,7 +161,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <C extends CbrCase> List<C> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
+    public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
         CbrFeatureSchema schema = schemas.get(query.caseType());
         if (schema != null) {
             CbrQueryTranslator.validateQueryFeatures(query.features(), schema);
@@ -168,7 +169,6 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         String collection = collectionManager.collectionName(query.caseType());
 
-        // Check collection exists
         try {
             if (!collectionManager.client().collectionExistsAsync(collection).get()) {
                 return List.of();
@@ -182,15 +182,23 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
-        // CBR retrieval is payload-filter-based; dense vector search is future work
-        List<ScoredPoint> scoredPoints = executeFilterQuery(collection, filter, query.topK());
+        // Branch between dense search and filter-only based on model and problem text
+        List<ScoredPoint> scoredPoints;
+        if (embeddingModel != null && query.problem() != null) {
+            scoredPoints = executeDenseSearch(collection, filter, query);
+        } else {
+            if (query.problem() != null) {
+                LOG.info("Dense search unavailable — problem text ignored, returning filter-only results for caseType=" + query.caseType());
+            }
+            scoredPoints = executeFilterQuery(collection, filter, query.topK());
+        }
 
-        List<C> results = new ArrayList<>(scoredPoints.size());
+        List<ScoredCbrCase<C>> results = new ArrayList<>(scoredPoints.size());
         for (ScoredPoint point : scoredPoints) {
             try {
                 C cbrCase = (C) reconstructCase(point.getPayloadMap(), caseClass);
                 if (cbrCase != null) {
-                    results.add(cbrCase);
+                    results.add(new ScoredCbrCase<>(cbrCase, point.getScore()));
                 }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Failed to reconstruct case from point", e);
@@ -269,6 +277,28 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private int vectorDimension() {
         return embeddingModel != null ? embeddingModel.dimension() : 0;
+    }
+
+    private List<ScoredPoint> executeDenseSearch(String collection, Filter filter, CbrQuery query) {
+        Embedding queryEmbedding = embeddingModel.embed(TextSegment.from(query.problem())).content();
+
+        SearchPoints.Builder searchBuilder = SearchPoints.newBuilder()
+            .setCollectionName(collection)
+            .addAllVector(queryEmbedding.vectorAsList())
+            .setVectorName(config.denseVectorName())
+            .setFilter(filter)
+            .setLimit(query.topK())
+            .setScoreThreshold((float) query.minSimilarity())
+            .setWithPayload(WithPayloadSelectorFactory.enable(true));
+
+        try {
+            return collectionManager.client().searchAsync(searchBuilder.build()).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted during dense search", e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Dense search failed", e.getCause());
+        }
     }
 
     private List<ScoredPoint> executeFilterQuery(String collection, Filter filter, int limit) {

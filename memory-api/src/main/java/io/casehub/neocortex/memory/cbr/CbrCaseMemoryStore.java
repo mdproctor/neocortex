@@ -11,7 +11,7 @@ public interface CbrCaseMemoryStore {
     String store(CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
                  String tenantId, String caseId);
 
-    <C extends CbrCase> List<C> retrieveSimilar(CbrQuery query, Class<C> caseType);
+    <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery query, Class<C> caseType);
 
     Integer erase(EraseRequest request);
 

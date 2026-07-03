@@ -21,7 +21,7 @@ public class NoOpCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     @Override
-    public <C extends CbrCase> List<C> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
+    public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
         return List.of();
     }
 

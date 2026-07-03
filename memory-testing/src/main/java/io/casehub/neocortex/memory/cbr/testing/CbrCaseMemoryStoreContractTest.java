@@ -50,8 +50,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
             Map.of("opponent_race", "Zerg"), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().problem()).isEqualTo("Zerg roach rush");
-        assertThat(results.getFirst().features()).containsEntry("opponent_race", "Zerg");
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("Zerg roach rush");
+        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", "Zerg");
     }
 
     @Test
@@ -90,7 +90,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
             Map.of("opponent_race", "Zerg"), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().features()).containsEntry("opponent_race", "Zerg");
+        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", "Zerg");
     }
 
     @Test
@@ -139,8 +139,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
             Map.of("opponent_race", "Zerg"), 5);
         var results = store().retrieveSimilar(q, PlanCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().problem()).isEqualTo("Zerg roach rush");
-        assertThat(results.getFirst().cbrType()).isEqualTo("plan");
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("Zerg roach rush");
+        assertThat(results.getFirst().cbrCase().cbrType()).isEqualTo("plan");
     }
 
     @Test
@@ -157,7 +157,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
             Map.of("opponent_race", "Zerg"), 5);
         var results = store().retrieveSimilar(q, PlanCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().features()).containsEntry("opponent_race", "Zerg");
+        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", "Zerg");
     }
 
     @Test
@@ -175,7 +175,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
             CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 5),
             PlanCbrCase.class);
         assertThat(results).hasSize(1);
-        var retrieved = results.getFirst();
+        var retrieved = results.getFirst().cbrCase();
         assertThat(retrieved.planTrace()).hasSize(2);
         assertThat(retrieved.planTrace().get(0).bindingName()).isEqualTo("scout");
         assertThat(retrieved.planTrace().get(0).capabilityName()).isEqualTo("reconnaissance");
@@ -197,13 +197,13 @@ public abstract class CbrCaseMemoryStoreContractTest {
             CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
             FeatureVectorCbrCase.class);
         assertThat(fvResults).hasSize(1);
-        assertThat(fvResults.getFirst().problem()).isEqualTo("FV game");
+        assertThat(fvResults.getFirst().cbrCase().problem()).isEqualTo("FV game");
 
         var planResults = store().retrieveSimilar(
             CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
             PlanCbrCase.class);
         assertThat(planResults).hasSize(1);
-        assertThat(planResults.getFirst().problem()).isEqualTo("Plan game");
+        assertThat(planResults.getFirst().cbrCase().problem()).isEqualTo("Plan game");
 
         var allResults = store().retrieveSimilar(
             CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
@@ -228,10 +228,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
             "starcraft-game", ENTITY, CBR, TENANT, "case-new");
 
         var q = new CbrQuery(TENANT, CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg"), 10, 0.0, boundary);
+            Map.of("opponent_race", "Zerg"), 10, 0.0, boundary, null);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().problem()).isEqualTo("new game");
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("new game");
     }
 
     @Test
@@ -265,7 +265,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
                    "army_size_ratio", NumericRange.within(0.7, 0.15)), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().problem()).isEqualTo("close game");
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("close game");
     }
 
     @Test
@@ -282,7 +282,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
                    "army_size_ratio", NumericRange.exact(0.7)), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().problem()).isEqualTo("exact game");
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("exact game");
     }
 
     @Test
@@ -298,7 +298,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
             Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst().problem()).isEqualTo("match");
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("match");
     }
 
     @Test
@@ -347,5 +347,55 @@ public abstract class CbrCaseMemoryStoreContractTest {
             Map.of("opponent_race", "Zerg", "unknown_field", "value"), 5);
         assertThatCode(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    void retrieveSimilar_withProblem_null_returnsFilteredResults() {
+        var fv = new FeatureVectorCbrCase("Zerg rush detected", "wall-off", null, null,
+            Map.of("opponent_race", "Zerg"));
+        store().store(fv, "starcraft-game", ENTITY, CBR, TENANT, "case-null-problem");
+
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 5);
+        // problem is null by default via of()
+        assertThat(query.problem()).isNull();
+
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("Zerg rush detected");
+        assertThat(results.get(0).score()).isEqualTo(1.0);
+    }
+
+    @Test
+    void retrieveSimilar_withProblem_nonNull_returnsFilteredResults() {
+        var fv = new FeatureVectorCbrCase("Zerg rush detected", "wall-off", null, null,
+            Map.of("opponent_race", "Zerg"));
+        store().store(fv, "starcraft-game", ENTITY, CBR, TENANT, "case-with-problem");
+
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 5)
+            .withProblem("Zerg attack incoming");
+
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("Zerg rush detected");
+    }
+
+    @Test
+    void retrieveSimilar_minSimilarity_zero_returnsAllMatches() {
+        var fv1 = new FeatureVectorCbrCase("case one", "solution one", null, null,
+            Map.of("opponent_race", "Zerg"));
+        var fv2 = new FeatureVectorCbrCase("case two", "solution two", null, null,
+            Map.of("opponent_race", "Zerg"));
+        store().store(fv1, "starcraft-game", ENTITY, CBR, TENANT, "case-ms-1");
+        store().store(fv2, "starcraft-game", ENTITY, CBR, TENANT, "case-ms-2");
+
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 10);
+        // minSimilarity is 0.0 by default
+        assertThat(query.minSimilarity()).isEqualTo(0.0);
+
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
     }
 }

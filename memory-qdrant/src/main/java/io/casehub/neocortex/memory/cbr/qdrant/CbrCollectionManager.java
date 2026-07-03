@@ -13,6 +13,8 @@ import io.qdrant.client.grpc.Collections.VectorsConfig;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Manages Qdrant collections for CBR case storage.
@@ -23,6 +25,8 @@ import java.util.concurrent.ExecutionException;
  * feature schema fields.
  */
 final class CbrCollectionManager {
+
+    private static final Logger LOG = Logger.getLogger(CbrCollectionManager.class.getName());
 
     /** Base payload fields that always get keyword indexes. */
     private static final String[] BASE_KEYWORD_FIELDS =
@@ -59,8 +63,26 @@ final class CbrCollectionManager {
 
         try {
             if (client.collectionExistsAsync(collection).get()) {
-                knownCollections.add(collection);
-                return;
+                // Validate vector dimension matches
+                int effectiveDim = vectorDimension > 0 ? vectorDimension : 1;
+                var info = client.getCollectionInfoAsync(collection).get();
+                var vectorsConfig = info.getConfig().getParams().getVectorsConfig();
+                if (vectorsConfig.hasParamsMap()) {
+                    var params = vectorsConfig.getParamsMap().getMapMap().get(config.denseVectorName());
+                    if (params != null && params.getSize() != effectiveDim) {
+                        LOG.warning("Collection " + collection + " has vector dimension "
+                            + params.getSize() + " but expected " + effectiveDim
+                            + " — recreating collection (existing points will be lost)");
+                        client.deleteCollectionAsync(collection).get();
+                        // Fall through to create with correct dimension
+                    } else {
+                        knownCollections.add(collection);
+                        return;
+                    }
+                } else {
+                    knownCollections.add(collection);
+                    return;
+                }
             }
 
             // Qdrant requires at least one vector config. When no embedding model
