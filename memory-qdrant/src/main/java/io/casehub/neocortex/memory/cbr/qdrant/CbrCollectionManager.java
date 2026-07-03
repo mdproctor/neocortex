@@ -157,6 +157,8 @@ final class CbrCollectionManager {
             client.createPayloadIndexAsync(collection, field,
                 PayloadSchemaType.Keyword, null, true, null, null).get();
         }
+        client.createPayloadIndexAsync(collection, "_stored_at",
+            PayloadSchemaType.Float, null, true, null, null).get();
     }
 
     QdrantClient client() {

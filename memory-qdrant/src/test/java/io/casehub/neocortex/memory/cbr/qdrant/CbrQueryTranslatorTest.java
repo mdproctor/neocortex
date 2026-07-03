@@ -3,11 +3,13 @@ package io.casehub.neocortex.memory.cbr.qdrant;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.NumericRange;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.qdrant.client.grpc.Common.Condition;
 import io.qdrant.client.grpc.Common.Filter;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,6 +99,35 @@ class CbrQueryTranslatorTest {
         // Should not throw
         CbrQueryTranslator.validateQueryFeatures(
             Map.of("totally_unknown", "anything"), schema);
+    }
+
+    @Test
+    void toFilter_notBefore_addsStoredAtRangeCondition() {
+        Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
+        var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
+            Map.of(), 5, 0.0, notBefore);
+        Filter filter = CbrQueryTranslator.toFilter(query, schema);
+
+        assertThat(filter.getMustCount()).isEqualTo(4);
+        Condition storedAtCondition = filter.getMust(3);
+        assertThat(storedAtCondition.getField().getKey()).isEqualTo("_stored_at");
+    }
+
+    @Test
+    void toFilter_numericRange_addsRangeCondition() {
+        var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
+            Map.of("army_size_ratio", NumericRange.within(0.7, 0.1)), 5);
+        Filter filter = CbrQueryTranslator.toFilter(query, schema);
+
+        assertThat(filter.getMustCount()).isEqualTo(4);
+        Condition rangeCondition = filter.getMust(3);
+        assertThat(rangeCondition.getField().getKey()).isEqualTo("f_army_size_ratio");
+    }
+
+    @Test
+    void validateQueryFeatures_numericAcceptsNumericRange() {
+        CbrQueryTranslator.validateQueryFeatures(
+            Map.of("army_size_ratio", NumericRange.of(0.5, 1.0)), schema);
     }
 
     @Test

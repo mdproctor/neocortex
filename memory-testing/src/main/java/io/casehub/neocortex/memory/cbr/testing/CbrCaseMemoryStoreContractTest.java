@@ -5,6 +5,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
@@ -208,6 +209,108 @@ public abstract class CbrCaseMemoryStoreContractTest {
             CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
             CbrCase.class);
         assertThat(allResults).hasSize(2);
+    }
+
+    // --- notBefore tests ---
+
+    @Test
+    void retrieveSimilar_notBefore_filtersOlderCases() throws Exception {
+        store().store(new FeatureVectorCbrCase("old game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-old");
+
+        Thread.sleep(50);
+        Instant boundary = Instant.now();
+        Thread.sleep(50);
+
+        store().store(new FeatureVectorCbrCase("new game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-new");
+
+        var q = new CbrQuery(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 10, 0.0, boundary);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().problem()).isEqualTo("new game");
+    }
+
+    @Test
+    void retrieveSimilar_notBefore_null_returnsAll() {
+        store().store(new FeatureVectorCbrCase("game 1", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-1");
+        store().store(new FeatureVectorCbrCase("game 2", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-2");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 10);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(2);
+    }
+
+    // --- NumericRange tests ---
+
+    @Test
+    void retrieveSimilar_numericRange_matchesWithinTolerance() {
+        store().store(new FeatureVectorCbrCase("close game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.65)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-close");
+        store().store(new FeatureVectorCbrCase("far game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 2.0)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-far");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg",
+                   "army_size_ratio", NumericRange.within(0.7, 0.15)), 5);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().problem()).isEqualTo("close game");
+    }
+
+    @Test
+    void retrieveSimilar_numericRange_exact_matchesExactValue() {
+        store().store(new FeatureVectorCbrCase("exact game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-exact");
+        store().store(new FeatureVectorCbrCase("other game", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 1.5)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-other");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg",
+                   "army_size_ratio", NumericRange.exact(0.7)), 5);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().problem()).isEqualTo("exact game");
+    }
+
+    @Test
+    void retrieveSimilar_numericExactMatch_backwardCompatible() {
+        store().store(new FeatureVectorCbrCase("match", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-match");
+        store().store(new FeatureVectorCbrCase("no match", "strat", "WIN", null,
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 1.5)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-no-match");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7), 5);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().problem()).isEqualTo("match");
+    }
+
+    @Test
+    void schemaValidation_numericFieldAcceptsNumericRange() {
+        store().store(new FeatureVectorCbrCase("p", "s", null, null,
+            Map.of("army_size_ratio", 0.7)),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-1");
+
+        var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("army_size_ratio", NumericRange.within(0.7, 0.1)), 5);
+        assertThatCode(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+            .doesNotThrowAnyException();
     }
 
     @Test

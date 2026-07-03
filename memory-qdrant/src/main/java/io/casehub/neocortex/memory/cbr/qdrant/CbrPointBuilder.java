@@ -14,6 +14,7 @@ import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.Vector;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +95,7 @@ final class CbrPointBuilder {
         }
 
         payload.put("_cbr_type", ValueFactory.value(cbrCase.cbrType()));
+        payload.put("_stored_at", ValueFactory.value(Instant.now().toEpochMilli()));
 
         // Build point — always include a named vector (real or placeholder)
         Map<String, Vector> namedVectors = new HashMap<>();

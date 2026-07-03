@@ -15,7 +15,7 @@
     <name>CaseHub Neocortex - Memory JPA</name>
     <description>JPA-backed CaseMemoryStore. @ApplicationScoped — displaces @DefaultBean no-op.
         Add as compile dep; add classpath:db/memory/migration to quarkus.flyway.locations.
-        Do NOT add casehub-platform-memory-inmem alongside this in test scope.</description>
+        Do NOT add casehub-neocortex-memory-inmem alongside this in test scope.</description>
 
     <dependencies>
         <dependency>
@@ -73,6 +73,11 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-h2</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

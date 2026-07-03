@@ -3,6 +3,7 @@ package io.casehub.neocortex.memory.cbr.qdrant;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.NumericRange;
 import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.Common.Range;
@@ -53,15 +54,30 @@ final class CbrQueryTranslator {
                 if (field instanceof FeatureField.Categorical) {
                     builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
                 } else if (field instanceof FeatureField.Numeric) {
-                    builder.addMust(ConditionFactory.range(payloadKey,
-                        Range.newBuilder()
-                            .setGte(((Number) value).doubleValue())
-                            .setLte(((Number) value).doubleValue())
-                            .build()));
+                    if (value instanceof NumericRange range) {
+                        builder.addMust(ConditionFactory.range(payloadKey,
+                            Range.newBuilder()
+                                .setGte(range.min())
+                                .setLte(range.max())
+                                .build()));
+                    } else {
+                        builder.addMust(ConditionFactory.range(payloadKey,
+                            Range.newBuilder()
+                                .setGte(((Number) value).doubleValue())
+                                .setLte(((Number) value).doubleValue())
+                                .build()));
+                    }
                 } else if (field instanceof FeatureField.Text) {
                     builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
                 }
             }
+        }
+
+        if (query.notBefore() != null) {
+            builder.addMust(ConditionFactory.range("_stored_at",
+                Range.newBuilder()
+                    .setGte(query.notBefore().toEpochMilli())
+                    .build()));
         }
 
         return builder.build();
@@ -84,9 +100,9 @@ final class CbrQueryTranslator {
                         + value.getClass().getSimpleName());
                 }
             } else if (field instanceof FeatureField.Numeric) {
-                if (!(value instanceof Number)) {
+                if (!(value instanceof Number) && !(value instanceof NumericRange)) {
                     throw new IllegalArgumentException(
-                        "Numeric field '" + entry.getKey() + "' requires Number, got: "
+                        "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
                         + value.getClass().getSimpleName());
                 }
             } else if (field instanceof FeatureField.Text) {

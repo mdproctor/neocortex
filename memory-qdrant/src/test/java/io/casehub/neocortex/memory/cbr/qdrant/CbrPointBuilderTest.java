@@ -114,6 +114,17 @@ class CbrPointBuilderTest {
     }
 
     @Test
+    void buildPoint_includes_stored_at_timestamp() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        PointStruct point = CbrPointBuilder.buildPoint(cbrCase, "type",
+            "e1", "d1", "t1", "c1", null, "dense");
+
+        Map<String, Value> payload = point.getPayloadMap();
+        assertThat(payload).containsKey("_stored_at");
+        assertThat(payload.get("_stored_at").getIntegerValue()).isGreaterThan(0);
+    }
+
+    @Test
     void pointId_matchesBuildPointId() {
         UUID expected = CbrPointBuilder.pointId("tenant-1", "game", "case-1");
         String expectedIdInput = "tenant-1#game#case-1";

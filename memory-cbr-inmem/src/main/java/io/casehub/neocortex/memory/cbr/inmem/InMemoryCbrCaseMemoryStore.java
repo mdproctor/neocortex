@@ -6,6 +6,7 @@ import io.casehub.neocortex.memory.MemoryDomain;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,7 +20,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private record StoredCase(
         String id, CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
-        String tenantId, String caseId
+        String tenantId, String caseId, Instant storedAt
     ) {}
 
     private final List<StoredCase> cases = new CopyOnWriteArrayList<>();
@@ -33,7 +34,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     public String store(CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
                         String tenantId, String caseId) {
         String id = UUID.randomUUID().toString();
-        cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId));
+        cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, Instant.now()));
         return id;
     }
 
@@ -49,7 +50,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
             .filter(sc -> sc.tenantId().equals(query.tenantId()))
             .filter(sc -> sc.domain().equals(query.domain()))
             .filter(sc -> sc.caseType().equals(query.caseType()))
-            .filter(sc -> query.notBefore() == null || true)
+            .filter(sc -> query.notBefore() == null || !sc.storedAt().isBefore(query.notBefore()))
             .filter(sc -> caseClass.isInstance(sc.cbrCase()))
             .filter(sc -> matchesFeatures(sc.cbrCase(), query.features(), schema))
             .limit(query.topK())
@@ -94,6 +95,13 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
             if (field instanceof FeatureField.Categorical) {
                 if (!queryValue.equals(storedValue)) return false;
+            } else if (field instanceof FeatureField.Numeric) {
+                double storedNum = ((Number) storedValue).doubleValue();
+                if (queryValue instanceof NumericRange range) {
+                    if (!range.contains(storedNum)) return false;
+                } else if (queryValue instanceof Number queryNum) {
+                    if (Double.compare(queryNum.doubleValue(), storedNum) != 0) return false;
+                }
             }
         }
         return true;
@@ -112,9 +120,11 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                     "Categorical field '" + entry.getKey() + "' requires String, got: "
                     + entry.getValue().getClass().getSimpleName());
             }
-            if (field instanceof FeatureField.Numeric && !(entry.getValue() instanceof Number)) {
+            if (field instanceof FeatureField.Numeric
+                    && !(entry.getValue() instanceof Number)
+                    && !(entry.getValue() instanceof NumericRange)) {
                 throw new IllegalArgumentException(
-                    "Numeric field '" + entry.getKey() + "' requires Number, got: "
+                    "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
                     + entry.getValue().getClass().getSimpleName());
             }
             if (field instanceof FeatureField.Text && !(entry.getValue() instanceof String)) {
