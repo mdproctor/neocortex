@@ -120,6 +120,7 @@ public final class OnnxInferenceModel implements InferenceModel {
             openedTokenizer = HuggingFaceTokenizer.newInstance(
                 config.tokenizerPath(),
                 Map.of("maxLength", String.valueOf(config.maxSequenceLength()),
+                       "modelMaxLength", String.valueOf(config.maxSequenceLength()),
                        "truncation", "true",
                        "padding", "false"));
             this.tokenizer = openedTokenizer;
