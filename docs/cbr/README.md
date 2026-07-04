@@ -15,7 +15,9 @@ exact match, numeric range filtering, and optional dense vector similarity on te
 
 ## Case Types
 
-Three `CbrCase` implementations cover different CBR paradigms:
+Three `CbrCase` implementations cover different CBR paradigms. For a detailed
+explanation of each type — what it does, its inputs and outputs, when to use it,
+and how they layer for routing — see [CBR Types](cbr-types.md).
 
 | Type | When to use | Features | Extra |
 |------|------------|----------|-------|
