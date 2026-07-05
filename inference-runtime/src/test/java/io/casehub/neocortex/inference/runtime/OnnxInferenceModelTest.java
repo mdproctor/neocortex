@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -214,11 +215,30 @@ class OnnxInferenceModelTest {
     class LoadingErrors {
 
         @Test
-        void rejectsModelMissingInputIds() {
-            assertThatThrownBy(() -> new OnnxInferenceModel(
-                    new ModelConfig(WRONG_INPUTS_MODEL, TOKENIZER_PATH)))
-                .isInstanceOf(ModelLoadException.class)
-                .hasMessageContaining("input_ids");
+        void acceptsModelWithBertInputAliases() {
+            ModelConfig config = new ModelConfig(WRONG_INPUTS_MODEL, TOKENIZER_PATH);
+            try (OnnxInferenceModel model = new OnnxInferenceModel(config)) {
+                InferenceOutput output = model.run(InferenceInput.of("test"));
+                assertThat(output).isNotNull();
+            }
+        }
+
+        @Test
+        void acceptsExplicitInputNameOverrides() {
+            ModelConfig config = new ModelConfig(WRONG_INPUTS_MODEL, TOKENIZER_PATH, 512, 0, 0,
+                Map.of("input_ids", "tokens", "attention_mask", "mask"));
+            try (OnnxInferenceModel model = new OnnxInferenceModel(config)) {
+                InferenceOutput output = model.run(InferenceInput.of("test"));
+                assertThat(output).isNotNull();
+            }
+        }
+
+        @Test
+        void rejectsModelWithUnknownInputNames() {
+            ModelConfig config = new ModelConfig(WRONG_INPUTS_MODEL, TOKENIZER_PATH, 512, 0, 0,
+                Map.of("input_ids", "nonexistent_name"));
+            assertThatThrownBy(() -> new OnnxInferenceModel(config))
+                .isInstanceOf(ModelLoadException.class);
         }
 
         @Test

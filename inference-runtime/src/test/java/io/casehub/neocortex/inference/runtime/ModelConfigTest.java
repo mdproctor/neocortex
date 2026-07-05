@@ -95,14 +95,14 @@ class ModelConfigTest {
 
         @Test
         void rejectsNegativeIntraOpThreads() {
-            assertThatThrownBy(() -> new ModelConfig(MODEL, TOKENIZER, 512, -1, 0))
+            assertThatThrownBy(() -> new ModelConfig(MODEL, TOKENIZER, 512, -1, 0, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("intraOpThreads");
         }
 
         @Test
         void rejectsNegativeInterOpThreads() {
-            assertThatThrownBy(() -> new ModelConfig(MODEL, TOKENIZER, 512, 0, -1))
+            assertThatThrownBy(() -> new ModelConfig(MODEL, TOKENIZER, 512, 0, -1, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("interOpThreads");
         }
@@ -116,7 +116,7 @@ class ModelConfigTest {
 
         @Test
         void acceptsCustomValues() {
-            var cfg = new ModelConfig(MODEL, TOKENIZER, 256, 4, 2);
+            var cfg = new ModelConfig(MODEL, TOKENIZER, 256, 4, 2, null);
             assertThat(cfg.maxSequenceLength()).isEqualTo(256);
             assertThat(cfg.intraOpThreads()).isEqualTo(4);
             assertThat(cfg.interOpThreads()).isEqualTo(2);
@@ -124,7 +124,7 @@ class ModelConfigTest {
 
         @Test
         void zeroThreadCountsMeansOrtDefault() {
-            var cfg = new ModelConfig(MODEL, TOKENIZER, 512, 0, 0);
+            var cfg = new ModelConfig(MODEL, TOKENIZER, 512, 0, 0, null);
             assertThat(cfg.intraOpThreads()).isEqualTo(0);
             assertThat(cfg.interOpThreads()).isEqualTo(0);
         }

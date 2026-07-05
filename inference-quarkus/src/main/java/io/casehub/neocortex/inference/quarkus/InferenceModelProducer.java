@@ -53,7 +53,8 @@ public class InferenceModelProducer {
             Path.of(props.tokenizerPath()),
             props.maxSequenceLength(),
             props.intraOpThreads(),
-            props.interOpThreads()));
+            props.interOpThreads(),
+            null));
     }
 
     private static String extractName(InjectionPoint ip) {

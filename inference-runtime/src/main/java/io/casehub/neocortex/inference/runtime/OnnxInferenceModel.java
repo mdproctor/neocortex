@@ -35,17 +35,26 @@ import java.util.Set;
  */
 public final class OnnxInferenceModel implements InferenceModel {
 
+    private static final Map<String, List<String>> INPUT_ALIASES = Map.of(
+        "input_ids", List.of("tokens", "input.1"),
+        "attention_mask", List.of("input_mask", "mask", "input.2"),
+        "token_type_ids", List.of("segment_ids", "input.3")
+    );
+
     private final OrtEnvironment env;
     private final OrtSession session;
     private final HuggingFaceTokenizer tokenizer;
     private final boolean requiresTokenTypeIds;
+    private final String inputIdsName;
+    private final String attentionMaskName;
+    private final String tokenTypeIdsName;
     private final OptionalInt outputSize;
     private final boolean hasRank3Output;
     private volatile boolean closed;
 
     /**
      * Creates a new model from the given configuration. Loads the ONNX model,
-     * validates its inputs (must have {@code input_ids} and {@code attention_mask}),
+     * validates its inputs (must have {@code input_ids} and {@code attention_mask}, or recognized aliases),
      * validates its outputs (at least one, each rank 2 or 3), and creates the tokenizer.
      *
      * <p>Supports multi-output models (e.g., BGE-M3 with dense, sparse, and ColBERT heads)
@@ -73,17 +82,13 @@ public final class OnnxInferenceModel implements InferenceModel {
             }
             this.session = openedSession;
 
-            // Validate inputs: must have input_ids and attention_mask
+            // Resolve input names via overrides, canonical names, or aliases
             Set<String> inputNames = session.getInputNames();
-            if (!inputNames.contains("input_ids")) {
-                throw new ModelLoadException(
-                    "Model must have 'input_ids' input, found: " + inputNames);
-            }
-            if (!inputNames.contains("attention_mask")) {
-                throw new ModelLoadException(
-                    "Model must have 'attention_mask' input, found: " + inputNames);
-            }
-            this.requiresTokenTypeIds = inputNames.contains("token_type_ids");
+            this.inputIdsName = resolveInputName("input_ids", inputNames, config.inputNameOverrides());
+            this.attentionMaskName = resolveInputName("attention_mask", inputNames, config.inputNameOverrides());
+            String resolvedTokenTypeIds = resolveInputName("token_type_ids", inputNames, config.inputNameOverrides());
+            this.requiresTokenTypeIds = resolvedTokenTypeIds != null;
+            this.tokenTypeIdsName = resolvedTokenTypeIds;
 
             // Validate outputs: at least one, each must be rank 2 or rank 3
             Map<String, NodeInfo> outputInfo = session.getOutputInfo();
@@ -165,14 +170,14 @@ public final class OnnxInferenceModel implements InferenceModel {
             tensors.add(maskTensor);
 
             Map<String, OnnxTensor> inputMap = new HashMap<>();
-            inputMap.put("input_ids", idsTensor);
-            inputMap.put("attention_mask", maskTensor);
+            inputMap.put(inputIdsName, idsTensor);
+            inputMap.put(attentionMaskName, maskTensor);
 
             if (requiresTokenTypeIds) {
                 long[][] typeIds2d = {encoding.getTypeIds()};
                 OnnxTensor typeIdsTensor = OnnxTensor.createTensor(env, typeIds2d);
                 tensors.add(typeIdsTensor);
-                inputMap.put("token_type_ids", typeIdsTensor);
+                inputMap.put(tokenTypeIdsName, typeIdsTensor);
             }
 
             try (OrtSession.Result result = session.run(inputMap)) {
@@ -249,13 +254,13 @@ public final class OnnxInferenceModel implements InferenceModel {
             tensors.add(maskTensor);
 
             Map<String, OnnxTensor> inputMap = new HashMap<>();
-            inputMap.put("input_ids", idsTensor);
-            inputMap.put("attention_mask", maskTensor);
+            inputMap.put(inputIdsName, idsTensor);
+            inputMap.put(attentionMaskName, maskTensor);
 
             if (batchTypeIds != null) {
                 OnnxTensor typeIdsTensor = OnnxTensor.createTensor(env, batchTypeIds);
                 tensors.add(typeIdsTensor);
-                inputMap.put("token_type_ids", typeIdsTensor);
+                inputMap.put(tokenTypeIdsName, typeIdsTensor);
             }
 
             try (OrtSession.Result result = session.run(inputMap)) {
@@ -323,5 +328,57 @@ public final class OnnxInferenceModel implements InferenceModel {
                 // swallow
             }
         }
+    }
+
+    /**
+     * Resolves an input name by checking:
+     * 1. Explicit overrides from config (if provided)
+     * 2. Canonical name in model inputs
+     * 3. Known aliases in model inputs
+     *
+     * @param canonicalName the standard BERT input name (input_ids, attention_mask, token_type_ids)
+     * @param modelInputs   the actual input names from the ONNX model
+     * @param overrides     explicit name overrides from config (nullable)
+     * @return the resolved input name, or null if not required and not found
+     * @throws ModelLoadException if a required input (input_ids, attention_mask) cannot be resolved
+     */
+    private static String resolveInputName(String canonicalName, Set<String> modelInputs,
+                                           Map<String, String> overrides) {
+        // Check explicit override first
+        if (overrides != null && overrides.containsKey(canonicalName)) {
+            String override = overrides.get(canonicalName);
+            if (!modelInputs.contains(override)) {
+                throw new ModelLoadException(
+                    "Overridden input name '" + override + "' for '" + canonicalName +
+                    "' not found in model inputs: " + modelInputs);
+            }
+            return override;
+        }
+
+        // Check canonical name
+        if (modelInputs.contains(canonicalName)) {
+            return canonicalName;
+        }
+
+        // Check aliases
+        List<String> aliases = INPUT_ALIASES.get(canonicalName);
+        if (aliases != null) {
+            for (String alias : aliases) {
+                if (modelInputs.contains(alias)) {
+                    return alias;
+                }
+            }
+        }
+
+        // token_type_ids is optional
+        if ("token_type_ids".equals(canonicalName)) {
+            return null;
+        }
+
+        // input_ids and attention_mask are required
+        List<String> knownAliases = INPUT_ALIASES.getOrDefault(canonicalName, List.of());
+        throw new ModelLoadException(
+            "Could not resolve required input '" + canonicalName + "' in model inputs: " + modelInputs
+            + ". Known aliases: " + knownAliases);
     }
 }
