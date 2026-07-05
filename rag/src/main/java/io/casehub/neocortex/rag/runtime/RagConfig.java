@@ -34,6 +34,9 @@ public interface RagConfig {
     @WithDefault("100")
     int embeddingBatchSize();
 
+    @WithDefault("1000000")
+    int maxMultivectorFloats();
+
     MatryoshkaConfig matryoshka();
 
     interface MatryoshkaConfig {

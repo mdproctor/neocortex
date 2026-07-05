@@ -58,6 +58,11 @@ public final class MatryoshkaMultiModalEmbedder implements MultiModalEmbedder {
         return delegate.colbertDimension();
     }
 
+    @Override
+    public int maxSequenceLength() {
+        return delegate.maxSequenceLength();
+    }
+
     private MultiModalEmbedding truncateAndRenormalize(MultiModalEmbedding embedding) {
         float[] truncated = Arrays.copyOf(embedding.dense(), targetDimension);
 

@@ -8,9 +8,14 @@ public final class BgeM3Embedder implements MultiModalEmbedder {
     private static final float SPARSE_THRESHOLD = 0.01f;
 
     private final InferenceModel model;
+    private final int maxSequenceLength;
 
-    public BgeM3Embedder(InferenceModel model) {
+    public BgeM3Embedder(InferenceModel model, int maxSequenceLength) {
         this.model = Objects.requireNonNull(model);
+        if (maxSequenceLength <= 0) {
+            throw new IllegalArgumentException("maxSequenceLength must be positive, got: " + maxSequenceLength);
+        }
+        this.maxSequenceLength = maxSequenceLength;
     }
 
     @Override
@@ -37,6 +42,9 @@ public final class BgeM3Embedder implements MultiModalEmbedder {
 
     @Override
     public OptionalInt colbertDimension() { return OptionalInt.of(1024); }
+
+    @Override
+    public int maxSequenceLength() { return maxSequenceLength; }
 
     private MultiModalEmbedding toEmbedding(InferenceOutput output) {
         float[] dense = normalize(output.vector("dense"));

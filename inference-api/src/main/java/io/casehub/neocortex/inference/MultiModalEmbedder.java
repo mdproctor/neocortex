@@ -41,4 +41,9 @@ public interface MultiModalEmbedder {
      * @return ColBERT token dimension (empty if ColBERT not supported)
      */
     OptionalInt colbertDimension();
+
+    /**
+     * @return Maximum token sequence length — bounds ColBERT output rows per point
+     */
+    int maxSequenceLength();
 }

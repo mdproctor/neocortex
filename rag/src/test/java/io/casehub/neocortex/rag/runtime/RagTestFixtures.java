@@ -74,6 +74,7 @@ final class RagTestFixtures {
                 };
             }
             @Override public int embeddingBatchSize() { return batchSize; }
+            @Override public int maxMultivectorFloats() { return 1_000_000; }
             @Override public MatryoshkaConfig matryoshka() {
                 return new MatryoshkaConfig() {
                     @Override public OptionalInt dimension() { return matryoshkaDim; }
@@ -148,6 +149,11 @@ final class RagTestFixtures {
         @Override
         public OptionalInt colbertDimension() {
             return OptionalInt.empty();
+        }
+
+        @Override
+        public int maxSequenceLength() {
+            return 512;
         }
 
         private MultiModalEmbedding makeEmbedding() {

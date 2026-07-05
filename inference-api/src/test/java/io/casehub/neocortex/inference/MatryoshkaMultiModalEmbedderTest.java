@@ -59,6 +59,14 @@ class MatryoshkaMultiModalEmbedderTest {
     }
 
     @Test
+    void maxSequenceLengthDelegated() {
+        MultiModalEmbedder delegate = stubEmbedder(
+            new float[]{1f, 2f}, null, null, 2);
+        var matryoshka = new MatryoshkaMultiModalEmbedder(delegate, 1);
+        assertEquals(512, matryoshka.maxSequenceLength());
+    }
+
+    @Test
     void targetExceedingDelegateRejected() {
         MultiModalEmbedder delegate = stubEmbedder(
             new float[]{1f, 2f}, null, null, 2);
@@ -91,6 +99,7 @@ class MatryoshkaMultiModalEmbedderTest {
             }
             @Override public int denseDimension() { return dim; }
             @Override public OptionalInt colbertDimension() { return OptionalInt.empty(); }
+            @Override public int maxSequenceLength() { return 512; }
         };
     }
 }
