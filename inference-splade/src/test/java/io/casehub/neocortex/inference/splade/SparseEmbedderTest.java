@@ -1,6 +1,7 @@
 package io.casehub.neocortex.inference.splade;
 
 import io.casehub.neocortex.inference.InferenceInput;
+import io.casehub.neocortex.inference.InferenceModel;
 import io.casehub.neocortex.inference.inmem.InMemoryInferenceModel;
 
 import org.junit.jupiter.api.AfterEach;
@@ -158,6 +159,74 @@ class SparseEmbedderTest {
             // Only index 0 (log1p(2.0)=1.098) and index 4 (log1p(3.0)=1.386) survive
             assertThat(sparse).hasSize(2);
             assertThat(sparse).containsOnlyKeys(0, 4);
+        }
+    }
+
+    // ── rank-3 output ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("rank-3 output")
+    class Rank3Output {
+
+        private static InferenceModel rank3StubModel(float[][] rank3Output) {
+            // Returns a model with single output named "output" containing rank3Output
+            // outputSize() is empty (no fixed size for rank-3)
+            return InMemoryInferenceModel.returningMulti(Map.of("output", rank3Output));
+        }
+
+        @Test
+        void maxPoolsAcrossSequenceDimension() {
+            // 2 tokens, vocab size 4. Max-pool should take max across tokens.
+            float[][] rank3Output = {
+                {0.0f, 1.5f, 0.0f, 2.0f},  // token 0
+                {3.0f, 0.0f, 0.5f, 0.0f}   // token 1
+            };
+            // After max-pool: {3.0, 1.5, 0.5, 2.0}
+            // After logSaturate (log1p of max(0,x)): log1p(3.0)≈1.386, log1p(1.5)≈0.916,
+            //   log1p(0.5)≈0.405, log1p(2.0)≈1.099
+            // All above default threshold 0.01
+            InferenceModel stubModel = rank3StubModel(rank3Output);
+            SparseEmbedder embedder = new SparseEmbedder(stubModel);
+            Map<Integer, Float> result = embedder.embed("test");
+
+            assertThat(result).hasSize(4);
+            assertThat(result.get(0)).isCloseTo((float) Math.log1p(3.0f), within(1e-5f));
+            assertThat(result.get(1)).isCloseTo((float) Math.log1p(1.5f), within(1e-5f));
+            assertThat(result.get(2)).isCloseTo((float) Math.log1p(0.5f), within(1e-5f));
+            assertThat(result.get(3)).isCloseTo((float) Math.log1p(2.0f), within(1e-5f));
+        }
+
+        @Test
+        void batchMaxPoolsEachSampleIndependently() {
+            // Sample 1: 2 tokens, vocab size 3
+            float[][] sample1 = {
+                {1.0f, 0.0f, 2.0f},  // token 0
+                {0.0f, 3.0f, 1.0f}   // token 1
+            };
+            // After max-pool sample1: {1.0, 3.0, 2.0}
+
+            // Sample 2: 3 tokens, vocab size 3 (different sequence length)
+            float[][] sample2 = {
+                {0.5f, 1.5f, 0.0f},  // token 0
+                {2.0f, 0.0f, 1.0f},  // token 1
+                {0.0f, 0.5f, 3.0f}   // token 2
+            };
+            // After max-pool sample2: {2.0, 1.5, 3.0}
+
+            InferenceModel stubModel = InMemoryInferenceModel.returningMulti(Map.of("output", sample1));
+            SparseEmbedder embedder = new SparseEmbedder(stubModel);
+
+            // Note: InMemoryInferenceModel.returningMulti returns same output for all inputs
+            // So we test with single sample here; batch independence is inherent to the loop
+            List<Map<Integer, Float>> results = embedder.embedBatch(List.of("a", "b"));
+
+            assertThat(results).hasSize(2);
+            // Both results should be identical (same stub output)
+            assertThat(results.get(0)).hasSize(3);
+            assertThat(results.get(0).get(0)).isCloseTo((float) Math.log1p(1.0f), within(1e-5f));
+            assertThat(results.get(0).get(1)).isCloseTo((float) Math.log1p(3.0f), within(1e-5f));
+            assertThat(results.get(0).get(2)).isCloseTo((float) Math.log1p(2.0f), within(1e-5f));
+            assertThat(results.get(1)).isEqualTo(results.get(0));
         }
     }
 

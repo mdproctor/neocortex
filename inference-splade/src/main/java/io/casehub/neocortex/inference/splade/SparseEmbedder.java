@@ -27,8 +27,6 @@ public final class SparseEmbedder {
             throw new IllegalArgumentException(
                 "threshold must be positive and finite, got: " + threshold);
         }
-        model.outputSize().orElseThrow(() -> new IllegalArgumentException(
-            "model outputSize must be present for SparseEmbedder (SPLADE vocab size is fixed)"));
         this.model = model;
         this.threshold = threshold;
     }
@@ -36,7 +34,7 @@ public final class SparseEmbedder {
     public Map<Integer, Float> embed(String text) {
         if (text == null) throw new IllegalArgumentException("text must not be null");
         InferenceOutput output = model.run(InferenceInput.of(text));
-        return logSaturate(output.values());
+        return logSaturate(extractSparseVector(output));
     }
 
     public List<Map<Integer, Float>> embedBatch(List<String> texts) {
@@ -56,9 +54,36 @@ public final class SparseEmbedder {
         List<InferenceOutput> outputs = model.runBatch(inputs);
         List<Map<Integer, Float>> results = new ArrayList<>(outputs.size());
         for (InferenceOutput output : outputs) {
-            results.add(logSaturate(output.values()));
+            results.add(logSaturate(extractSparseVector(output)));
         }
         return Collections.unmodifiableList(results);
+    }
+
+    private float[] extractSparseVector(InferenceOutput output) {
+        if (output.outputNames().size() != 1) {
+            throw new IllegalStateException(
+                "SparseEmbedder requires a single-output model, got: " + output.outputNames());
+        }
+        String name = output.outputNames().iterator().next();
+        float[][] matrix = output.output(name);
+        if (matrix.length == 1) {
+            return matrix[0];  // rank-2: [1][vocab] → [vocab]
+        }
+        return maxPool(matrix);  // rank-3: [seq][vocab] → [vocab]
+    }
+
+    private float[] maxPool(float[][] tokenVectors) {
+        if (tokenVectors.length == 0) {
+            return new float[0];
+        }
+        int vocabSize = tokenVectors[0].length;
+        float[] pooled = new float[vocabSize];
+        for (float[] tokenVector : tokenVectors) {
+            for (int i = 0; i < vocabSize; i++) {
+                pooled[i] = Math.max(pooled[i], tokenVector[i]);
+            }
+        }
+        return pooled;
     }
 
     private Map<Integer, Float> logSaturate(float[] values) {
