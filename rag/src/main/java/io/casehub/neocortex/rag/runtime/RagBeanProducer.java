@@ -18,10 +18,8 @@ public class RagBeanProducer {
     @Inject Instance<CurrentPrincipal> currentPrincipalInstance;
 
     private MultiModalEmbedder effectiveEmbedder() {
-        return config.matryoshka().dimension().isPresent()
-            ? new MatryoshkaMultiModalEmbedder(embedder,
-                config.matryoshka().dimension().getAsInt())
-            : embedder;
+        return MatryoshkaMultiModalEmbedder.wrapIfNeeded(embedder,
+            config.matryoshka().dimension());
     }
 
     private TenantGuard resolveTenantGuard() {

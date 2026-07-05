@@ -75,6 +75,7 @@ final class RagTestFixtures {
             }
             @Override public int embeddingBatchSize() { return batchSize; }
             @Override public int maxMultivectorFloats() { return 1_000_000; }
+            @Override public Optional<Integer> maxSequenceLength() { return Optional.of(512); }
             @Override public MatryoshkaConfig matryoshka() {
                 return new MatryoshkaConfig() {
                     @Override public OptionalInt dimension() { return matryoshkaDim; }

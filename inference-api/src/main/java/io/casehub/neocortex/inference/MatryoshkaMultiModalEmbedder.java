@@ -63,6 +63,22 @@ public final class MatryoshkaMultiModalEmbedder implements MultiModalEmbedder {
         return delegate.maxSequenceLength();
     }
 
+    /**
+     * Wraps embedder with Matryoshka truncation if dimension is present and embedder
+     * is not already wrapped. Returns embedder unchanged if dimension is empty or
+     * embedder is already a MatryoshkaMultiModalEmbedder.
+     *
+     * @param embedder  embedder to potentially wrap
+     * @param dimension target dimension (empty = no wrapping)
+     * @return wrapped embedder or original embedder
+     */
+    public static MultiModalEmbedder wrapIfNeeded(MultiModalEmbedder embedder, OptionalInt dimension) {
+        if (dimension.isPresent() && !(embedder instanceof MatryoshkaMultiModalEmbedder)) {
+            return new MatryoshkaMultiModalEmbedder(embedder, dimension.getAsInt());
+        }
+        return embedder;
+    }
+
     private MultiModalEmbedding truncateAndRenormalize(MultiModalEmbedding embedding) {
         float[] truncated = Arrays.copyOf(embedding.dense(), targetDimension);
 

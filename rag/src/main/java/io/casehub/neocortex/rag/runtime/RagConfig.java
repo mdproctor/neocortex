@@ -37,6 +37,12 @@ public interface RagConfig {
     @WithDefault("1000000")
     int maxMultivectorFloats();
 
+    /**
+     * Maximum token sequence length for embedders. Used by SeparateModelEmbedder
+     * to report maxSequenceLength() contract. Defaults to 512 if not configured.
+     */
+    Optional<Integer> maxSequenceLength();
+
     MatryoshkaConfig matryoshka();
 
     interface MatryoshkaConfig {
