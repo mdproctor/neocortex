@@ -113,6 +113,14 @@ class CaseMemoryStoreSpiTest {
         assertEquals(MemoryCapability.CROSS_TENANT_ERASE, ex.required());
     }
 
+    @Test
+    void scan_default_throws_MemoryCapabilityException() {
+        var request = new MemoryScanRequest("tenant-1", null, null, null, 10, null);
+        final var ex = assertThrows(MemoryCapabilityException.class,
+            () -> sut.scan(request));
+        assertEquals(MemoryCapability.SCAN, ex.required());
+    }
+
     private static CurrentPrincipal principal(String tenancyId) {
         return new CurrentPrincipal() {
             @Override public String actorId() { return "actor"; }

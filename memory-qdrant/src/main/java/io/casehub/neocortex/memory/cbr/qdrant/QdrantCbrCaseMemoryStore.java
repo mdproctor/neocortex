@@ -115,48 +115,12 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     /**
      * Serialize CbrCase to MemoryInput for delegation to CaseMemoryStore.
-     * Mapping per spec §3.4:
-     * - problem() → text
-     * - solution() → attributes["solution"]
-     * - outcome() → attributes["outcome"]
-     * - confidence() → attributes["confidence"] (formatted)
-     * - features → attributes["cbr.features"] (JSON)
-     * - discriminator → attributes["cbr.type"]
+     * Delegates to {@link CbrMemorySerializer}.
      */
     private MemoryInput serializeToMemoryInput(CbrCase cbrCase, String entityId,
                                                 MemoryDomain domain, String tenantId,
                                                 String caseId, String caseType) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(MemoryAttributeKeys.SOLUTION, cbrCase.solution());
-        if (cbrCase.outcome() != null) {
-            attributes.put(MemoryAttributeKeys.OUTCOME, cbrCase.outcome());
-        }
-        if (cbrCase.confidence() != null) {
-            attributes.put(MemoryAttributeKeys.CONFIDENCE,
-                MemoryAttributeKeys.formatConfidence(cbrCase.confidence()));
-        }
-
-        attributes.put("cbr.type", cbrCase.cbrType());
-        Map<String, Object> features = cbrCase.features();
-        if (!features.isEmpty()) {
-            try {
-                attributes.put("cbr.features", MAPPER.writeValueAsString(features));
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException("Failed to serialize features to JSON", e);
-            }
-        }
-        if (cbrCase instanceof PlanCbrCase plan) {
-            try {
-                attributes.put("cbr.planTrace", MAPPER.writeValueAsString(plan.planTrace()));
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException("Failed to serialize plan trace to JSON", e);
-            }
-        }
-
-        // Add caseType to attributes for reconstruction
-        attributes.put("cbr.caseType", caseType);
-
-        return new MemoryInput(entityId, domain, tenantId, caseId, cbrCase.problem(), attributes);
+        return CbrMemorySerializer.serialize(cbrCase, entityId, domain, tenantId, caseId, caseType);
     }
 
     @Override

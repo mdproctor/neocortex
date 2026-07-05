@@ -150,6 +150,22 @@ public interface CaseMemoryStore {
     }
 
     /**
+     * Paginated scan of memories for admin/debug scenarios. Returns up to {@code request.limit()}
+     * memories matching the filters in {@code request}. Use {@code request.afterMemoryId()} for
+     * pagination.
+     *
+     * <p>Default throws {@link MemoryCapabilityException} with {@link MemoryCapability#SCAN}.
+     *
+     * <p>Adapters MUST call {@link MemoryPermissions#assertTenant} before delegating to the backend.
+     *
+     * @param request scan request with tenant, domain, attribute filter, limit, and cursor
+     * @return list of memories matching the request, ordered by memoryId; empty list if none match
+     */
+    default List<Memory> scan(MemoryScanRequest request) {
+        throw new MemoryCapabilityException(MemoryCapability.SCAN, getClass());
+    }
+
+    /**
      * Convenience bulk store. Returns a {@link StoreAllResult} carrying the IDs of
      * successfully stored inputs and any backend failures.
      *

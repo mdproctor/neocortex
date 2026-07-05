@@ -16,6 +16,7 @@ public class QdrantCbrBeanProducer {
 
     private final QdrantCbrConfig config;
     private volatile QdrantClient client;
+    private volatile CbrCollectionManager collectionManager;
 
     @Inject
     Instance<EmbeddingModel> embeddingModelInstance;
@@ -28,20 +29,35 @@ public class QdrantCbrBeanProducer {
         this.config = config;
     }
 
+    private CbrCollectionManager collectionManager() {
+        if (collectionManager == null) {
+            var grpcBuilder = QdrantGrpcClient.newBuilder(
+                config.host(), config.port(), config.useTls());
+            config.apiKey().ifPresent(grpcBuilder::withApiKey);
+            client = new QdrantClient(grpcBuilder.build());
+            collectionManager = new CbrCollectionManager(client, config);
+        }
+        return collectionManager;
+    }
+
     @Produces
     @ApplicationScoped
     CbrCaseMemoryStore cbrCaseMemoryStore() {
-        var grpcBuilder = QdrantGrpcClient.newBuilder(
-            config.host(), config.port(), config.useTls());
-        config.apiKey().ifPresent(grpcBuilder::withApiKey);
-        client = new QdrantClient(grpcBuilder.build());
-
-        var collectionManager = new CbrCollectionManager(client, config);
         EmbeddingModel embeddingModel = embeddingModelInstance.isResolvable()
             ? embeddingModelInstance.get() : null;
         CaseMemoryStore delegate = delegateInstance.isResolvable()
             ? delegateInstance.get() : null;
-        return new QdrantCbrCaseMemoryStore(collectionManager, embeddingModel, config, delegate);
+        return new QdrantCbrCaseMemoryStore(collectionManager(), embeddingModel, config, delegate);
+    }
+
+    @Produces
+    @ApplicationScoped
+    CbrReconciliationService cbrReconciliationService() {
+        EmbeddingModel embeddingModel = embeddingModelInstance.isResolvable()
+            ? embeddingModelInstance.get() : null;
+        CaseMemoryStore delegate = delegateInstance.isResolvable()
+            ? delegateInstance.get() : null;
+        return new CbrReconciliationService(collectionManager(), embeddingModel, config, delegate);
     }
 
     @PreDestroy

@@ -87,4 +87,43 @@ class CbrCaseTest {
         assertThat(new TextualCbrCase("p", "s", null, null).cbrType()).isEqualTo(TextualCbrCase.CBR_TYPE);
         assertThat(new FeatureVectorCbrCase("p", "s", null, null, Map.of()).cbrType()).isEqualTo(FeatureVectorCbrCase.CBR_TYPE);
     }
+
+    @Test
+    void scoredCbrCase_rejectsScoreAboveOne() {
+        var c = new TextualCbrCase("p", "s", null, null);
+        assertThatThrownBy(() -> new ScoredCbrCase<>(c, 1.1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("[-1,1]");
+    }
+
+    @Test
+    void scoredCbrCase_rejectsScoreBelowNegativeOne() {
+        var c = new TextualCbrCase("p", "s", null, null);
+        assertThatThrownBy(() -> new ScoredCbrCase<>(c, -1.1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("[-1,1]");
+    }
+
+    @Test
+    void scoredCbrCase_rejectsNaN() {
+        var c = new TextualCbrCase("p", "s", null, null);
+        assertThatThrownBy(() -> new ScoredCbrCase<>(c, Double.NaN))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void scoredCbrCase_rejectsPositiveInfinity() {
+        var c = new TextualCbrCase("p", "s", null, null);
+        assertThatThrownBy(() -> new ScoredCbrCase<>(c, Double.POSITIVE_INFINITY))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void scoredCbrCase_acceptsBoundaryValues() {
+        var c = new TextualCbrCase("p", "s", null, null);
+        assertThatCode(() -> new ScoredCbrCase<>(c, 1.0)).doesNotThrowAnyException();
+        assertThatCode(() -> new ScoredCbrCase<>(c, -1.0)).doesNotThrowAnyException();
+        assertThatCode(() -> new ScoredCbrCase<>(c, 0.0)).doesNotThrowAnyException();
+        assertThatCode(() -> new ScoredCbrCase<>(c, 0.75)).doesNotThrowAnyException();
+    }
 }

@@ -42,7 +42,8 @@ public class SqliteMemoryStore implements CaseMemoryStore {
             MemoryCapability.ERASE_BY_ID,
             MemoryCapability.ERASE_ENTITY,
             MemoryCapability.ERASE_DOMAIN_CASE,
-            MemoryCapability.CROSS_TENANT_ERASE
+            MemoryCapability.CROSS_TENANT_ERASE,
+            MemoryCapability.SCAN
         );
     }
 
@@ -258,6 +259,42 @@ public class SqliteMemoryStore implements CaseMemoryStore {
             return ps.executeUpdate();
         } catch (SQLException e) {
             throw new IllegalStateException("eraseEntityAcrossTenants() failed", e);
+        }
+    }
+
+    @Timed(value = "casehub.memory.sqlite", histogram = true, extraTags = {"operation", "scan"})
+    @Override
+    public List<Memory> scan(MemoryScanRequest request) {
+        MemoryPermissions.assertTenant(request.tenantId(), principal, requestContextActive());
+
+        var sql = new StringBuilder("SELECT * FROM memory_entry WHERE tenant_id = ?");
+        if (request.domain() != null) sql.append(" AND domain = ?");
+        if (request.attributeKey() != null) {
+            sql.append(" AND json_extract(attributes, ?) = ?");
+        }
+        if (request.afterMemoryId() != null) sql.append(" AND memory_id > ?");
+        sql.append(" ORDER BY memory_id ASC LIMIT ?");
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            int idx = 1;
+            ps.setString(idx++, request.tenantId());
+            if (request.domain() != null) ps.setString(idx++, request.domain());
+            if (request.attributeKey() != null) {
+                String jsonPath = "$.\"" + request.attributeKey() + "\"";
+                ps.setString(idx++, jsonPath);
+                ps.setString(idx++, request.attributeValue());
+            }
+            if (request.afterMemoryId() != null) ps.setString(idx++, request.afterMemoryId());
+            ps.setInt(idx, request.limit());
+
+            var results = new ArrayList<Memory>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) results.add(toMemory(rs));
+            }
+            return List.copyOf(results);
+        } catch (SQLException e) {
+            throw new IllegalStateException("scan() failed", e);
         }
     }
 

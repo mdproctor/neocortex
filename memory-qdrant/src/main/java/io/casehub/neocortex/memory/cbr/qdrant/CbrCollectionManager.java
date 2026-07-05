@@ -61,20 +61,23 @@ final class CbrCollectionManager {
             return;
         }
 
+        int effectiveDim = vectorDimension > 0 ? vectorDimension : 1;
+
         try {
             if (client.collectionExistsAsync(collection).get()) {
-                // Validate vector dimension matches
-                int effectiveDim = vectorDimension > 0 ? vectorDimension : 1;
                 var info = client.getCollectionInfoAsync(collection).get();
                 var vectorsConfig = info.getConfig().getParams().getVectorsConfig();
                 if (vectorsConfig.hasParamsMap()) {
                     var params = vectorsConfig.getParamsMap().getMapMap().get(config.denseVectorName());
                     if (params != null && params.getSize() != effectiveDim) {
-                        LOG.warning("Collection " + collection + " has vector dimension "
-                            + params.getSize() + " but expected " + effectiveDim
-                            + " — recreating collection (existing points will be lost)");
+                        if (!config.allowDimensionMigration()) {
+                            throw new CbrDimensionMismatchException(collection, (int) params.getSize(), effectiveDim);
+                        }
+                        LOG.warning("Collection " + collection + " dimension mismatch ("
+                            + params.getSize() + " → " + effectiveDim
+                            + ") — recreating. ALL tenants sharing caseType=" + caseType
+                            + " are affected. Run reconciliation per tenant to recover data.");
                         client.deleteCollectionAsync(collection).get();
-                        // Fall through to create with correct dimension
                     } else {
                         knownCollections.add(collection);
                         return;
@@ -84,10 +87,6 @@ final class CbrCollectionManager {
                     return;
                 }
             }
-
-            // Qdrant requires at least one vector config. When no embedding model
-            // is available (vectorDimension==0), use a 1-dimensional placeholder vector.
-            int effectiveDim = vectorDimension > 0 ? vectorDimension : 1;
 
             VectorParams denseParams = VectorParams.newBuilder()
                 .setSize(effectiveDim)
@@ -106,6 +105,8 @@ final class CbrCollectionManager {
             createBasePayloadIndexes(collection);
             knownCollections.add(collection);
 
+        } catch (CbrDimensionMismatchException e) {
+            throw e;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted during ensureCollection", e);
@@ -181,6 +182,15 @@ final class CbrCollectionManager {
         }
         client.createPayloadIndexAsync(collection, "_stored_at",
             PayloadSchemaType.Float, null, true, null, null).get();
+    }
+
+    /**
+     * Invalidate the cached state for a collection, forcing the next
+     * {@link #ensureCollection} call to re-check and recreate if needed.
+     * Used by reconciliation when a collection is found to be missing.
+     */
+    void invalidateCollection(String caseType) {
+        knownCollections.remove(collectionName(caseType));
     }
 
     QdrantClient client() {

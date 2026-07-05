@@ -24,4 +24,7 @@ public enum MemoryCapability {
     ERASE_ENTITY,        // eraseEntity() — GDPR full-entity wipe
     ERASE_DOMAIN_CASE,   // erase(EraseRequest) — domain+caseId scoped
     CROSS_TENANT_ERASE,  // eraseEntityAcrossTenants() — GDPR Art.17 across all supplied tenantIds
+
+    // Admin / scan tier
+    SCAN,                // paginated attribute-filtered enumeration
 }

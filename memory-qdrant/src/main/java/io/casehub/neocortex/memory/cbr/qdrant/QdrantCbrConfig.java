@@ -26,4 +26,7 @@ public interface QdrantCbrConfig {
 
     @WithDefault("3")
     int maxRetries();
+
+    @WithDefault("false")
+    boolean allowDimensionMigration();
 }

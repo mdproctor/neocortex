@@ -33,7 +33,8 @@ public class JpaMemoryStore implements CaseMemoryStore {
             MemoryCapability.ERASE_BY_ID,
             MemoryCapability.ERASE_ENTITY,
             MemoryCapability.ERASE_DOMAIN_CASE,
-            MemoryCapability.CROSS_TENANT_ERASE
+            MemoryCapability.CROSS_TENANT_ERASE,
+            MemoryCapability.SCAN
         );
     }
 
@@ -216,6 +217,51 @@ public class JpaMemoryStore implements CaseMemoryStore {
             .executeUpdate();
         em.clear();
         return count;
+    }
+
+    @Timed(value = "casehub.memory.jpa", histogram = true, extraTags = {"operation", "scan"})
+    @Override
+    @Transactional(TxType.REQUIRED)
+    public List<Memory> scan(MemoryScanRequest request) {
+        MemoryPermissions.assertTenant(request.tenantId(), principal, requestContextActive());
+
+        var sql = new StringBuilder("SELECT * FROM memory_entry WHERE tenant_id = :tenantId");
+        if (request.domain() != null) sql.append(" AND domain = :domain");
+        if (request.attributeKey() != null) {
+            // Detect dialect: FTS enabled → PostgreSQL, disabled → H2
+            boolean isPostgres = config.fts().enabled();
+            if (isPostgres) {
+                sql.append(" AND attributes::jsonb->>:attrKey = :attrValue");
+            } else {
+                // H2: use LIKE pattern matching for JSON
+                sql.append(" AND attributes LIKE :attrPattern ESCAPE '\\'");
+            }
+        }
+        if (request.afterMemoryId() != null) sql.append(" AND memory_id > :cursor");
+        sql.append(" ORDER BY memory_id ASC");
+
+        @SuppressWarnings("unchecked")
+        var nq = em.createNativeQuery(sql.toString(), MemoryEntry.class)
+            .setParameter("tenantId", request.tenantId())
+            .setMaxResults(request.limit());
+
+        if (request.domain() != null) nq.setParameter("domain", request.domain());
+        if (request.attributeKey() != null) {
+            boolean isPostgres = config.fts().enabled();
+            if (isPostgres) {
+                nq.setParameter("attrKey", request.attributeKey());
+                nq.setParameter("attrValue", request.attributeValue());
+            } else {
+                // H2: pattern like %"key":"value"% with escaped SQL wildcards
+                String escapedKey = request.attributeKey().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+                String escapedValue = request.attributeValue().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+                String pattern = "%\"" + escapedKey + "\":\"" + escapedValue + "\"%";
+                nq.setParameter("attrPattern", pattern);
+            }
+        }
+        if (request.afterMemoryId() != null) nq.setParameter("cursor", request.afterMemoryId());
+
+        return ((List<MemoryEntry>) nq.getResultList()).stream().map(this::toMemory).toList();
     }
 
     private Memory toMemory(MemoryEntry e) {

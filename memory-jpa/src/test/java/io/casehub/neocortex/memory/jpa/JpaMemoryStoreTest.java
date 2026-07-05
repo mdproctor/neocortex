@@ -100,4 +100,95 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
         assertEquals(0, store().query(query()).size(),
             "Mixed-tenant storeAll must not persist any entries");
     }
+
+    @Test
+    void scan_returnsEntriesMatchingAttribute() {
+        // Store two CBR entries and one non-CBR entry
+        store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-1", "problem 1",
+            Map.of("cbr.caseType", "aml", "solution", "sol1")));
+        store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-2", "problem 2",
+            Map.of("cbr.caseType", "aml", "solution", "sol2")));
+        store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-3", "problem 3",
+            Map.of("other", "value")));
+
+        var request = new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 100, null);
+        var results = jpaStore.scan(request);
+
+        assertEquals(2, results.size());
+        results.forEach(m ->
+            assertTrue(m.attributes().containsKey("cbr.caseType") && m.attributes().get("cbr.caseType").equals("aml")));
+    }
+
+    @Test
+    void scan_respectsLimit() {
+        for (int i = 0; i < 5; i++) {
+            store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-" + i, "p" + i,
+                Map.of("cbr.caseType", "aml")));
+        }
+        var request = new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 2, null);
+        var results = jpaStore.scan(request);
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void scan_paginatesWithCursor() {
+        for (int i = 0; i < 5; i++) {
+            store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-" + i, "p" + i,
+                Map.of("cbr.caseType", "aml")));
+        }
+        // First page
+        var page1 = jpaStore.scan(new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 3, null));
+        assertEquals(3, page1.size());
+
+        // Second page using cursor from last element
+        String cursor = page1.getLast().memoryId();
+        var page2 = jpaStore.scan(new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 3, cursor));
+        assertEquals(2, page2.size());
+
+        // No overlap
+        var page1Ids = page1.stream().map(Memory::memoryId).toList();
+        var page2Ids = page2.stream().map(Memory::memoryId).toList();
+        assertTrue(page1Ids.stream().noneMatch(page2Ids::contains));
+    }
+
+    @Test
+    void scan_filtersByTenant() {
+        store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-1", "p1",
+            Map.of("cbr.caseType", "aml")));
+        principal.setTenancyId(OTHER_TENANT);
+        store().store(new MemoryInput("e1", DOMAIN, OTHER_TENANT, "case-2", "p2",
+            Map.of("cbr.caseType", "aml")));
+
+        principal.setTenancyId(TENANT);
+        var results = jpaStore.scan(new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 100, null));
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void scan_filtersByDomain() {
+        store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-1", "p1",
+            Map.of("cbr.caseType", "aml")));
+        store().store(new MemoryInput("e1", new MemoryDomain("other"), TENANT, "case-2", "p2",
+            Map.of("cbr.caseType", "aml")));
+
+        var results = jpaStore.scan(new MemoryScanRequest(TENANT, DOMAIN.name(), "cbr.caseType", "aml", 100, null));
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void scan_withoutAttributeFilter_returnsAllForTenant() {
+        store().store(new MemoryInput("e1", DOMAIN, TENANT, "case-1", "p1", Map.of("a", "1")));
+        store().store(new MemoryInput("e2", DOMAIN, TENANT, "case-2", "p2", Map.of("b", "2")));
+        principal.setTenancyId(OTHER_TENANT);
+        store().store(new MemoryInput("e1", DOMAIN, OTHER_TENANT, "case-3", "p3", Map.of("c", "3")));
+
+        principal.setTenancyId(TENANT);
+        var results = jpaStore.scan(new MemoryScanRequest(TENANT, null, null, null, 100, null));
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void scan_declaresScanCapability() {
+        assertTrue(jpaStore.capabilities().contains(MemoryCapability.SCAN));
+    }
 }

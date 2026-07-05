@@ -51,6 +51,7 @@ class QdrantCbrDenseSearchTest {
             @Override public String collectionPrefix() { return "dense_test_" + testId; }
             @Override public String denseVectorName() { return "dense"; }
             @Override public int maxRetries() { return 3; }
+            @Override public boolean allowDimensionMigration() { return false; }
         };
 
         CbrCollectionManager collectionManager = new CbrCollectionManager(client, config);
