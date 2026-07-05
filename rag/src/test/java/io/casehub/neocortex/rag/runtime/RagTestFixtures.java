@@ -87,6 +87,12 @@ final class RagTestFixtures {
                     @Override public OptionalDouble oversampling() { return oversampling; }
                 };
             }
+            @Override public ColbertQuantizationConfig colbertQuantization() {
+                return new ColbertQuantizationConfig() {
+                    @Override public DenseQuantization type() { return DenseQuantization.NONE; }
+                    @Override public boolean alwaysRam() { return true; }
+                };
+            }
         };
     }
 

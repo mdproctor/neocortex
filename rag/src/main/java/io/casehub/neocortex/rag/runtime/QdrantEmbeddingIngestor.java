@@ -280,13 +280,30 @@ public class QdrantEmbeddingIngestor implements EmbeddingIngestor {
                 .putMap(config.denseVectorName(), denseParams);
 
             if (embedder.supportedModes().contains(EmbeddingMode.COLBERT)) {
-                VectorParams colbertParams = VectorParams.newBuilder()
+                VectorParams.Builder colbertBuilder = VectorParams.newBuilder()
                     .setSize(embedder.colbertDimension().orElseThrow())
                     .setDistance(Distance.Cosine)
                     .setMultivectorConfig(MultiVectorConfig.newBuilder()
-                        .setComparator(MultiVectorComparator.MaxSim).build())
-                    .build();
-                paramsMapBuilder.putMap(config.colbertVectorName(), colbertParams);
+                        .setComparator(MultiVectorComparator.MaxSim).build());
+
+                if (config.colbertQuantization().type() == DenseQuantization.SCALAR) {
+                    colbertBuilder.setQuantizationConfig(
+                        io.qdrant.client.grpc.Collections.QuantizationConfig.newBuilder()
+                            .setScalar(io.qdrant.client.grpc.Collections.ScalarQuantization.newBuilder()
+                                .setType(io.qdrant.client.grpc.Collections.QuantizationType.Int8)
+                                .setAlwaysRam(config.colbertQuantization().alwaysRam())
+                                .build())
+                            .build());
+                } else if (config.colbertQuantization().type() == DenseQuantization.BINARY) {
+                    colbertBuilder.setQuantizationConfig(
+                        io.qdrant.client.grpc.Collections.QuantizationConfig.newBuilder()
+                            .setBinary(io.qdrant.client.grpc.Collections.BinaryQuantization.newBuilder()
+                                .setAlwaysRam(config.colbertQuantization().alwaysRam())
+                                .build())
+                            .build());
+                }
+
+                paramsMapBuilder.putMap(config.colbertVectorName(), colbertBuilder.build());
             }
 
             VectorParamsMap paramsMap = paramsMapBuilder.build();

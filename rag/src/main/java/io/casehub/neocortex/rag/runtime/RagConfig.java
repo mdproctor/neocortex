@@ -55,6 +55,16 @@ public interface RagConfig {
         OptionalDouble oversampling();
     }
 
+    ColbertQuantizationConfig colbertQuantization();
+
+    interface ColbertQuantizationConfig {
+        @WithDefault("NONE")
+        DenseQuantization type();
+
+        @WithDefault("true")
+        boolean alwaysRam();
+    }
+
     interface QdrantConfig {
         @WithDefault("localhost")
         String host();
