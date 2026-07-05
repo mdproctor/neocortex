@@ -53,11 +53,14 @@ final class CbrMemoryDeserializer {
             CbrCase result = switch (cbrType) {
                 case FeatureVectorCbrCase.CBR_TYPE -> {
                     Map<String, Object> features = parseFeatures(attrs);
+                    if (features == null) yield null;
                     yield new FeatureVectorCbrCase(problem, solution, outcome, confidence, features);
                 }
                 case PlanCbrCase.CBR_TYPE -> {
                     Map<String, Object> features = parseFeatures(attrs);
+                    if (features == null) yield null;
                     List<PlanTrace> planTrace = parsePlanTrace(attrs);
+                    if (planTrace == null) yield null;
                     yield new PlanCbrCase(problem, solution, outcome, confidence, features, planTrace);
                 }
                 case TextualCbrCase.CBR_TYPE ->
@@ -84,7 +87,8 @@ final class CbrMemoryDeserializer {
         try {
             return MAPPER.readValue(json, MAP_TYPE);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Malformed cbr.features JSON", e);
+            LOG.warning("Malformed cbr.features JSON: " + e.getMessage());
+            return null;
         }
     }
 
@@ -94,7 +98,8 @@ final class CbrMemoryDeserializer {
         try {
             return MAPPER.readValue(json, PLAN_TRACE_TYPE);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Malformed cbr.planTrace JSON", e);
+            LOG.warning("Malformed cbr.planTrace JSON: " + e.getMessage());
+            return null;
         }
     }
 }

@@ -19,6 +19,9 @@ import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScoredPoint;
 import io.qdrant.client.grpc.Points.SearchPoints;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +43,7 @@ import java.util.logging.Logger;
  * <p>Delegates durable memory storage to an injected {@link CaseMemoryStore}
  * when present. When absent, operates in Qdrant-only mode (for tests without platform).
  */
+@ApplicationScoped
 public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private static final Logger LOG = Logger.getLogger(QdrantCbrCaseMemoryStore.class.getName());
@@ -52,6 +56,17 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     private final QdrantCbrConfig config;
     private final CaseMemoryStore delegate; // nullable — when present, delegate durable storage
     private final Map<String, CbrFeatureSchema> schemas = new ConcurrentHashMap<>();
+
+    @Inject
+    QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
+                              Instance<EmbeddingModel> embeddingModelInstance,
+                              QdrantCbrConfig config,
+                              Instance<CaseMemoryStore> delegateInstance) {
+        this.collectionManager = collectionManager;
+        this.embeddingModel = embeddingModelInstance.isResolvable() ? embeddingModelInstance.get() : null;
+        this.config = config;
+        this.delegate = delegateInstance.isResolvable() ? delegateInstance.get() : null;
+    }
 
     QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
                               EmbeddingModel embeddingModel,

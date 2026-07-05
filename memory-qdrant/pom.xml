@@ -51,6 +51,12 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
 
+    <!-- Micrometer — metrics for batch upserts -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
+
     <!-- Testing -->
     <dependency>
       <groupId>io.casehub</groupId>

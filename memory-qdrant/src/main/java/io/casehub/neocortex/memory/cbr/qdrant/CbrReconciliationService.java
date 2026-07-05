@@ -5,17 +5,25 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.casehub.neocortex.memory.*;
 import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.PointIdFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
+import io.qdrant.client.grpc.Common.Filter;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.Points.PointStruct;
 import io.qdrant.client.grpc.Points.ScrollPoints;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@ApplicationScoped
 public class CbrReconciliationService {
 
     private static final Logger LOG = Logger.getLogger(CbrReconciliationService.class.getName());
@@ -25,17 +33,35 @@ public class CbrReconciliationService {
     private final EmbeddingModel embeddingModel;
     private final QdrantCbrConfig config;
     private final CaseMemoryStore delegate;
+    private final MeterRegistry meterRegistry;
+
+    @Inject
+    CbrReconciliationService(CbrCollectionManager collectionManager,
+                              Instance<EmbeddingModel> embeddingModelInstance,
+                              QdrantCbrConfig config,
+                              Instance<CaseMemoryStore> delegateInstance,
+                              Instance<MeterRegistry> meterRegistryInstance) {
+        this.collectionManager = collectionManager;
+        this.embeddingModel = embeddingModelInstance.isResolvable() ? embeddingModelInstance.get() : null;
+        this.config = config;
+        this.delegate = delegateInstance.isResolvable() ? delegateInstance.get() : null;
+        this.meterRegistry = meterRegistryInstance.isResolvable() ? meterRegistryInstance.get() : null;
+    }
 
     CbrReconciliationService(CbrCollectionManager collectionManager,
                               EmbeddingModel embeddingModel,
                               QdrantCbrConfig config,
-                              CaseMemoryStore delegate) {
+                              CaseMemoryStore delegate,
+                              MeterRegistry meterRegistry) {
         this.collectionManager = collectionManager;
         this.embeddingModel = embeddingModel;
         this.config = config;
         this.delegate = delegate;
+        this.meterRegistry = meterRegistry;
     }
 
+    @Timed(value = "casehub.cbr.reconciliation", histogram = true,
+           extraTags = {"operation", "reconcile"})
     public ReconciliationResult reconcile(String caseType, String tenantId) {
         if (delegate == null) {
             return new ReconciliationResult(caseType, tenantId, 0, 0, 0);
@@ -95,7 +121,6 @@ public class CbrReconciliationService {
                         cbrCase, caseType, memory.entityId(), memory.domain().name(),
                         memory.tenantId(), memory.caseId(), embedding, config.denseVectorName());
                     batch.add(point);
-                    reindexed++;
                 } catch (Exception e) {
                     LOG.log(Level.WARNING, "Failed to reindex memory " + entry.getValue().memoryId(), e);
                     errors++;
@@ -103,7 +128,11 @@ public class CbrReconciliationService {
             }
             if (!batch.isEmpty()) {
                 try {
-                    collectionManager.client().upsertAsync(collection, batch).get();
+                    for (int i = 0; i < batch.size(); i += DEFAULT_PAGE_SIZE) {
+                        List<PointStruct> chunk = batch.subList(i, Math.min(i + DEFAULT_PAGE_SIZE, batch.size()));
+                        collectionManager.client().upsertAsync(collection, chunk).get();
+                        reindexed += chunk.size();
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException("Interrupted during batch upsert", e);
@@ -113,7 +142,46 @@ public class CbrReconciliationService {
             }
         }
 
+        // Record metrics
+        if (meterRegistry != null) {
+            meterRegistry.counter("casehub.cbr.reconciliation.orphans", "caseType", caseType).increment(orphansRemoved);
+            meterRegistry.counter("casehub.cbr.reconciliation.reindexed", "caseType", caseType).increment(reindexed);
+            meterRegistry.counter("casehub.cbr.reconciliation.errors", "caseType", caseType).increment(errors);
+        }
+
         return new ReconciliationResult(caseType, tenantId, orphansRemoved, reindexed, errors);
+    }
+
+    public Set<String> discoverTenants(String caseType) {
+        if (delegate == null) {
+            throw new IllegalStateException("No delegate configured — tenant discovery unavailable");
+        }
+        delegate.requireCapability(MemoryCapability.DISCOVER_TENANTS);
+        return delegate.discoverTenants(CbrAttributeKeys.CBR_CASE_TYPE, caseType);
+    }
+
+    @Timed(value = "casehub.cbr.reconciliation", histogram = true,
+           extraTags = {"operation", "reconcileAll"})
+    public List<ReconciliationResult> reconcileAll(String caseType, Set<String> tenantIds) {
+        List<ReconciliationResult> results = new ArrayList<>();
+        for (String tenantId : tenantIds) {
+            try {
+                results.add(reconcile(caseType, tenantId));
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Reconciliation failed for tenant " + tenantId, e);
+                results.add(new ReconciliationResult(caseType, tenantId, 0, 0, 1));
+            }
+        }
+        return results;
+    }
+
+    public List<ReconciliationResult> reconcileAll(String caseType) {
+        Set<String> tenants = discoverTenants(caseType);
+        if (tenants.isEmpty()) {
+            LOG.info("No tenants discovered for caseType=" + caseType);
+            return List.of();
+        }
+        return reconcileAll(caseType, tenants);
     }
 
     private Map<UUID, Memory> buildDelegateIndex(String caseType, String tenantId) {
@@ -139,11 +207,11 @@ public class CbrReconciliationService {
                                      Map<UUID, Memory> delegateIndex)
             throws InterruptedException, ExecutionException {
         int orphansRemoved = 0;
-        var filter = io.qdrant.client.grpc.Common.Filter.newBuilder()
+        var filter = Filter.newBuilder()
             .addMust(ConditionFactory.matchKeyword("tenantId", tenantId))
             .build();
 
-        io.qdrant.client.grpc.Common.PointId nextPageOffset = null;
+        PointId nextPageOffset = null;
         boolean hasMore = true;
 
         while (hasMore) {

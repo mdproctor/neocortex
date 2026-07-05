@@ -4,6 +4,7 @@ import io.casehub.neocortex.memory.*;
 import io.casehub.neocortex.memory.cbr.*;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
@@ -44,12 +45,21 @@ class CbrReconciliationServiceTest {
         collectionManager = new CbrCollectionManager(client, config);
         delegate = new InMemoryDelegateStore();
         cbrStore = new QdrantCbrCaseMemoryStore(collectionManager, null, config, delegate);
-        reconciler = new CbrReconciliationService(collectionManager, null, config, delegate);
+        reconciler = new CbrReconciliationService(collectionManager, null, config, delegate, null);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (collectionManager != null) {
+            try { collectionManager.client().close(); } catch (Exception ignored) {}
+        }
     }
 
     @Test
     void reconcile_noDelegate_returnsNoOp() {
-        var service = new CbrReconciliationService(collectionManager, null, config, null);
+        var service = new CbrReconciliationService(collectionManager,
+            (dev.langchain4j.model.embedding.EmbeddingModel) null, config,
+            (io.casehub.neocortex.memory.CaseMemoryStore) null, null);
         var result = service.reconcile("test-type", TENANT);
         assertThat(result.orphansRemoved()).isZero();
         assertThat(result.entriesReindexed()).isZero();
@@ -58,7 +68,7 @@ class CbrReconciliationServiceTest {
     @Test
     void reconcile_delegateWithoutScan_returnsNoOp() {
         var noScanDelegate = new NoScanDelegateStore();
-        var service = new CbrReconciliationService(collectionManager, null, config, noScanDelegate);
+        var service = new CbrReconciliationService(collectionManager, null, config, noScanDelegate, null);
         var result = service.reconcile("test-type", TENANT);
         assertThat(result.orphansRemoved()).isZero();
         assertThat(result.entriesReindexed()).isZero();
@@ -137,6 +147,108 @@ class CbrReconciliationServiceTest {
         assertThat(result.entriesReindexed()).isEqualTo(1);
     }
 
+    @Test
+    void reconcile_deserializationFailure_incrementsErrorCount() {
+        // Store a memory directly in delegate with missing 'solution' attribute
+        delegate.storeRaw("case-err", ENTITY, CBR, TENANT, "problem text",
+            Map.of(CbrAttributeKeys.CBR_CASE_TYPE, "err-type",
+                   CbrAttributeKeys.CBR_TYPE, FeatureVectorCbrCase.CBR_TYPE));
+        // Missing solution → CbrMemoryDeserializer returns empty
+
+        var result = reconciler.reconcile("err-type", TENANT);
+        assertThat(result.errors()).isEqualTo(1);
+        assertThat(result.entriesReindexed()).isZero();
+    }
+
+    @Test
+    void discoverTenants_returnsTenantsFromDelegate() {
+        cbrStore.registerSchema(CbrFeatureSchema.of("disc-type", FeatureField.categorical("cat")));
+        cbrStore.store(new FeatureVectorCbrCase("p1", "s1", null, null,
+            Map.of("cat", "A")), "disc-type", ENTITY, CBR, "tenant-x", "case-1");
+        cbrStore.store(new FeatureVectorCbrCase("p2", "s2", null, null,
+            Map.of("cat", "B")), "disc-type", ENTITY, CBR, "tenant-y", "case-2");
+
+        Set<String> tenants = reconciler.discoverTenants("disc-type");
+        assertThat(tenants).containsExactlyInAnyOrder("tenant-x", "tenant-y");
+    }
+
+    @Test
+    void discoverTenants_noDelegate_throwsIllegalState() {
+        var noDelegate = new CbrReconciliationService(collectionManager,
+            (dev.langchain4j.model.embedding.EmbeddingModel) null, config,
+            (io.casehub.neocortex.memory.CaseMemoryStore) null, null);
+        assertThatThrownBy(() -> noDelegate.discoverTenants("type"))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void discoverTenants_delegateWithoutCapability_throwsMemoryCapabilityException() {
+        var noDiscoverDelegate = new NoScanDelegateStore();
+        var service = new CbrReconciliationService(collectionManager, null, config, noDiscoverDelegate, null);
+        assertThatThrownBy(() -> service.discoverTenants("type"))
+            .isInstanceOf(MemoryCapabilityException.class)
+            .hasMessageContaining("DISCOVER_TENANTS");
+    }
+
+    @Test
+    void reconcileAll_reconcilesMultipleTenants() {
+        cbrStore.registerSchema(CbrFeatureSchema.of("multi-type", FeatureField.categorical("cat")));
+        cbrStore.store(new FeatureVectorCbrCase("p1", "s1", null, null,
+            Map.of("cat", "A")), "multi-type", ENTITY, CBR, "t1", "case-1");
+        cbrStore.store(new FeatureVectorCbrCase("p2", "s2", null, null,
+            Map.of("cat", "B")), "multi-type", ENTITY, CBR, "t2", "case-2");
+
+        // Delete collection to force reindex
+        String collection = collectionManager.collectionName("multi-type");
+        try { collectionManager.client().deleteCollectionAsync(collection).get(); } catch (Exception e) { throw new RuntimeException(e); }
+
+        var results = reconciler.reconcileAll("multi-type", Set.of("t1", "t2"));
+        assertThat(results).hasSize(2);
+        assertThat(results).allMatch(r -> r.entriesReindexed() > 0 && r.errors() == 0);
+    }
+
+    @Test
+    void reconcileAll_autoDiscovery() {
+        cbrStore.registerSchema(CbrFeatureSchema.of("auto-type", FeatureField.categorical("cat")));
+        cbrStore.store(new FeatureVectorCbrCase("p1", "s1", null, null,
+            Map.of("cat", "A")), "auto-type", ENTITY, CBR, "auto-t1", "case-1");
+        cbrStore.store(new FeatureVectorCbrCase("p2", "s2", null, null,
+            Map.of("cat", "B")), "auto-type", ENTITY, CBR, "auto-t2", "case-2");
+
+        // Delete collection
+        String collection = collectionManager.collectionName("auto-type");
+        try { collectionManager.client().deleteCollectionAsync(collection).get(); } catch (Exception e) { throw new RuntimeException(e); }
+
+        var results = reconciler.reconcileAll("auto-type");
+        assertThat(results).hasSize(2);
+        assertThat(results).allMatch(r -> r.entriesReindexed() > 0);
+    }
+
+    @Test
+    void reconcileAll_partialFailure_capturesErrorsAndSuccesses() {
+        cbrStore.registerSchema(CbrFeatureSchema.of("partial-type", FeatureField.categorical("cat")));
+        cbrStore.store(new FeatureVectorCbrCase("p1", "s1", null, null,
+            Map.of("cat", "A")), "partial-type", ENTITY, CBR, "good-tenant", "case-1");
+
+        // Store invalid memory for bad tenant (missing 'solution' attribute)
+        delegate.storeRaw("case-bad", ENTITY, CBR, "bad-tenant", "problem text",
+            Map.of(CbrAttributeKeys.CBR_CASE_TYPE, "partial-type",
+                   CbrAttributeKeys.CBR_TYPE, FeatureVectorCbrCase.CBR_TYPE));
+        // Missing solution → CbrMemoryDeserializer returns empty → reconciliation error
+
+        // Delete collection to force reindex for good-tenant
+        String collection = collectionManager.collectionName("partial-type");
+        try { collectionManager.client().deleteCollectionAsync(collection).get(); } catch (Exception e) { throw new RuntimeException(e); }
+
+        var results = reconciler.reconcileAll("partial-type", Set.of("good-tenant", "bad-tenant"));
+        assertThat(results).hasSize(2);
+
+        // One tenant should have reindexed successfully
+        assertThat(results).anyMatch(r -> r.entriesReindexed() > 0 && r.errors() == 0);
+        // One tenant should have an error
+        assertThat(results).anyMatch(r -> r.errors() > 0);
+    }
+
     // --- Test doubles ---
 
     private QdrantCbrConfig testConfig(int testId) {
@@ -153,7 +265,7 @@ class CbrReconciliationServiceTest {
     }
 
     /**
-     * In-memory CaseMemoryStore that supports SCAN for testing reconciliation.
+     * In-memory CaseMemoryStore that supports SCAN and DISCOVER_TENANTS for testing reconciliation.
      */
     static class InMemoryDelegateStore implements CaseMemoryStore {
         private final List<Memory> entries = new ArrayList<>();
@@ -169,7 +281,7 @@ class CbrReconciliationServiceTest {
 
         @Override
         public Set<MemoryCapability> capabilities() {
-            return Set.of(MemoryCapability.SCAN);
+            return Set.of(MemoryCapability.SCAN, MemoryCapability.DISCOVER_TENANTS);
         }
 
         @Override
@@ -186,11 +298,27 @@ class CbrReconciliationServiceTest {
                 .toList();
         }
 
+        @Override
+        public Set<String> discoverTenants(String attributeKey, String attributeValue) {
+            return entries.stream()
+                .filter(m -> attributeKey == null
+                    || attributeValue.equals(m.attributes().get(attributeKey)))
+                .map(Memory::tenantId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+
         void storeDirectly(String caseId, String entityId, MemoryDomain domain,
                            String tenantId, CbrCase cbrCase, String caseType) {
             MemoryInput input = CbrMemorySerializer.serialize(
                 cbrCase, entityId, domain, tenantId, caseId, caseType);
             store(input);
+        }
+
+        void storeRaw(String caseId, String entityId, MemoryDomain domain,
+                      String tenantId, String text, Map<String, String> attributes) {
+            String id = UUID.randomUUID().toString();
+            entries.add(new Memory(id, entityId, domain, tenantId, caseId,
+                text, attributes, Instant.now()));
         }
 
         void eraseAll() { entries.clear(); }

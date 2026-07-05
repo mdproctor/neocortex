@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -114,9 +115,10 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
         var request = new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 100, null);
         var results = jpaStore.scan(request);
 
-        assertEquals(2, results.size());
-        results.forEach(m ->
-            assertTrue(m.attributes().containsKey("cbr.caseType") && m.attributes().get("cbr.caseType").equals("aml")));
+        assertThat(results).hasSize(2);
+        assertThat(results).allSatisfy(m ->
+            assertThat(m.attributes())
+                .containsEntry("cbr.caseType", "aml"));
     }
 
     @Test
@@ -127,7 +129,7 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
         }
         var request = new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 2, null);
         var results = jpaStore.scan(request);
-        assertEquals(2, results.size());
+        assertThat(results).hasSize(2);
     }
 
     @Test
@@ -138,17 +140,17 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
         }
         // First page
         var page1 = jpaStore.scan(new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 3, null));
-        assertEquals(3, page1.size());
+        assertThat(page1).hasSize(3);
 
         // Second page using cursor from last element
         String cursor = page1.getLast().memoryId();
         var page2 = jpaStore.scan(new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 3, cursor));
-        assertEquals(2, page2.size());
+        assertThat(page2).hasSize(2);
 
         // No overlap
         var page1Ids = page1.stream().map(Memory::memoryId).toList();
         var page2Ids = page2.stream().map(Memory::memoryId).toList();
-        assertTrue(page1Ids.stream().noneMatch(page2Ids::contains));
+        assertThat(page1Ids).doesNotContainAnyElementsOf(page2Ids);
     }
 
     @Test
@@ -161,7 +163,7 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
 
         principal.setTenancyId(TENANT);
         var results = jpaStore.scan(new MemoryScanRequest(TENANT, null, "cbr.caseType", "aml", 100, null));
-        assertEquals(1, results.size());
+        assertThat(results).hasSize(1);
     }
 
     @Test
@@ -172,7 +174,7 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
             Map.of("cbr.caseType", "aml")));
 
         var results = jpaStore.scan(new MemoryScanRequest(TENANT, DOMAIN.name(), "cbr.caseType", "aml", 100, null));
-        assertEquals(1, results.size());
+        assertThat(results).hasSize(1);
     }
 
     @Test
@@ -184,7 +186,7 @@ class JpaMemoryStoreTest extends CaseMemoryStoreContractTest {
 
         principal.setTenancyId(TENANT);
         var results = jpaStore.scan(new MemoryScanRequest(TENANT, null, null, null, 100, null));
-        assertEquals(2, results.size());
+        assertThat(results).hasSize(2);
     }
 
     @Test

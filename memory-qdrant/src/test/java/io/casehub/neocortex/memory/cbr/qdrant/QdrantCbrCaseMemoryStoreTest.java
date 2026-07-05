@@ -72,7 +72,9 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         QdrantClient client = new QdrantClient(
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         var collectionManager1 = new CbrCollectionManager(client, config1);
-        var store1 = new QdrantCbrCaseMemoryStore(collectionManager1, null, config1, null);
+        var store1 = new QdrantCbrCaseMemoryStore(collectionManager1,
+            (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
+            (io.casehub.neocortex.memory.CaseMemoryStore) null);
 
         store1.registerSchema(CbrFeatureSchema.of("dim-test",
             FeatureField.categorical("cat")));
@@ -99,7 +101,9 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         QdrantClient client = new QdrantClient(
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         var collectionManager1 = new CbrCollectionManager(client, config1);
-        var store1 = new QdrantCbrCaseMemoryStore(collectionManager1, null, config1, null);
+        var store1 = new QdrantCbrCaseMemoryStore(collectionManager1,
+            (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
+            (io.casehub.neocortex.memory.CaseMemoryStore) null);
 
         store1.registerSchema(CbrFeatureSchema.of("dim-migrate",
             FeatureField.categorical("cat")));
