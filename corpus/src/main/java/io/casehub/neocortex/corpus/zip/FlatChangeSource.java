@@ -171,7 +171,7 @@ public final class FlatChangeSource implements WatchableChangeSource {
 
         String relativePath = rootDir.relativize(absolute).toString().replace('\\', '/');
 
-        if (relativePath.startsWith("_")) {
+        if (relativePath.startsWith("_") || containsHiddenSegment(relativePath)) {
             return;
         }
 
@@ -180,6 +180,10 @@ public final class FlatChangeSource implements WatchableChangeSource {
             eventBuffer.put(relativePath, type);
             scheduleFlush();
         }
+    }
+
+    private static boolean containsHiddenSegment(String relativePath) {
+        return relativePath.startsWith(".") || relativePath.contains("/.");
     }
 
     private ChangeType mapEventType(DirectoryChangeEvent.EventType eventType, String path) {

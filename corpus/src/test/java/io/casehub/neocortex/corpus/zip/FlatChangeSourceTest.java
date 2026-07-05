@@ -1,6 +1,8 @@
 package io.casehub.neocortex.corpus.zip;
 
+import io.casehub.neocortex.corpus.ChangeSet;
 import io.casehub.neocortex.corpus.ChangeType;
+import io.casehub.neocortex.corpus.ChangedEntry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -9,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FlatChangeSourceTest {
@@ -155,5 +158,20 @@ class FlatChangeSourceTest {
             .anyMatch(e -> e.path().equals("to-delete.txt") && e.type() == ChangeType.DELETED));
         assertTrue(changeSet.entries().stream()
             .anyMatch(e -> e.path().equals("to-modify.txt") && e.type() == ChangeType.MODIFIED));
+    }
+
+    @Test
+    void fullScan_excludesHiddenPaths(@TempDir Path tempDir) throws Exception {
+        var store = new FlatCorpusStore(tempDir);
+        var changeSource = new FlatChangeSource(store, tempDir);
+
+        store.append("visible.txt", "content".getBytes());
+        Path gitObj = tempDir.resolve(".git/objects/abc");
+        Files.createDirectories(gitObj.getParent());
+        Files.writeString(gitObj, "blob");
+
+        ChangeSet changes = changeSource.fullScan();
+        assertThat(changes.entries()).extracting(ChangedEntry::path)
+            .containsExactly("visible.txt");
     }
 }

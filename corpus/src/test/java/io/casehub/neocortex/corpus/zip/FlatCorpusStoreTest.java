@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FlatCorpusStoreTest {
@@ -206,5 +207,51 @@ class FlatCorpusStoreTest {
         var stream = store.readStream("nonexistent.txt");
 
         assertTrue(stream.isEmpty());
+    }
+
+    @Test
+    void list_excludesHiddenDirectories(@TempDir Path tempDir) throws Exception {
+        var store = new FlatCorpusStore(tempDir);
+
+        // Create .git directory structure
+        Path gitDir = tempDir.resolve(".git/objects");
+        Files.createDirectories(gitDir);
+        Files.writeString(gitDir.resolve("abc123"), "blob");
+
+        // Create .DS_Store
+        Files.writeString(tempDir.resolve(".DS_Store"), "data");
+
+        // Create normal file
+        store.append("visible.txt", "content".getBytes());
+
+        List<String> listed = store.list();
+        assertThat(listed).containsExactly("visible.txt");
+    }
+
+    @Test
+    void list_excludesHiddenFilesInSubdirectories(@TempDir Path tempDir) throws Exception {
+        var store = new FlatCorpusStore(tempDir);
+
+        store.append("docs/readme.md", "content".getBytes());
+        Path subHidden = tempDir.resolve("docs/.hidden");
+        Files.createDirectories(subHidden.getParent());
+        Files.writeString(subHidden, "secret");
+
+        List<String> listed = store.list();
+        assertThat(listed).containsExactly("docs/readme.md");
+    }
+
+    @Test
+    void list_preservesUnderscoreSemantics(@TempDir Path tempDir) throws Exception {
+        var store = new FlatCorpusStore(tempDir);
+
+        // _prefixed at root level → filtered (existing behavior)
+        Files.writeString(tempDir.resolve("_internal.txt"), "meta");
+        // _prefixed in subdirectory → NOT filtered (existing behavior)
+        store.append("sub/_notes.txt", "notes".getBytes());
+        store.append("visible.txt", "content".getBytes());
+
+        List<String> listed = store.list();
+        assertThat(listed).containsExactlyInAnyOrder("visible.txt", "sub/_notes.txt");
     }
 }

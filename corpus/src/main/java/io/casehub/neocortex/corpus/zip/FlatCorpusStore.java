@@ -8,13 +8,15 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 /**
  * Filesystem-based implementation of {@link CorpusStore} and {@link CorpusReader}.
@@ -119,16 +121,34 @@ public final class FlatCorpusStore implements CorpusStore, CorpusReader {
 
     @Override
     public List<String> list() {
-        try (Stream<Path> walk = Files.walk(rootDir)) {
-            return walk
-                .filter(Files::isRegularFile)
-                .map(rootDir::relativize)
-                .map(Path::toString)
-                .filter(p -> !p.startsWith("_"))
-                .toList();
+        List<String> result = new ArrayList<>();
+        try {
+            Files.walkFileTree(rootDir, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (dir.equals(rootDir)) return FileVisitResult.CONTINUE;
+                    if (dir.getFileName().toString().startsWith(".")) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (file.getFileName().toString().startsWith(".")) {
+                        return FileVisitResult.CONTINUE;
+                    }
+                    String relative = rootDir.relativize(file).toString();
+                    if (!relative.startsWith("_")) {
+                        result.add(relative);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to list files in: " + rootDir, e);
         }
+        return result;
     }
 
     @Override
