@@ -159,12 +159,13 @@ inference-tasks/    — NliClassifier, TextClassifier, ScalarRegressor, CrossEnc
 inference-splade/   — sparse SPLADE embeddings (Map<Integer, Float>)
 inference-inmem/    — deterministic stubs; no JNI; safe in all test contexts
 inference-quarkus/  — CDI wiring, @InferenceModel qualifier, Dev Services, @QuarkusTest
-rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, CaseRetriever + ReactiveCaseRetriever SPIs, QueryExpander SPI, RetrievalQuery, MetadataExtractor + CursorStore SPIs, FusionStrategy enum (RRF/DBSF/CC), ConvexCombinationFusion (client-side weighted score fusion with min-max normalization), value types — Mutiny provided
+rag-api/            — EmbeddingIngestor + ReactiveEmbeddingIngestor SPIs, CaseRetriever + ReactiveCaseRetriever SPIs, QueryExpander SPI, RetrievalTracker + ReactiveRetrievalTracker SPIs, RetrievalQuery, MetadataExtractor + CursorStore SPIs, FusionStrategy enum (RRF/DBSF/CC), ConvexCombinationFusion (client-side weighted score fusion with min-max normalization), RetrievalOutcome enum, RetrievedDocumentRef, RetrievalRecord, RetrievalFeedback, RetrievalRecorded (CDI event), value types — Mutiny provided
 rag/                — LangChain4j wiring, Qdrant, configurable hybrid fusion (RRF/DBSF server-side, CC client-side), SeparateModelEmbedder (EmbeddingModel + optional SparseEmbedder → MultiModalEmbedder adapter, @DefaultBean displaced by BgeM3), MultiModalEmbedderProducer (@DefaultBean CDI, @IfBuildProperty gated), MatryoshkaMultiModalEmbedder.wrapIfNeeded() (consolidates double-wrap prevention), DenseQuantization (binary/scalar), ColbertQuantizationConfig (per-vector quantization for ColBERT multi-vectors), search-time oversampling, CamelCaseExpander (BM25 token pre-processing), @DefaultBean blocking-to-reactive bridges, CorpusIngestionService (event-driven via directory-watcher for filesystem corpora, @Scheduled polling fallback for ZIP-based corpora)
 rag-tika/           — optional Apache Tika document parsing → chunked ChunkInput
-rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped)
+rag-testing/        — in-memory stubs for both blocking and reactive SPIs + InMemoryCursorStore + InMemoryRelevanceEvaluator (@Alternative @Priority(1) @ApplicationScoped) + InMemoryRetrievalTracker (@Alternative @Priority(1)) + RetrievalTrackerContractTest abstract base (16 tests)
 rag-crag/           — Corrective RAG: CDI @Decorator on CaseRetriever and ReactiveCaseRetriever — evaluates retrieval quality (RelevanceEvaluator SPI), filters INCORRECT chunks, expands search, fires RetrievalQuality CDI events. Classpath + config activated. CrossEncoderRelevanceEvaluator default. Already-graded guard prevents double-application through blocking-to-reactive bridge.
 rag-expansion/      — Query expansion: HyDE (hypothetical documents), step-back prompting (abstract reformulation), multi-query fan-out with RRF fusion; @Decorator on CaseRetriever + ReactiveCaseRetriever, classpath + config activated
+rag-tracking/       — Retrieval tracking: CDI @Decorator @Priority(50) on CaseRetriever + ReactiveCaseRetriever — records retrieval events via RetrievalTracker SPI, fires RetrievalRecorded CDI events, isAlreadyTracked guard prevents double-recording through bridge. SqliteRetrievalTracker (SQLite + HikariCP WAL + Flyway), BlockingToReactiveRetrievalTracker @DefaultBean bridge. Classpath + config activated (`casehub.rag.tracking.enabled=true`)
 corpus-api/         — CorpusStore + CorpusReader + ChangeSource + WatchableChangeSource + CorpusIntegrity SPIs, reactive variants, value types — zero deps, Hortora-eligible
 corpus/             — Zip4j implementation: ZipCorpusStore (rolling archives, chain manifest), FlatCorpusStore, CompositeCorpusStore, compaction, migration — Hortora-eligible
 memory-api/         — CaseMemoryStore + ReactiveCaseMemoryStore + CbrCaseMemoryStore + ReactiveCbrCaseMemoryStore SPIs, CaseEnrichmentStep SPI, MemoryCapability enum (incl. DISCOVER_TENANTS), CbrCase hierarchy, CbrQuery (weights + vectorWeight for per-field weighted similarity), CbrSimilarityScorer (pure-Java weighted composite scoring — categorical exact match, numeric linear decay, text exact match), CbrFeatureSchema, FeatureField, NumericRange, ScoredCbrCase, MemoryScanRequest — Mutiny provided
@@ -205,6 +206,7 @@ Examples are excluded from the default build. Activate with `-Pexamples-smoke` (
 | RAG testing | `casehub-neocortex-rag-testing` |
 | RAG CRAG | `casehub-neocortex-rag-crag` |
 | RAG Expansion | `casehub-neocortex-rag-expansion` |
+| RAG Tracking | `casehub-neocortex-rag-tracking` |
 | Corpus API | `casehub-neocortex-corpus-api` |
 | Corpus | `casehub-neocortex-corpus` |
 | Memory API | `casehub-neocortex-memory-api` |
@@ -223,6 +225,7 @@ Examples are excluded from the default build. Activate with `-Pexamples-smoke` (
 | Root Java package (rag) | `io.casehub.neocortex.rag` |
 | Root Java package (examples) | `io.casehub.neocortex.examples.analysis`, `io.casehub.neocortex.examples.rag` |
 | Root Java package (rag-expansion) | `io.casehub.neocortex.rag.expansion` |
+| Root Java package (rag-tracking) | `io.casehub.neocortex.rag.tracking` |
 | Root Java package (corpus) | `io.casehub.neocortex.corpus` |
 | Root Java package (memory) | `io.casehub.neocortex.memory` |
 | Root Java package (memory-cbr) | `io.casehub.neocortex.memory.cbr` |

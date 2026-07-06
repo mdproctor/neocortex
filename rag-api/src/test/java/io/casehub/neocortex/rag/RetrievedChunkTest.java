@@ -120,4 +120,16 @@ class RetrievedChunkTest {
         assertThat(chunk.metadata()).isEmpty();
         assertThat(chunk.grade()).isEqualTo(RelevanceGrade.UNGRADED);
     }
+
+    @Test
+    void withMetadataReturnsNewChunkWithReplacedMetadata() {
+        var chunk = new RetrievedChunk("content", "doc-1", 0.9, Map.of("key", "val"));
+        var updated = chunk.withMetadata(Map.of("key", "val", "_trackingId", "abc"));
+        assertThat(updated.metadata()).containsEntry("_trackingId", "abc");
+        assertThat(updated.content()).isEqualTo("content");
+        assertThat(updated.sourceDocumentId()).isEqualTo("doc-1");
+        assertThat(updated.relevanceScore()).isEqualTo(0.9);
+        assertThat(updated.grade()).isEqualTo(RelevanceGrade.UNGRADED);
+        assertThat(chunk.metadata()).doesNotContainKey("_trackingId");
+    }
 }

@@ -27,6 +27,7 @@
     <module>rag-testing</module>
     <module>rag-crag</module>
     <module>rag-expansion</module>
+    <module>rag-tracking</module>
     <module>corpus-api</module>
     <module>corpus</module>
     <module>memory-api</module>
@@ -181,6 +182,11 @@
       <dependency>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-neocortex-rag-expansion</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-rag-tracking</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

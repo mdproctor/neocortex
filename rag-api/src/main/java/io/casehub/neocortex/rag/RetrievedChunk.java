@@ -23,4 +23,8 @@ public record RetrievedChunk(String content, String sourceDocumentId,
     public RetrievedChunk withGrade(RelevanceGrade grade) {
         return new RetrievedChunk(content, sourceDocumentId, relevanceScore, metadata, grade);
     }
+
+    public RetrievedChunk withMetadata(Map<String, String> metadata) {
+        return new RetrievedChunk(content, sourceDocumentId, relevanceScore, metadata, grade);
+    }
 }
