@@ -44,7 +44,7 @@ class TemplateQueryExpanderTest {
     private static ExpansionConfig stubConfig(Optional<String> template) {
         return new ExpansionConfig() {
             @Override public boolean enabled() { return true; }
-            @Override public String mode() { return "template"; }
+            @Override public Optional<String> mode() { return Optional.of("template"); }
             @Override public int hypotheticalCount() { return 1; }
             @Override public Optional<String> promptTemplate() { return Optional.empty(); }
             @Override public Optional<String> template() { return template; }

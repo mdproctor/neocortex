@@ -143,7 +143,7 @@ class LlmQueryExpanderTest {
     private static ExpansionConfig stubConfig(Optional<String> promptTemplate, int hypotheticalCount) {
         return new ExpansionConfig() {
             @Override public boolean enabled() { return true; }
-            @Override public String mode() { return "llm"; }
+            @Override public Optional<String> mode() { return Optional.of("llm"); }
             @Override public int hypotheticalCount() { return hypotheticalCount; }
             @Override public Optional<String> promptTemplate() { return promptTemplate; }
             @Override public Optional<String> template() { return Optional.empty(); }

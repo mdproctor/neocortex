@@ -11,8 +11,7 @@ public interface ExpansionConfig {
     @WithDefault("false")
     boolean enabled();
 
-    @WithDefault("llm")
-    String mode();
+    Optional<String> mode();
 
     @WithDefault("1")
     int hypotheticalCount();

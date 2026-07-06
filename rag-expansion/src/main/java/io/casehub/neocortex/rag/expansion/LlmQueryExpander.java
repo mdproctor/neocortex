@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 @ApplicationScoped
-@IfBuildProperty(name = "casehub.rag.expansion.mode", stringValue = "llm", enableIfMissing = true)
+@IfBuildProperty(name = "casehub.rag.expansion.mode", stringValue = "llm")
 public class LlmQueryExpander implements QueryExpander {
 
     static final String DEFAULT_PROMPT =
