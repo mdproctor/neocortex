@@ -65,4 +65,10 @@ public class BlockingToReactiveRetrievalTracker implements ReactiveRetrievalTrac
         return Uni.createFrom().item(() -> delegate.findRetrievedDocumentIds(corpus, since, until))
             .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
+
+    @Override
+    public Uni<Integer> purgeOlderThan(Instant cutoff) {
+        return Uni.createFrom().item(() -> delegate.purgeOlderThan(cutoff))
+            .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
 }

@@ -191,8 +191,8 @@ C4Container
     Container(corpus, "corpus", "Zip4j", "ZipCorpusStore, FlatCorpusStore, CompositeCorpusStore, compaction, migration")
   }
 
-  Container_Boundary(b_rag_crag, "Layer: CRAG") {
-    Container(rag_crag, "rag-crag", "CDI library", "CorrectiveCaseRetriever @Decorator, CrossEncoderRelevanceEvaluator, RelevanceEvaluator SPI consumer")
+  Container_Boundary(b_rag_crossencoder, "Layer: CRAG") {
+    Container(rag_crossencoder, "rag-crossencoder", "CDI library", "CorrectiveCaseRetriever @Decorator, CrossEncoderRelevanceEvaluator, RelevanceEvaluator SPI consumer")
   }
 
   Container_Boundary(b_rag_expansion, "Layer: Query Expansion") {
@@ -209,8 +209,8 @@ C4Container
   Rel(rag, corpus_api, "CorpusIngestionService reads ChangeSource + CorpusReader")
   Rel(rag_testing, rag_api, "implements stubs")
   Rel(corpus, corpus_api, "implements CorpusStore, CorpusReader, ChangeSource")
-  Rel(rag_crag, rag_api, "decorates CaseRetriever")
-  Rel(rag_crag, inference_tasks, "uses CrossEncoderReranker")
+  Rel(rag_crossencoder, rag_api, "decorates CaseRetriever")
+  Rel(rag_crossencoder, inference_tasks, "uses CrossEncoderReranker")
   Rel(rag_expansion, rag_api, "decorates CaseRetriever")
 ```
 
@@ -227,7 +227,7 @@ C4Container
 | L7 RAG Runtime | `rag` | Quarkus + LangChain4j | ✅ yes |
 | L8 Corpus SPI | `corpus-api` | Pure Java, zero deps | ✅ yes |
 | L9 Corpus Runtime | `corpus` | Zip4j | ✅ yes |
-| L10 CRAG | `rag-crag` | CDI library, classpath + config activated | ✅ yes |
+| L10 CRAG | `rag-crossencoder` | CDI library, classpath + config activated | ✅ yes |
 | L11 Query Expansion | `rag-expansion` | CDI library, classpath + config activated | ✅ yes |
 
 ---
@@ -624,7 +624,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 **Issues:** #33, #38, #41 | **Blocked by:** C7 (CaseRetriever SPI), C4 (CrossEncoderReranker)
 
 **What this delivers**
-`rag-crag` module — a CDI `@Decorator` on `CaseRetriever` that evaluates retrieval quality via `RelevanceEvaluator` SPI, filters INCORRECT chunks, optionally expands search when too few results survive, and fires `RetrievalQuality` CDI events. Default evaluator: `CrossEncoderRelevanceEvaluator` — threshold-based grading reusing the deployed cross-encoder model. Classpath-activated: add `casehub-neocortex-rag-crag` as a compile dependency to enable. `rag-api` enriched with `RelevanceGrade` on `RetrievedChunk`, `RelevanceEvaluator` SPI, and `RetrievalQuality` event type. `rag-testing` gains `InMemoryRelevanceEvaluator` stub.
+`rag-crossencoder` module — a CDI `@Decorator` on `CaseRetriever` that evaluates retrieval quality via `RelevanceEvaluator` SPI, filters INCORRECT chunks, optionally expands search when too few results survive, and fires `RetrievalQuality` CDI events. Default evaluator: `CrossEncoderRelevanceEvaluator` — threshold-based grading reusing the deployed cross-encoder model. Classpath-activated: add `casehub-neocortex-rag-crossencoder` as a compile dependency to enable. `rag-api` enriched with `RelevanceGrade` on `RetrievedChunk`, `RelevanceEvaluator` SPI, and `RetrievalQuality` event type. `rag-testing` gains `InMemoryRelevanceEvaluator` stub.
 
 **Accountability gaps closed**
 
@@ -640,7 +640,7 @@ A passing prototype: ONNX Runtime JNI + HuggingFace Tokenizers JNI both load and
 |---|---|
 | L6 RAG SPI | Low (RelevanceEvaluator SPI, RelevanceGrade, enriched RetrievedChunk, RetrievalQuality event) |
 | L7 RAG Runtime | Low (no structural change — convenience constructor handles backward compat) |
-| L10 CRAG | High (new module: CorrectiveCaseRetriever decorator, CrossEncoderRelevanceEvaluator, CragBeanProducer, CragConfig) |
+| L10 CRAG | High (new module: CorrectiveCaseRetriever decorator, CrossEncoderRelevanceEvaluator, CrossEncoderBeanProducer, CragConfig) |
 
 ---
 
@@ -1066,7 +1066,7 @@ Rolling archive pattern with chain manifest for any append-heavy storage where i
 
 #### What it adds
 
-Classpath + config activated corrective retrieval — when `casehub-neocortex-rag-crag` is on the classpath and `casehub.rag.crag.enabled=true`, `CorrectiveCaseRetriever` and `ReactiveCorrectiveCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability. Already-graded guard prevents double CRAG application when the blocking-to-reactive bridge is active — uses `RelevanceGrade.UNGRADED` as the idempotency signal. Shared `CragEvaluationLogic` helper provides pure functions consumed by both decorators.
+Classpath + config activated corrective retrieval — when `casehub-neocortex-rag-crossencoder` is on the classpath and `casehub.rag.crag.enabled=true`, `CorrectiveCaseRetriever` and `ReactiveCorrectiveCaseRetriever` intercept all `CaseRetriever.retrieve()` and `ReactiveCaseRetriever.retrieve()` calls via CDI `@Decorator`. Evaluates each retrieved chunk as CORRECT/AMBIGUOUS/INCORRECT, filters INCORRECT, expands search when quality filtering leaves too few results, and fires `RetrievalQuality` CDI events for observability. Already-graded guard prevents double CRAG application when the blocking-to-reactive bridge is active — uses `RelevanceGrade.UNGRADED` as the idempotency signal. Shared `CragEvaluationLogic` helper provides pure functions consumed by both decorators.
 
 #### Accountability gaps closed
 
@@ -1079,12 +1079,12 @@ Classpath + config activated corrective retrieval — when `casehub-neocortex-ra
 
 | File | Role |
 |---|---|
-| `rag-crag/.../CorrectiveCaseRetriever.java` | @Decorator — evaluate, filter, expand, grade-sort, quality event |
-| `rag-crag/.../CrossEncoderRelevanceEvaluator.java` | Default RelevanceEvaluator — cross-encoder threshold grading |
-| `rag-crag/.../CragBeanProducer.java` | Produces RelevanceEvaluator from CrossEncoderReranker + config |
-| `rag-crag/.../CragConfig.java` | @ConfigMapping — thresholds + expansion multiplier |
-| `rag-crag/.../ReactiveCorrectiveCaseRetriever.java` | @Decorator on ReactiveCaseRetriever — Uni chains, worker thread offload, fireAsync |
-| `rag-crag/.../CragEvaluationLogic.java` | Shared pure functions — grading, filtering, dedup, sort, quality event construction |
+| `rag-crossencoder/.../CorrectiveCaseRetriever.java` | @Decorator — evaluate, filter, expand, grade-sort, quality event |
+| `rag-crossencoder/.../CrossEncoderRelevanceEvaluator.java` | Default RelevanceEvaluator — cross-encoder threshold grading |
+| `rag-crossencoder/.../CrossEncoderBeanProducer.java` | Produces RelevanceEvaluator from CrossEncoderReranker + config |
+| `rag-crossencoder/.../CragConfig.java` | @ConfigMapping — thresholds + expansion multiplier |
+| `rag-crossencoder/.../ReactiveCorrectiveCaseRetriever.java` | @Decorator on ReactiveCaseRetriever — Uni chains, worker thread offload, fireAsync |
+| `rag-crossencoder/.../CragEvaluationLogic.java` | Shared pure functions — grading, filtering, dedup, sort, quality event construction |
 
 #### Architectural decisions
 

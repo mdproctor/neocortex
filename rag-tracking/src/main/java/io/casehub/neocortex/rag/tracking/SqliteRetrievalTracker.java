@@ -259,6 +259,43 @@ public class SqliteRetrievalTracker implements RetrievalTracker {
         }
     }
 
+    @Override
+    public int purgeOlderThan(Instant cutoff) {
+        String cutoffIso = toIso(cutoff);
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM retrieval_feedback WHERE retrieval_id IN "
+                        + "(SELECT retrieval_id FROM retrieval_records WHERE timestamp < ?)")) {
+                    ps.setString(1, cutoffIso);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM retrieved_documents WHERE retrieval_id IN "
+                        + "(SELECT retrieval_id FROM retrieval_records WHERE timestamp < ?)")) {
+                    ps.setString(1, cutoffIso);
+                    ps.executeUpdate();
+                }
+                int deleted;
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM retrieval_records WHERE timestamp < ?")) {
+                    ps.setString(1, cutoffIso);
+                    deleted = ps.executeUpdate();
+                }
+                conn.commit();
+                return deleted;
+            } catch (Exception e) {
+                conn.rollback();
+                throw e instanceof RuntimeException re ? re : new IllegalStateException(e);
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("purgeOlderThan() failed", e);
+        }
+    }
+
     // --- package-private for tests ---
 
     void clearAll() {

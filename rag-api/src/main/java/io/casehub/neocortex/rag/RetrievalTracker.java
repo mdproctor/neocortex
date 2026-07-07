@@ -17,4 +17,6 @@ public interface RetrievalTracker {
     List<RetrievalFeedback> findFeedback(CorpusRef corpus, Instant since, Instant until);
 
     Set<String> findRetrievedDocumentIds(CorpusRef corpus, Instant since, Instant until);
+
+    int purgeOlderThan(Instant cutoff);
 }

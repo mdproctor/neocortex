@@ -19,4 +19,6 @@ public interface ReactiveRetrievalTracker {
     Uni<List<RetrievalFeedback>> findFeedback(CorpusRef corpus, Instant since, Instant until);
 
     Uni<Set<String>> findRetrievedDocumentIds(CorpusRef corpus, Instant since, Instant until);
+
+    Uni<Integer> purgeOlderThan(Instant cutoff);
 }

@@ -180,4 +180,59 @@ public abstract class RetrievalTrackerContractTest {
         assertThat(List.copyOf(tracker().findRetrievedDocumentIds(CORPUS,
             Instant.EPOCH, Instant.MAX))).isEmpty();
     }
+
+    // --- purgeOlderThan ---
+
+    @Test
+    void purge_deletesOldRecordsAndChildren() {
+        // Record that will be purged (timestamp = now - 100 days)
+        // Must use Thread.sleep or clock manipulation to age the record
+        // Record a retrieval, add feedback, then purge with cutoff = now - 50 days
+        // Assert: record gone, its documents gone, its feedback gone
+        String id = tracker().record(RetrievalQuery.of("old query"), CORPUS, chunks("doc-a"), 10);
+        tracker().feedback(id, "doc-a", RetrievalOutcome.RELEVANT);
+
+        // Purge everything older than 1 millisecond from now (i.e. everything)
+        Instant cutoff = Instant.now().plusMillis(1);
+        int deleted = tracker().purgeOlderThan(cutoff);
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(tracker().findRecords(CORPUS, Instant.EPOCH, Instant.MAX)).isEmpty();
+        assertThat(tracker().findFeedback(CORPUS, Instant.EPOCH, Instant.MAX)).isEmpty();
+        assertThat(tracker().findRetrievedDocumentIds(CORPUS, Instant.EPOCH, Instant.MAX)).isEmpty();
+    }
+
+    @Test
+    void purge_preservesRecentRecordsAndChildren() {
+        String id = tracker().record(RetrievalQuery.of("recent"), CORPUS, chunks("doc-b"), 10);
+        tracker().feedback(id, "doc-b", RetrievalOutcome.RELEVANT);
+
+        // Purge everything older than 1 hour ago (nothing qualifies)
+        Instant cutoff = Instant.now().minusSeconds(3600);
+        int deleted = tracker().purgeOlderThan(cutoff);
+
+        assertThat(deleted).isEqualTo(0);
+        assertThat(tracker().findRecords(CORPUS, Instant.EPOCH, Instant.MAX)).hasSize(1);
+        assertThat(tracker().findFeedback(CORPUS, Instant.EPOCH, Instant.MAX)).hasSize(1);
+        assertThat(tracker().findRetrievedDocumentIds(CORPUS, Instant.EPOCH, Instant.MAX))
+            .containsExactly("doc-b");
+    }
+
+    @Test
+    void purge_returnsDeletedCount() {
+        tracker().record(RetrievalQuery.of("q1"), CORPUS, chunks("d1"), 10);
+        tracker().record(RetrievalQuery.of("q2"), CORPUS, chunks("d2"), 10);
+        tracker().record(RetrievalQuery.of("q3"), OTHER_CORPUS, chunks("d3"), 10);
+
+        Instant cutoff = Instant.now().plusMillis(1);
+        int deleted = tracker().purgeOlderThan(cutoff);
+
+        assertThat(deleted).isEqualTo(3); // all three, regardless of corpus
+    }
+
+    @Test
+    void purge_emptyWhenNothingOld() {
+        int deleted = tracker().purgeOlderThan(Instant.now());
+        assertThat(deleted).isEqualTo(0);
+    }
 }

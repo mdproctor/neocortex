@@ -86,6 +86,19 @@ public class InMemoryRetrievalTracker implements RetrievalTracker {
             .collect(Collectors.toSet());
     }
 
+    @Override
+    public int purgeOlderThan(Instant cutoff) {
+        List<RetrievalRecord> old = records.stream()
+            .filter(r -> r.timestamp().isBefore(cutoff))
+            .toList();
+        Set<String> oldIds = old.stream()
+            .map(RetrievalRecord::retrievalId)
+            .collect(Collectors.toSet());
+        records.removeAll(old);
+        feedbackIndex.entrySet().removeIf(e -> oldIds.contains(e.getValue().retrievalId()));
+        return old.size();
+    }
+
     public void clear() {
         records.clear();
         feedbackIndex.clear();
