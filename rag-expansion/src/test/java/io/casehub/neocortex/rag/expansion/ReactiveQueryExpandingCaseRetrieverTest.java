@@ -22,19 +22,27 @@ class ReactiveQueryExpandingCaseRetrieverTest {
 
     @Test
     void delegatesWithExpandedQuery() {
-        var capturedQuery = new AtomicReference<RetrievalQuery>();
+        var capturedQueries = new ArrayList<RetrievalQuery>();
         ReactiveCaseRetriever delegate = (query, corpus, maxResults, filter) -> {
-            capturedQuery.set(query);
-            return Uni.createFrom().item(List.of(chunk("result", "doc1", 0.9)));
+            capturedQueries.add(query);
+            return Uni.createFrom().item(List.of(chunk(query.searchText(), "doc-" + capturedQueries.size(), 0.9)));
         };
 
         var retriever = new ReactiveQueryExpandingCaseRetriever(delegate, new InMemoryQueryExpander());
         var results = retriever.retrieve(RetrievalQuery.of("original"), CORPUS, 10, null)
             .await().indefinitely();
 
-        assertThat(results).hasSize(1);
-        assertThat(capturedQuery.get().text()).isEqualTo("original");
-        assertThat(capturedQuery.get().expandedText()).isEqualTo("hypothetical: original");
+        // Original + expanded = 2 queries fanned out
+        assertThat(capturedQueries).hasSize(2);
+        // First query is the original (no expansion)
+        assertThat(capturedQueries.get(0).text()).isEqualTo("original");
+        assertThat(capturedQueries.get(0).expandedText()).isNull();
+        // Second is the expanded
+        assertThat(capturedQueries.get(1).text()).isEqualTo("original");
+        assertThat(capturedQueries.get(1).expandedText()).isEqualTo("hypothetical: original");
+        assertThat(capturedQueries.get(1).searchText()).isEqualTo("hypothetical: original");
+        // Results fused via RRF
+        assertThat(results).hasSize(2);
     }
 
     @Test
@@ -91,6 +99,61 @@ class ReactiveQueryExpandingCaseRetrieverTest {
 
         assertThat(capturedQueries).hasSize(1);
         assertThat(capturedQueries.get(0).expandedText()).isNull();
+    }
+
+    @Test
+    void prependsOriginalWhenExpanderOmitsIt() {
+        var capturedQueries = new ArrayList<RetrievalQuery>();
+        ReactiveCaseRetriever delegate = (query, corpus, maxResults, filter) -> {
+            capturedQueries.add(query);
+            return Uni.createFrom().item(List.of(chunk(query.searchText(), "doc-" + capturedQueries.size(), 0.9)));
+        };
+        QueryExpander hydeExpander = query -> List.of(query.withExpansion("hypothetical"));
+
+        var decorator = new ReactiveQueryExpandingCaseRetriever(delegate, hydeExpander);
+        var results = decorator.retrieve(RetrievalQuery.of("original"), CORPUS, 10, null)
+            .await().indefinitely();
+
+        assertThat(capturedQueries).hasSize(2);
+        assertThat(capturedQueries.get(0).expandedText()).isNull();
+        assertThat(capturedQueries.get(0).text()).isEqualTo("original");
+        assertThat(capturedQueries.get(1).expandedText()).isEqualTo("hypothetical");
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
+    void doesNotDuplicateOriginalWhenExpanderIncludesIt() {
+        var capturedQueries = new ArrayList<RetrievalQuery>();
+        ReactiveCaseRetriever delegate = (query, corpus, maxResults, filter) -> {
+            capturedQueries.add(query);
+            return Uni.createFrom().item(List.of(chunk(query.searchText(), "doc-" + capturedQueries.size(), 0.9)));
+        };
+        var original = RetrievalQuery.of("original");
+        QueryExpander stepBackExpander = query -> List.of(query, RetrievalQuery.of("abstract"));
+
+        var decorator = new ReactiveQueryExpandingCaseRetriever(delegate, stepBackExpander);
+        decorator.retrieve(original, CORPUS, 10, null).await().indefinitely();
+
+        assertThat(capturedQueries).hasSize(2);
+        assertThat(capturedQueries.get(0)).isEqualTo(original);
+    }
+
+    @Test
+    void prependsOriginalForReformulatedQueryWithoutExpansion() {
+        var capturedQueries = new ArrayList<RetrievalQuery>();
+        ReactiveCaseRetriever delegate = (query, corpus, maxResults, filter) -> {
+            capturedQueries.add(query);
+            return Uni.createFrom().item(List.of(chunk(query.searchText(), "doc-" + capturedQueries.size(), 0.9)));
+        };
+        QueryExpander reformulator = query -> List.of(RetrievalQuery.of("reformulated"));
+
+        var original = RetrievalQuery.of("original");
+        var decorator = new ReactiveQueryExpandingCaseRetriever(delegate, reformulator);
+        decorator.retrieve(original, CORPUS, 10, null).await().indefinitely();
+
+        assertThat(capturedQueries).hasSize(2);
+        assertThat(capturedQueries.get(0)).isEqualTo(original);
+        assertThat(capturedQueries.get(1).text()).isEqualTo("reformulated");
     }
 
     private static RetrievedChunk chunk(String content, String docId, double score) {

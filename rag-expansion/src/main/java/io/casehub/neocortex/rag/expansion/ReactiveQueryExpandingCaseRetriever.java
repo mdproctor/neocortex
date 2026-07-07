@@ -17,6 +17,7 @@ import jakarta.decorator.Delegate;
 import jakarta.enterprise.inject.Any;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -53,6 +54,15 @@ public class ReactiveQueryExpandingCaseRetriever implements ReactiveCaseRetrieve
                 return List.of(query);
             })
             .map(expanded -> expanded.isEmpty() ? List.of(query) : expanded)
+            .map(expanded -> {
+                if (!expanded.contains(query)) {
+                    var withOriginal = new ArrayList<RetrievalQuery>(expanded.size() + 1);
+                    withOriginal.add(query);
+                    withOriginal.addAll(expanded);
+                    return withOriginal;
+                }
+                return expanded;
+            })
             .chain(expanded -> {
                 // Single-query fast path: skip RRF fusion
                 if (expanded.size() == 1) {

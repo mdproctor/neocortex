@@ -56,6 +56,14 @@ public class QueryExpandingCaseRetriever implements CaseRetriever {
             expanded = List.of(query);
         }
 
+        // Ensure original query is in the expanded set
+        if (!expanded.contains(query)) {
+            var withOriginal = new ArrayList<RetrievalQuery>(expanded.size() + 1);
+            withOriginal.add(query);
+            withOriginal.addAll(expanded);
+            expanded = withOriginal;
+        }
+
         // Single-query fast path: skip RRF fusion
         if (expanded.size() == 1) {
             return delegate.retrieve(expanded.get(0), corpus, maxResults, filter);
