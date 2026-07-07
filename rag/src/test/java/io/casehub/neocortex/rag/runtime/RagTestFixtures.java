@@ -129,6 +129,8 @@ final class RagTestFixtures {
 
         private final int dim;
         private final boolean sparse;
+        private final List<String> embedCalls = new ArrayList<>();
+        private final List<List<String>> batchCalls = new ArrayList<>();
 
         StubMultiModalEmbedder(int dim, boolean sparse) {
             this.dim = dim;
@@ -137,16 +139,31 @@ final class RagTestFixtures {
 
         @Override
         public MultiModalEmbedding embed(String text) {
+            embedCalls.add(text);
             return makeEmbedding();
         }
 
         @Override
         public List<MultiModalEmbedding> embedBatch(List<String> texts) {
+            batchCalls.add(List.copyOf(texts));
             List<MultiModalEmbedding> result = new ArrayList<>(texts.size());
             for (int i = 0; i < texts.size(); i++) {
                 result.add(makeEmbedding());
             }
             return result;
+        }
+
+        List<String> embedCalls() {
+            return List.copyOf(embedCalls);
+        }
+
+        List<List<String>> batchCalls() {
+            return List.copyOf(batchCalls);
+        }
+
+        void clearCalls() {
+            embedCalls.clear();
+            batchCalls.clear();
         }
 
         @Override

@@ -84,18 +84,30 @@ public class HybridCaseRetriever implements CaseRetriever {
             return List.of();
         }
 
-        // Embed query: single call produces dense + optional sparse/colbert
-        MultiModalEmbedding embedding = embedder.embed(query.searchText());
-        List<Float> denseVector = QdrantPointBuilder.floatListFrom(embedding.dense());
+        // Embed query: when expansion is active, batch-embed both searchText (expanded)
+        // and text (original). Dense leg uses searchText, sparse/ColBERT use text.
+        MultiModalEmbedding searchTextEmbedding;
+        MultiModalEmbedding originalTextEmbedding;
+        if (query.expandedText() != null) {
+            List<MultiModalEmbedding> embeddings = embedder.embedBatch(
+                List.of(query.searchText(), query.text()));
+            searchTextEmbedding = embeddings.get(0);
+            originalTextEmbedding = embeddings.get(1);
+        } else {
+            searchTextEmbedding = embedder.embed(query.searchText());
+            originalTextEmbedding = searchTextEmbedding;
+        }
 
-        boolean hasSparse = embedding.sparse() != null;
+        List<Float> denseVector = QdrantPointBuilder.floatListFrom(searchTextEmbedding.dense());
+
+        boolean hasSparse = originalTextEmbedding.sparse() != null;
         boolean useFusion = hasSparse || config.bm25Enabled();
         FusionStrategy fusionStrategy = config.retrieval().fusionStrategy();
 
         // CC fusion uses client-side fusion, not server-side prefetch
         if (useFusion && fusionStrategy == FusionStrategy.CC) {
-            return executeConvexCombinationFusion(collection, query, embedding,
-                mergedFilter, maxResults);
+            return executeConvexCombinationFusion(collection, query, searchTextEmbedding,
+                originalTextEmbedding, mergedFilter, maxResults);
         }
 
         QueryPoints queryPoints;
@@ -115,7 +127,7 @@ public class HybridCaseRetriever implements CaseRetriever {
 
             // SPLADE prefetch (when available)
             if (hasSparse) {
-                Map<Integer, Float> sparseMap = embedding.sparse();
+                Map<Integer, Float> sparseMap = originalTextEmbedding.sparse();
                 List<Float> sparseValues = new ArrayList<>(sparseMap.size());
                 List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
                 for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
@@ -149,7 +161,7 @@ public class HybridCaseRetriever implements CaseRetriever {
             // ColBERT MAX_SIM two-stage: fusion as prefetch, ColBERT as outer query
             // Note: CC fusion does not support ColBERT reranking (handled separately above)
             if (embedder.supportedModes().contains(EmbeddingMode.COLBERT)
-                    && embedding.colbert() != null
+                    && originalTextEmbedding.colbert() != null
                     && config.retrieval().rerankEnabled()) {
                 queryPoints = QueryPoints.newBuilder()
                     .setCollectionName(collection)
@@ -157,7 +169,7 @@ public class HybridCaseRetriever implements CaseRetriever {
                         .setQuery(buildFusionQuery(fusionStrategy))
                         .setLimit(config.retrieval().rerankTopN())
                         .addAllPrefetch(prefetchLegs))
-                    .setQuery(QueryFactory.nearest(embedding.colbert()))
+                    .setQuery(QueryFactory.nearest(originalTextEmbedding.colbert()))
                     .setUsing(config.colbertVectorName())
                     .setLimit(maxResults)
                     .setWithPayload(WithPayloadSelectorFactory.enable(true))
@@ -244,10 +256,10 @@ public class HybridCaseRetriever implements CaseRetriever {
     }
 
     private List<RetrievedChunk> executeConvexCombinationFusion(
-            String collection, RetrievalQuery query, MultiModalEmbedding embedding,
-            Optional<Filter> mergedFilter, int maxResults) {
+            String collection, RetrievalQuery query, MultiModalEmbedding searchTextEmbedding,
+            MultiModalEmbedding originalTextEmbedding, Optional<Filter> mergedFilter, int maxResults) {
 
-        List<Float> denseVector = QdrantPointBuilder.floatListFrom(embedding.dense());
+        List<Float> denseVector = QdrantPointBuilder.floatListFrom(searchTextEmbedding.dense());
         List<ConvexCombinationFusion.ScoredLeg> legs = new ArrayList<>();
 
         // Dense leg
@@ -269,8 +281,8 @@ public class HybridCaseRetriever implements CaseRetriever {
         }
 
         // Sparse leg (if available)
-        if (embedding.sparse() != null) {
-            Map<Integer, Float> sparseMap = embedding.sparse();
+        if (originalTextEmbedding.sparse() != null) {
+            Map<Integer, Float> sparseMap = originalTextEmbedding.sparse();
             List<Float> sparseValues = new ArrayList<>(sparseMap.size());
             List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
             for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {

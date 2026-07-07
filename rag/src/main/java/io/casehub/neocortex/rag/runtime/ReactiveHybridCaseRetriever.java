@@ -87,26 +87,37 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                     if (!exists) {
                         return Uni.createFrom().item(List.<RetrievedChunk>of());
                     }
-                    return Uni.createFrom().item(() -> embedder.embed(query.searchText()))
-                        .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                        .chain(embedding -> executeRetrieve(query, collection, mergedFilter,
-                            embedding, maxResults));
+                    // Embed query: when expansion is active, batch-embed both searchText (expanded)
+                    // and text (original). Dense leg uses searchText, sparse/ColBERT use text.
+                    if (query.expandedText() != null) {
+                        return Uni.createFrom().item(() -> embedder.embedBatch(
+                                List.of(query.searchText(), query.text())))
+                            .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                            .chain(embeddings -> executeRetrieve(query, collection, mergedFilter,
+                                embeddings.get(0), embeddings.get(1), maxResults));
+                    } else {
+                        return Uni.createFrom().item(() -> embedder.embed(query.searchText()))
+                            .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                            .chain(embedding -> executeRetrieve(query, collection, mergedFilter,
+                                embedding, embedding, maxResults));
+                    }
                 });
         });
     }
 
     private Uni<List<RetrievedChunk>> executeRetrieve(RetrievalQuery query, String collection,
-            Optional<Filter> mergedFilter, MultiModalEmbedding embedding, int maxResults) {
-        List<Float> denseVector = QdrantPointBuilder.floatListFrom(embedding.dense());
+            Optional<Filter> mergedFilter, MultiModalEmbedding searchTextEmbedding,
+            MultiModalEmbedding originalTextEmbedding, int maxResults) {
+        List<Float> denseVector = QdrantPointBuilder.floatListFrom(searchTextEmbedding.dense());
 
-        boolean hasSparse = embedding.sparse() != null;
+        boolean hasSparse = originalTextEmbedding.sparse() != null;
         boolean useFusion = hasSparse || config.bm25Enabled();
         FusionStrategy fusionStrategy = config.retrieval().fusionStrategy();
 
         // CC fusion uses client-side fusion, not server-side prefetch
         if (useFusion && fusionStrategy == FusionStrategy.CC) {
-            return executeConvexCombinationFusion(collection, query, embedding,
-                mergedFilter, maxResults);
+            return executeConvexCombinationFusion(collection, query, searchTextEmbedding,
+                originalTextEmbedding, mergedFilter, maxResults);
         }
 
         QueryPoints queryPoints;
@@ -126,7 +137,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
 
             // SPLADE prefetch (when available)
             if (hasSparse) {
-                Map<Integer, Float> sparseMap = embedding.sparse();
+                Map<Integer, Float> sparseMap = originalTextEmbedding.sparse();
                 List<Float> sparseValues = new ArrayList<>(sparseMap.size());
                 List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
                 for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {
@@ -161,7 +172,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
             // Note: CC fusion does not support ColBERT reranking (handled separately above)
             if (embedder != null
                     && embedder.supportedModes().contains(EmbeddingMode.COLBERT)
-                    && embedding.colbert() != null
+                    && originalTextEmbedding.colbert() != null
                     && config.retrieval().rerankEnabled()) {
                 queryPoints = QueryPoints.newBuilder()
                     .setCollectionName(collection)
@@ -169,7 +180,7 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                         .setQuery(buildFusionQuery(fusionStrategy))
                         .setLimit(config.retrieval().rerankTopN())
                         .addAllPrefetch(prefetchLegs))
-                    .setQuery(QueryFactory.nearest(embedding.colbert()))
+                    .setQuery(QueryFactory.nearest(originalTextEmbedding.colbert()))
                     .setUsing(config.colbertVectorName())
                     .setLimit(maxResults)
                     .setWithPayload(WithPayloadSelectorFactory.enable(true))
@@ -249,10 +260,10 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
     }
 
     private Uni<List<RetrievedChunk>> executeConvexCombinationFusion(
-            String collection, RetrievalQuery query, MultiModalEmbedding embedding,
-            Optional<Filter> mergedFilter, int maxResults) {
+            String collection, RetrievalQuery query, MultiModalEmbedding searchTextEmbedding,
+            MultiModalEmbedding originalTextEmbedding, Optional<Filter> mergedFilter, int maxResults) {
 
-        List<Float> denseVector = QdrantPointBuilder.floatListFrom(embedding.dense());
+        List<Float> denseVector = QdrantPointBuilder.floatListFrom(searchTextEmbedding.dense());
 
         // Build dense query
         QueryPoints.Builder denseQuery = QueryPoints.newBuilder()
@@ -271,8 +282,8 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
 
         // Build sparse query (if available)
         Uni<List<RetrievedChunk>> sparseUni = null;
-        if (embedding.sparse() != null) {
-            Map<Integer, Float> sparseMap = embedding.sparse();
+        if (originalTextEmbedding.sparse() != null) {
+            Map<Integer, Float> sparseMap = originalTextEmbedding.sparse();
             List<Float> sparseValues = new ArrayList<>(sparseMap.size());
             List<Integer> sparseIndices = new ArrayList<>(sparseMap.size());
             for (Map.Entry<Integer, Float> entry : sparseMap.entrySet()) {

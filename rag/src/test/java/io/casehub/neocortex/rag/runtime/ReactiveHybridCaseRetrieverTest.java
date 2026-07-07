@@ -216,6 +216,62 @@ class ReactiveHybridCaseRetrieverTest {
         assertThat(results).isNotEmpty();
     }
 
+    @Test
+    void usesEmbedBatchWhenExpansionActive() {
+        RagTestFixtures.StubMultiModalEmbedder stub = RagTestFixtures.stubEmbedder(DENSE_DIM, true);
+
+        CorpusRef corpus = uniqueCorpus();
+        // Ingest first so collection exists
+        var ingestor = new QdrantEmbeddingIngestor(client, stub,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            RagTestFixtures.stubConfig());
+        ingestor.ingest(corpus, List.of(
+            new ChunkInput("test content", "doc-1", Map.of())));
+
+        var retriever = new ReactiveHybridCaseRetriever(client, stub,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            RagTestFixtures.stubConfig());
+
+        stub.clearCalls();
+
+        // Query WITH expansion active
+        var expandedQuery = RetrievalQuery.of("original").withExpansion("hypothetical");
+        retriever.retrieve(expandedQuery, corpus, 10, null)
+            .await().indefinitely();
+
+        // Should use embedBatch with [searchText, text]
+        assertThat(stub.batchCalls()).hasSize(1);
+        assertThat(stub.batchCalls().get(0)).containsExactly("hypothetical", "original");
+        assertThat(stub.embedCalls()).isEmpty();
+    }
+
+    @Test
+    void usesSingleEmbedWhenNoExpansion() {
+        RagTestFixtures.StubMultiModalEmbedder stub = RagTestFixtures.stubEmbedder(DENSE_DIM, true);
+
+        CorpusRef corpus = uniqueCorpus();
+        var ingestor = new QdrantEmbeddingIngestor(client, stub,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            RagTestFixtures.stubConfig());
+        ingestor.ingest(corpus, List.of(
+            new ChunkInput("test content", "doc-1", Map.of())));
+
+        var retriever = new ReactiveHybridCaseRetriever(client, stub,
+            TenantGuard.of(RagTestFixtures.stubPrincipal(TENANT)),
+            RagTestFixtures.stubConfig());
+
+        stub.clearCalls();
+
+        // Query WITHOUT expansion
+        retriever.retrieve(RetrievalQuery.of("original"), corpus, 10, null)
+            .await().indefinitely();
+
+        // Should use single embed call
+        assertThat(stub.embedCalls()).hasSize(1);
+        assertThat(stub.embedCalls().get(0)).isEqualTo("original");
+        assertThat(stub.batchCalls()).isEmpty();
+    }
+
     // --- helpers ---
 
     private CorpusRef uniqueCorpus() {
