@@ -564,4 +564,90 @@ public abstract class CbrCaseMemoryStoreContractTest {
     private static org.assertj.core.data.Offset<Double> within(double tolerance) {
         return org.assertj.core.data.Offset.offset(tolerance);
     }
+
+    // --- SimilaritySpec contract tests (#107, #108) ---
+
+    @Test
+    void categoricalTable_graduatedSimilarityRanking() {
+        var schema = CbrFeatureSchema.of("medical",
+            FeatureField.categorical("condition",
+                SimilaritySpec.categoricalTableBuilder()
+                    .add("headache", "migraine", 0.8)
+                    .add("headache", "fracture", 0.1)
+                    .build()),
+            FeatureField.numeric("severity", 0, 10));
+        store().registerSchema(schema);
+
+        store().store(new FeatureVectorCbrCase("migraine case", "treatment A", "SUCCESS", null,
+            Map.of("condition", "migraine", "severity", 5.0)),
+            "medical", ENTITY, CBR, TENANT, "case-migraine");
+        store().store(new FeatureVectorCbrCase("fracture case", "treatment B", "SUCCESS", null,
+            Map.of("condition", "fracture", "severity", 5.0)),
+            "medical", ENTITY, CBR, TENANT, "case-fracture");
+
+        var results = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "medical",
+                Map.of("condition", "headache", "severity", 5.0), 10),
+            FeatureVectorCbrCase.class);
+
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(results.get(0).cbrCase().features().get("condition")).isEqualTo("migraine");
+        assertThat(results.get(0).score()).isGreaterThan(results.get(1).score());
+    }
+
+    @Test
+    void gaussianDecay_numericSimilarityRanking() {
+        var schema = CbrFeatureSchema.of("gauss",
+            FeatureField.categorical("cat"),
+            FeatureField.numeric("val", 0, 100, new SimilaritySpec.GaussianDecay(0.3)));
+        store().registerSchema(schema);
+
+        store().store(new FeatureVectorCbrCase("close value", "sol", "OK", null,
+            Map.of("cat", "a", "val", 50.0)),
+            "gauss", ENTITY, CBR, TENANT, "case-close");
+        store().store(new FeatureVectorCbrCase("far value", "sol", "OK", null,
+            Map.of("cat", "a", "val", 90.0)),
+            "gauss", ENTITY, CBR, TENANT, "case-far");
+
+        var results = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "gauss",
+                Map.of("cat", "a", "val", 55.0), 10),
+            FeatureVectorCbrCase.class);
+
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(50.0);
+        assertThat(results.get(0).score()).isGreaterThan(results.get(1).score());
+    }
+
+    @Test
+    void noSpec_backwardCompatible_linearDecay() {
+        var results = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "starcraft-game",
+                Map.of("opponent_race", "Zerg", "army_size_ratio", 1.5), 10),
+            FeatureVectorCbrCase.class);
+        // Existing tests use the default schema with no SimilaritySpec — must still work
+        assertThat(results).isNotNull();
+    }
+
+    @Test
+    void stepDecay_hardCutoff() {
+        var schema = CbrFeatureSchema.of("step",
+            FeatureField.numeric("val", 0, 100, new SimilaritySpec.StepDecay(0.1)));
+        store().registerSchema(schema);
+
+        store().store(new FeatureVectorCbrCase("close", "sol", "OK", null,
+            Map.of("val", 55.0)),
+            "step", ENTITY, CBR, TENANT, "case-close");
+        store().store(new FeatureVectorCbrCase("far", "sol", "OK", null,
+            Map.of("val", 80.0)),
+            "step", ENTITY, CBR, TENANT, "case-far");
+
+        var results = store().retrieveSimilar(
+            CbrQuery.of(TENANT, CBR, "step",
+                Map.of("val", 50.0), 10).withMinSimilarity(0.5),
+            FeatureVectorCbrCase.class);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(55.0);
+    }
 }

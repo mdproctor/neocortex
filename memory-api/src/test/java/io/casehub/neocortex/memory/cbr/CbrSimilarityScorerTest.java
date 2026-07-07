@@ -236,4 +236,186 @@ class CbrSimilarityScorerTest {
             Map.of());
         assertThat(sim).isEqualTo(1.0);
     }
+
+    // --- Categorical table tests ---
+    static final CbrFeatureSchema TABLE_SCHEMA = CbrFeatureSchema.of("test",
+        FeatureField.categorical("type",
+            SimilaritySpec.categoricalTableBuilder()
+                .add("headache", "migraine", 0.8)
+                .add("headache", "fracture", 0.1)
+                .build()));
+
+    @Test
+    void categoricalTable_graduatedSimilarity() {
+        double sim = CbrSimilarityScorer.score(
+            Map.of("type", "headache"), Map.of("type", "migraine"), Map.of(), TABLE_SCHEMA);
+        assertThat(sim).isCloseTo(0.8, org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    @Test
+    void categoricalTable_symmetricLookup() {
+        double sim = CbrSimilarityScorer.score(
+            Map.of("type", "migraine"), Map.of("type", "headache"), Map.of(), TABLE_SCHEMA);
+        assertThat(sim).isCloseTo(0.8, org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    @Test
+    void categoricalTable_unlistedPair_zero() {
+        double sim = CbrSimilarityScorer.score(
+            Map.of("type", "headache"), Map.of("type", "unknown"), Map.of(), TABLE_SCHEMA);
+        assertThat(sim).isCloseTo(0.0, org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    @Test
+    void categoricalTable_selfPair_one() {
+        double sim = CbrSimilarityScorer.score(
+            Map.of("type", "headache"), Map.of("type", "headache"), Map.of(), TABLE_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void categoricalTable_emptyTable_exactMatch() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.categorical("x", new SimilaritySpec.CategoricalTable(Map.of())));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("x", "a"), Map.of("x", "b"), Map.of(), schema);
+        assertThat(sim).isEqualTo(0.0);
+    }
+
+    // --- Numeric decay tests ---
+    @Test
+    void gaussianDecay_exactMatch() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.5)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 50.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void gaussianDecay_midRange() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.5)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 80.0), Map.of(), schema);
+        // normalized distance = 0.3, gaussian = exp(-0.3^2 / (2 * 0.5^2)) = exp(-0.18)
+        assertThat(sim).isCloseTo(Math.exp(-0.09 / 0.5), org.assertj.core.data.Offset.offset(1e-6));
+    }
+
+    @Test
+    void gaussianDecay_maxDistance() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.3)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 0.0), Map.of("s", 100.0), Map.of(), schema);
+        // normalized distance = 1.0, gaussian = exp(-1.0 / (2 * 0.09)) = exp(-5.56) ≈ 0.004
+        assertThat(sim).isCloseTo(Math.exp(-1.0 / (2 * 0.3 * 0.3)),
+            org.assertj.core.data.Offset.offset(1e-6));
+    }
+
+    @Test
+    void stepDecay_withinTolerance() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.StepDecay(0.1)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 55.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void stepDecay_outsideTolerance() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.StepDecay(0.1)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 70.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(0.0);
+    }
+
+    @Test
+    void exponentialDecay_exactMatch() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.ExponentialDecay(3.0)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 50.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void exponentialDecay_fullRange() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.ExponentialDecay(3.0)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 0.0), Map.of("s", 100.0), Map.of(), schema);
+        assertThat(sim).isCloseTo(Math.exp(-3.0), org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    // --- NumericRange + SimilaritySpec ---
+    @Test
+    void gaussianDecay_numericRange_inside() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.5)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", NumericRange.of(40, 60)), Map.of("s", 50.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void gaussianDecay_numericRange_outside() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.5)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", NumericRange.of(40, 60)), Map.of("s", 80.0), Map.of(), schema);
+        // distance from nearest bound (60) = 20, normalized = 0.2
+        assertThat(sim).isCloseTo(Math.exp(-0.04 / (2 * 0.25)),
+            org.assertj.core.data.Offset.offset(1e-6));
+    }
+
+    // --- Zero range fallback ---
+    @Test
+    void gaussianDecay_zeroRange_exactMatch() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("x", 5.0, 5.0, new SimilaritySpec.GaussianDecay(0.5)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("x", 5.0), Map.of("x", 5.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void gaussianDecay_zeroRange_mismatch() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("x", 5.0, 5.0, new SimilaritySpec.GaussianDecay(0.5)));
+        double sim = CbrSimilarityScorer.score(
+            Map.of("x", 5.0), Map.of("x", 6.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(0.0);
+    }
+
+    // --- Precedence chain ---
+    @Test
+    void callerOverride_beatsSimilaritySpec() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.5)));
+        LocalSimilarityFunction alwaysHalf = (q, c) -> 0.5;
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 80.0), Map.of(), schema, Map.of("s", alwaysHalf));
+        assertThat(sim).isEqualTo(0.5);
+    }
+
+    @Test
+    void similaritySpec_beatsTypeDefault() {
+        var schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("s", 0, 100, new SimilaritySpec.StepDecay(0.1)));
+        // Linear default would give 0.8 for distance 20/100.
+        // Step with tolerance 0.1 gives 0.0 for distance 0.2 > 0.1
+        double sim = CbrSimilarityScorer.score(
+            Map.of("s", 50.0), Map.of("s", 70.0), Map.of(), schema);
+        assertThat(sim).isEqualTo(0.0);
+    }
+
+    @Test
+    void nullSpec_fallsThrough_toTypeDefault() {
+        // Numeric with null spec should use linear decay
+        double sim = CbrSimilarityScorer.score(
+            Map.of("score", 80.0), Map.of("score", 60.0), Map.of(), SCHEMA);
+        assertThat(sim).isCloseTo(0.8, org.assertj.core.data.Offset.offset(1e-9));
+    }
 }

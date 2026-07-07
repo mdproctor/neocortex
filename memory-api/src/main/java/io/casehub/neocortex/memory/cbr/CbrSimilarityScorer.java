@@ -7,7 +7,14 @@ import java.util.Objects;
  * Computes CBR similarity scores using per-field local similarity functions
  * and configurable per-field weights.
  *
- * <p>Local similarity functions are derived from field type:
+ * <p>Local similarity functions use three-level precedence:
+ * <ol>
+ *   <li>Caller-provided override via {@code Map<String, LocalSimilarityFunction>}</li>
+ *   <li>Field-attached {@link SimilaritySpec} (if present)</li>
+ *   <li>Type default (exact match for Categorical/Text, linear decay for Numeric)</li>
+ * </ol>
+ *
+ * <p>Type defaults:
  * <ul>
  *   <li>{@link FeatureField.Categorical} — exact match (1.0 or 0.0)</li>
  *   <li>{@link FeatureField.Numeric} — linear decay: {@code 1.0 - |query - case| / range},
@@ -94,11 +101,30 @@ public final class CbrSimilarityScorer {
         LocalSimilarityFunction override = overrides.get(field.name());
         if (override != null) return override.compute(queryVal, caseVal);
 
-        if (field instanceof FeatureField.Numeric n) {
-            return numericSimilarity(n, queryVal, caseVal);
-        }
-        // Categorical and Text: exact match
-        return queryVal.equals(caseVal) ? 1.0 : 0.0;
+        return switch (field) {
+            case FeatureField.Numeric n -> numericSimilarity(n, queryVal, caseVal);
+            case FeatureField.Categorical c -> categoricalSimilarity(c, queryVal, caseVal);
+            case FeatureField.Text t -> queryVal.equals(caseVal) ? 1.0 : 0.0;
+        };
+    }
+
+    private static double categoricalSimilarity(FeatureField.Categorical field,
+                                                 Object queryVal, Object caseVal) {
+        if (field.similaritySpec() == null) return queryVal.equals(caseVal) ? 1.0 : 0.0;
+        return switch (field.similaritySpec()) {
+            case SimilaritySpec.CategoricalTable ct -> {
+                String q = (String) queryVal;
+                String c = (String) caseVal;
+                if (q.equals(c)) yield 1.0;
+                yield ct.similarities().getOrDefault(q, Map.of()).getOrDefault(c, 0.0);
+            }
+            case SimilaritySpec.GaussianDecay gd -> throw new IllegalStateException(
+                "Unexpected spec on Categorical: " + field.similaritySpec());
+            case SimilaritySpec.StepDecay sd -> throw new IllegalStateException(
+                "Unexpected spec on Categorical: " + field.similaritySpec());
+            case SimilaritySpec.ExponentialDecay ed -> throw new IllegalStateException(
+                "Unexpected spec on Categorical: " + field.similaritySpec());
+        };
     }
 
     private static double numericSimilarity(FeatureField.Numeric field,
@@ -106,16 +132,36 @@ public final class CbrSimilarityScorer {
         double range = field.max() - field.min();
         if (range <= 0) return queryVal.equals(caseVal) ? 1.0 : 0.0;
 
+        double normalizedDistance = computeNormalizedDistance(field, queryVal, caseVal);
+
+        if (field.similaritySpec() == null) {
+            return Math.max(0.0, 1.0 - normalizedDistance);
+        }
+        return switch (field.similaritySpec()) {
+            case SimilaritySpec.GaussianDecay gd ->
+                Math.exp(-normalizedDistance * normalizedDistance / (2 * gd.sigma() * gd.sigma()));
+            case SimilaritySpec.StepDecay sd ->
+                normalizedDistance <= sd.tolerance() ? 1.0 : 0.0;
+            case SimilaritySpec.ExponentialDecay ed ->
+                Math.exp(-ed.decayRate() * normalizedDistance);
+            case SimilaritySpec.CategoricalTable ct -> throw new IllegalStateException(
+                "Unexpected spec on Numeric: " + field.similaritySpec());
+        };
+    }
+
+    private static double computeNormalizedDistance(FeatureField.Numeric field,
+                                                    Object queryVal, Object caseVal) {
+        double range = field.max() - field.min();
         double caseNum = ((Number) caseVal).doubleValue();
 
         if (queryVal instanceof NumericRange nr) {
-            if (caseNum >= nr.min() && caseNum <= nr.max()) return 1.0;
+            if (caseNum >= nr.min() && caseNum <= nr.max()) return 0.0;
             double dist = caseNum < nr.min() ? nr.min() - caseNum : caseNum - nr.max();
-            return Math.max(0.0, 1.0 - dist / range);
+            return dist / range;
         }
 
         double queryNum = ((Number) queryVal).doubleValue();
-        return Math.max(0.0, 1.0 - Math.abs(queryNum - caseNum) / range);
+        return Math.abs(queryNum - caseNum) / range;
     }
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {

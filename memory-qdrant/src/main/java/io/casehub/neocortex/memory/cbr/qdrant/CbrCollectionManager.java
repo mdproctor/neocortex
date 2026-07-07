@@ -127,15 +127,16 @@ final class CbrCollectionManager {
         try {
             for (FeatureField field : schema.fields()) {
                 String payloadKey = "f_" + field.name();
-                if (field instanceof FeatureField.Categorical) {
-                    client.createPayloadIndexAsync(collection, payloadKey,
-                        PayloadSchemaType.Keyword, null, true, null, null).get();
-                } else if (field instanceof FeatureField.Numeric) {
-                    client.createPayloadIndexAsync(collection, payloadKey,
-                        PayloadSchemaType.Float, null, true, null, null).get();
-                } else if (field instanceof FeatureField.Text) {
-                    client.createPayloadIndexAsync(collection, payloadKey,
-                        PayloadSchemaType.Keyword, null, true, null, null).get();
+                switch (field) {
+                    case FeatureField.Categorical c ->
+                        client.createPayloadIndexAsync(collection, payloadKey,
+                            PayloadSchemaType.Keyword, null, true, null, null).get();
+                    case FeatureField.Numeric n ->
+                        client.createPayloadIndexAsync(collection, payloadKey,
+                            PayloadSchemaType.Float, null, true, null, null).get();
+                    case FeatureField.Text t ->
+                        client.createPayloadIndexAsync(collection, payloadKey,
+                            PayloadSchemaType.Keyword, null, true, null, null).get();
                 }
             }
         } catch (InterruptedException e) {

@@ -305,8 +305,12 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         if (textSim == null) return Map.of();
         Map<String, LocalSimilarityFunction> overrides = new HashMap<>();
         for (FeatureField field : schema.fields()) {
-            if (field instanceof FeatureField.Text t && t.semantic()) {
-                overrides.put(field.name(), textSim);
+            switch (field) {
+                case FeatureField.Text t -> {
+                    if (t.semantic()) overrides.put(field.name(), textSim);
+                }
+                case FeatureField.Categorical c -> {}
+                case FeatureField.Numeric n -> {}
             }
         }
         return overrides.isEmpty() ? Map.of() : Collections.unmodifiableMap(overrides);

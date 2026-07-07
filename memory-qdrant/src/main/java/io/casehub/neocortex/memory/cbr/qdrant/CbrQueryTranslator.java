@@ -76,24 +76,26 @@ final class CbrQueryTranslator {
                 }
 
                 String payloadKey = "f_" + name;
-                if (field instanceof FeatureField.Categorical) {
-                    builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
-                } else if (field instanceof FeatureField.Numeric) {
-                    if (value instanceof NumericRange range) {
-                        builder.addMust(ConditionFactory.range(payloadKey,
-                            Range.newBuilder()
-                                .setGte(range.min())
-                                .setLte(range.max())
-                                .build()));
-                    } else {
-                        builder.addMust(ConditionFactory.range(payloadKey,
-                            Range.newBuilder()
-                                .setGte(((Number) value).doubleValue())
-                                .setLte(((Number) value).doubleValue())
-                                .build()));
+                switch (field) {
+                    case FeatureField.Categorical c ->
+                        builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
+                    case FeatureField.Numeric n -> {
+                        if (value instanceof NumericRange range) {
+                            builder.addMust(ConditionFactory.range(payloadKey,
+                                Range.newBuilder()
+                                    .setGte(range.min())
+                                    .setLte(range.max())
+                                    .build()));
+                        } else {
+                            builder.addMust(ConditionFactory.range(payloadKey,
+                                Range.newBuilder()
+                                    .setGte(((Number) value).doubleValue())
+                                    .setLte(((Number) value).doubleValue())
+                                    .build()));
+                        }
                     }
-                } else if (field instanceof FeatureField.Text) {
-                    builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
+                    case FeatureField.Text t ->
+                        builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
                 }
             }
         }
@@ -118,23 +120,27 @@ final class CbrQueryTranslator {
             if (field == null) continue;
 
             Object value = entry.getValue();
-            if (field instanceof FeatureField.Categorical) {
-                if (!(value instanceof String)) {
-                    throw new IllegalArgumentException(
-                        "Categorical field '" + entry.getKey() + "' requires String, got: "
-                        + value.getClass().getSimpleName());
+            switch (field) {
+                case FeatureField.Categorical c -> {
+                    if (!(value instanceof String)) {
+                        throw new IllegalArgumentException(
+                            "Categorical field '" + entry.getKey() + "' requires String, got: "
+                            + value.getClass().getSimpleName());
+                    }
                 }
-            } else if (field instanceof FeatureField.Numeric) {
-                if (!(value instanceof Number) && !(value instanceof NumericRange)) {
-                    throw new IllegalArgumentException(
-                        "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
-                        + value.getClass().getSimpleName());
+                case FeatureField.Numeric n -> {
+                    if (!(value instanceof Number) && !(value instanceof NumericRange)) {
+                        throw new IllegalArgumentException(
+                            "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
+                            + value.getClass().getSimpleName());
+                    }
                 }
-            } else if (field instanceof FeatureField.Text) {
-                if (!(value instanceof String)) {
-                    throw new IllegalArgumentException(
-                        "Text field '" + entry.getKey() + "' requires String, got: "
-                        + value.getClass().getSimpleName());
+                case FeatureField.Text t -> {
+                    if (!(value instanceof String)) {
+                        throw new IllegalArgumentException(
+                            "Text field '" + entry.getKey() + "' requires String, got: "
+                            + value.getClass().getSimpleName());
+                    }
                 }
             }
         }
