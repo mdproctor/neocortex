@@ -148,8 +148,8 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
                 Map.of("cat", "A"), 5).withProblem("query text"), FeatureVectorCbrCase.class);
 
             assertThat(handler.records).anyMatch(r ->
-                r.getLevel() == java.util.logging.Level.INFO
-                && r.getMessage().contains("Dense search unavailable"));
+                r.getLevel() == java.util.logging.Level.WARNING
+                && r.getMessage().contains("HYBRID degraded to FEATURE_ONLY"));
         } finally {
             logger.removeHandler(handler);
         }

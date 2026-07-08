@@ -234,7 +234,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
             "starcraft-game", ENTITY, CBR, TENANT, "case-new");
 
         var q = new CbrQuery(TENANT, CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg"), Map.of(), 10, 0.0, boundary, null, 0.5);
+            Map.of("opponent_race", "Zerg"), Map.of(), 10, 0.0, boundary, null, 0.5,
+            RetrievalMode.HYBRID, CbrFusionStrategy.RRF);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("new game");
@@ -649,5 +650,63 @@ public abstract class CbrCaseMemoryStoreContractTest {
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(55.0);
+    }
+
+    // --- Retrieval mode tests ---
+
+    @Test
+    void retrieveSimilar_featureOnly_ignoresProblem() {
+        registerDefaultSchema();
+        store().store(new FeatureVectorCbrCase("problem text", "solution",
+            "WIN", null, Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-mode-1");
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+                Map.of("opponent_race", "Zerg"), 5)
+            .withProblem("some problem")
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).isNotEmpty();
+    }
+
+    @Test
+    void retrieveSimilar_defaultRetrievalMode_isHybrid() {
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 5);
+        assertThat(query.retrievalMode()).isEqualTo(RetrievalMode.HYBRID);
+    }
+
+    @Test
+    void retrieveSimilar_defaultFusionStrategy_isRrf() {
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+            Map.of("opponent_race", "Zerg"), 5);
+        assertThat(query.fusionStrategy()).isEqualTo(CbrFusionStrategy.RRF);
+    }
+
+    @Test
+    void retrieveSimilar_hybrid_withoutEmbeddingModel_degradesToFeatureOnly() {
+        registerDefaultSchema();
+        store().store(new FeatureVectorCbrCase("problem text", "solution",
+            "WIN", null, Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-mode-2");
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+                Map.of("opponent_race", "Zerg"), 5)
+            .withProblem("problem")
+            .withRetrievalMode(RetrievalMode.HYBRID);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).isNotEmpty();
+    }
+
+    @Test
+    void retrieveSimilar_semanticOnly_withoutEmbeddingModel_returnsEmpty() {
+        registerDefaultSchema();
+        store().store(new FeatureVectorCbrCase("problem text", "solution",
+            "WIN", null, Map.of("opponent_race", "Zerg")),
+            "starcraft-game", ENTITY, CBR, TENANT, "case-mode-3");
+        var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
+                Map.of("opponent_race", "Zerg"), 5)
+            .withProblem("problem")
+            .withRetrievalMode(RetrievalMode.SEMANTIC_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).isEmpty();
     }
 }

@@ -146,27 +146,6 @@ class CbrSimilarityScorerTest {
     }
 
     @Test
-    void compositeScoreFormula() {
-        double composite = CbrSimilarityScorer.compositeScore(0.8, 0.6, 0.3);
-        // 0.3 * 0.6 + 0.7 * 0.8 = 0.18 + 0.56 = 0.74
-        assertThat(composite).isCloseTo(0.74, org.assertj.core.data.Offset.offset(1e-9));
-    }
-
-    @Test
-    void compositeScoreWithZeroVectorWeight() {
-        double composite = CbrSimilarityScorer.compositeScore(0.8, 0.6, 0.0);
-        // 0.0 * 0.6 + 1.0 * 0.8 = 0.8
-        assertThat(composite).isCloseTo(0.8, org.assertj.core.data.Offset.offset(1e-9));
-    }
-
-    @Test
-    void compositeScoreWithFullVectorWeight() {
-        double composite = CbrSimilarityScorer.compositeScore(0.8, 0.6, 1.0);
-        // 1.0 * 0.6 + 0.0 * 0.8 = 0.6
-        assertThat(composite).isCloseTo(0.6, org.assertj.core.data.Offset.offset(1e-9));
-    }
-
-    @Test
     void numericZeroRangeExactMatch() {
         // Field with min==max → exact match semantics
         var schema = CbrFeatureSchema.of("test",

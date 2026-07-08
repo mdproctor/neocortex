@@ -35,6 +35,7 @@
     <module>memory-testing</module>
     <module>memory-cbr-inmem</module>
     <module>memory-cbr-embedding</module>
+    <module>memory-cbr-crossencoder</module>
     <module>memory-qdrant</module>
     <module>memory-inmem</module>
     <module>memory-jpa</module>
@@ -223,6 +224,11 @@
       <dependency>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-neocortex-memory-cbr-embedding</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-memory-cbr-crossencoder</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

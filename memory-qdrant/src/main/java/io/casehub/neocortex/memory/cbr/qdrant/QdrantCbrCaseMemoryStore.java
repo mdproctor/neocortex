@@ -13,6 +13,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryAttributeKeys;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.MemoryInput;
+import io.casehub.neocortex.memory.ScoreFusion;
 import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.grpc.Common.Filter;
@@ -52,7 +53,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final TypeReference<List<PlanTrace>> PLAN_TRACE_TYPE = new TypeReference<>() {};
 
-    private record ReconstructedCandidate<C extends CbrCase>(C cbrCase, float vectorScore) {}
+    private record ReconstructedCandidate<C extends CbrCase>(String pointId, C cbrCase, float vectorScore) {}
 
     private final CbrCollectionManager collectionManager;
     private final EmbeddingModel embeddingModel; // nullable
@@ -162,70 +163,194 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             throw new RuntimeException("Failed to check collection existence", e.getCause());
         }
 
-        // Identity-only filter — features handled by client-side graded scoring
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
-
-        boolean denseSearch = embeddingModel != null && query.problem() != null;
-        List<ScoredPoint> scoredPoints;
-        if (denseSearch) {
-            scoredPoints = executeDenseSearch(collection, filter, query);
-        } else {
-            if (query.problem() != null) {
-                LOG.info("Dense search unavailable — problem text ignored, returning filter-only results for caseType=" + query.caseType());
-            }
-            scoredPoints = executeFilterQuery(collection, filter,
-                Math.max(query.topK(), config.overFetchLimit()));
+        RetrievalMode effectiveMode = resolveEffectiveMode(query);
+        if (effectiveMode == null) {
+            return List.of();
         }
 
-        // 1. Build overrides
+        return switch (effectiveMode) {
+            case FEATURE_ONLY -> retrieveFeatureOnly(query, caseClass, collection, filter, schema);
+            case SEMANTIC_ONLY -> retrieveSemanticOnly(query, caseClass, collection, filter);
+            case HYBRID -> retrieveHybrid(query, caseClass, collection, filter, schema);
+        };
+    }
+
+    private RetrievalMode resolveEffectiveMode(CbrQuery query) {
+        return switch (query.retrievalMode()) {
+            case SEMANTIC_ONLY -> {
+                if (embeddingModel == null || query.problem() == null) {
+                    LOG.warning("SEMANTIC_ONLY unavailable — " +
+                        (embeddingModel == null ? "no EmbeddingModel" : "problem is null"));
+                    yield null;
+                }
+                yield RetrievalMode.SEMANTIC_ONLY;
+            }
+            case HYBRID -> {
+                if (embeddingModel == null || query.problem() == null) {
+                    LOG.warning("HYBRID degraded to FEATURE_ONLY — " +
+                        (embeddingModel == null ? "no EmbeddingModel" : "problem is null"));
+                    yield RetrievalMode.FEATURE_ONLY;
+                }
+                yield RetrievalMode.HYBRID;
+            }
+            case FEATURE_ONLY -> RetrievalMode.FEATURE_ONLY;
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private <C extends CbrCase> List<ScoredCbrCase<C>> retrieveFeatureOnly(
+            CbrQuery query, Class<C> caseClass, String collection, Filter filter,
+            CbrFeatureSchema schema) {
+        List<ScoredPoint> scoredPoints = executeFilterQuery(collection, filter,
+            Math.max(query.topK(), config.overFetchLimit()));
+
         EmbeddingTextSimilarity textSim = (schema != null && embeddingModel != null)
             ? new EmbeddingTextSimilarity(embeddingModel) : null;
         Map<String, LocalSimilarityFunction> overrides = schema != null
-            ? buildTextOverrides(schema, textSim)
-            : Map.of();
+            ? buildTextOverrides(schema, textSim) : Map.of();
 
-        // 2. Reconstruct all candidates (pass 1)
-        List<ReconstructedCandidate<C>> reconstructed = new ArrayList<>(scoredPoints.size());
+        List<ReconstructedCandidate<C>> reconstructed = reconstructAll(scoredPoints, caseClass);
+
+        if (textSim != null && !overrides.isEmpty()) {
+            textSim.precompute(collectSemanticTextValues(query, reconstructed, overrides.keySet()));
+        }
+
+        List<ScoredCbrCase<C>> candidates = new ArrayList<>(reconstructed.size());
+        for (var rc : reconstructed) {
+            double score = CbrSimilarityScorer.score(
+                query.features(), rc.cbrCase().features(), query.weights(), schema, overrides);
+            if (score >= query.minSimilarity()) {
+                candidates.add(new ScoredCbrCase<>(rc.cbrCase(), score));
+            }
+        }
+
+        candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
+        return trimToTopK(candidates, query.topK());
+    }
+
+    @SuppressWarnings("unchecked")
+    private <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSemanticOnly(
+            CbrQuery query, Class<C> caseClass, String collection, Filter filter) {
+        List<ScoredPoint> scoredPoints = executeDenseSearch(collection, filter, query);
+
+        List<ScoredCbrCase<C>> candidates = new ArrayList<>(scoredPoints.size());
         for (ScoredPoint point : scoredPoints) {
             try {
                 C cbrCase = (C) reconstructCase(point.getPayloadMap(), caseClass);
-                if (cbrCase != null) {
-                    reconstructed.add(new ReconstructedCandidate<>(cbrCase, point.getScore()));
+                if (cbrCase != null && point.getScore() >= query.minSimilarity()) {
+                    candidates.add(new ScoredCbrCase<>(cbrCase, point.getScore()));
                 }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Failed to reconstruct case from point", e);
             }
         }
 
-        // 3. Batch precompute embeddings for semantic text values
+        candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
+        return trimToTopK(candidates, query.topK());
+    }
+
+    @SuppressWarnings("unchecked")
+    private <C extends CbrCase> List<ScoredCbrCase<C>> retrieveHybrid(
+            CbrQuery query, Class<C> caseClass, String collection, Filter filter,
+            CbrFeatureSchema schema) {
+        List<ScoredPoint> densePoints = executeDenseSearch(collection, filter, query);
+        List<ScoredPoint> filterPoints = executeFilterQuery(collection, filter,
+            Math.max(query.topK(), config.overFetchLimit()));
+
+        Map<String, ReconstructedCandidate<C>> candidateMap = new LinkedHashMap<>();
+        mergePoints(densePoints, candidateMap, caseClass, true);
+        mergePoints(filterPoints, candidateMap, caseClass, false);
+        List<ReconstructedCandidate<C>> allCandidates = new ArrayList<>(candidateMap.values());
+
+        EmbeddingTextSimilarity textSim = (schema != null && embeddingModel != null)
+            ? new EmbeddingTextSimilarity(embeddingModel) : null;
+        Map<String, LocalSimilarityFunction> overrides = schema != null
+            ? buildTextOverrides(schema, textSim) : Map.of();
         if (textSim != null && !overrides.isEmpty()) {
-            List<String> texts = collectSemanticTextValues(query, reconstructed, overrides.keySet());
-            textSim.precompute(texts);
+            textSim.precompute(collectSemanticTextValues(query, allCandidates, overrides.keySet()));
         }
 
-        // 4. Score and filter (pass 2 — compute() hits warm cache)
-        List<ScoredCbrCase<C>> candidates = new ArrayList<>(reconstructed.size());
-        for (var rc : reconstructed) {
+        record FusionEntry<C extends CbrCase>(String pointId, C cbrCase, double score) {}
+
+        List<FusionEntry<C>> featureLeg = new ArrayList<>();
+        List<FusionEntry<C>> semanticLeg = new ArrayList<>();
+        for (var rc : allCandidates) {
             double featureScore = CbrSimilarityScorer.score(
                 query.features(), rc.cbrCase().features(), query.weights(), schema, overrides);
-            double finalScore;
-            if (denseSearch) {
-                finalScore = CbrSimilarityScorer.compositeScore(
-                    featureScore, rc.vectorScore(), query.vectorWeight());
-            } else {
-                finalScore = featureScore;
-            }
-
-            if (finalScore >= query.minSimilarity()) {
-                candidates.add(new ScoredCbrCase<>(rc.cbrCase(), finalScore));
+            featureLeg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), featureScore));
+            if (rc.vectorScore() > 0) {
+                semanticLeg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), rc.vectorScore()));
             }
         }
 
-        // Sort by score descending, take topK
-        candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
-        List<ScoredCbrCase<C>> results = candidates.size() <= query.topK()
-            ? candidates
-            : candidates.subList(0, query.topK());
+        var featureScoredLeg = new ScoreFusion.ScoredLeg<>(
+            featureLeg, FusionEntry::score, 1.0 - query.vectorWeight());
+        var semanticScoredLeg = new ScoreFusion.ScoredLeg<>(
+            semanticLeg, FusionEntry::score, query.vectorWeight());
+
+        java.util.function.Function<FusionEntry<C>, String> idExtractor = FusionEntry::pointId;
+
+        List<ScoreFusion.FusedResult<FusionEntry<C>>> fused;
+        if (query.fusionStrategy() == CbrFusionStrategy.RRF) {
+            fused = ScoreFusion.rrf(List.of(featureScoredLeg, semanticScoredLeg),
+                idExtractor, query.topK(), 60);
+        } else {
+            fused = ScoreFusion.convexCombination(List.of(featureScoredLeg, semanticScoredLeg),
+                idExtractor, query.topK());
+        }
+
+        List<ScoredCbrCase<C>> results = new ArrayList<>(fused.size());
+        for (var f : fused) {
+            double score = Math.max(-1.0, Math.min(1.0, f.score()));
+            if (query.fusionStrategy() == CbrFusionStrategy.RRF || score >= query.minSimilarity()) {
+                results.add(new ScoredCbrCase<>(f.item().cbrCase(), score));
+            }
+        }
+        return Collections.unmodifiableList(results);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <C extends CbrCase> void mergePoints(List<ScoredPoint> points,
+            Map<String, ReconstructedCandidate<C>> map, Class<C> caseClass,
+            boolean useDenseScore) {
+        for (ScoredPoint point : points) {
+            String pointId = point.getId().getUuid();
+            if (map.containsKey(pointId)) continue;
+            try {
+                C cbrCase = (C) reconstructCase(point.getPayloadMap(), caseClass);
+                if (cbrCase != null) {
+                    map.put(pointId, new ReconstructedCandidate<>(pointId, cbrCase,
+                        useDenseScore ? point.getScore() : 0f));
+                }
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Failed to reconstruct case from point", e);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <C extends CbrCase> List<ReconstructedCandidate<C>> reconstructAll(
+            List<ScoredPoint> scoredPoints, Class<C> caseClass) {
+        List<ReconstructedCandidate<C>> reconstructed = new ArrayList<>(scoredPoints.size());
+        for (ScoredPoint point : scoredPoints) {
+            try {
+                C cbrCase = (C) reconstructCase(point.getPayloadMap(), caseClass);
+                if (cbrCase != null) {
+                    reconstructed.add(new ReconstructedCandidate<>(
+                        point.getId().getUuid(), cbrCase, point.getScore()));
+                }
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Failed to reconstruct case from point", e);
+            }
+        }
+        return reconstructed;
+    }
+
+    private <C extends CbrCase> List<ScoredCbrCase<C>> trimToTopK(
+            List<ScoredCbrCase<C>> candidates, int topK) {
+        List<ScoredCbrCase<C>> results = candidates.size() <= topK
+            ? candidates : candidates.subList(0, topK);
         return Collections.unmodifiableList(new ArrayList<>(results));
     }
 

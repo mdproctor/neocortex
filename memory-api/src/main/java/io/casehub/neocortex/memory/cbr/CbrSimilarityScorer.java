@@ -83,19 +83,6 @@ public final class CbrSimilarityScorer {
         return totalWeight > 0 ? weightedSum / totalWeight : 1.0;
     }
 
-    /**
-     * Compute composite score blending feature similarity and vector similarity.
-     *
-     * @param featureScore feature-based similarity in [0, 1]
-     * @param vectorScore  vector-based similarity (e.g. cosine)
-     * @param vectorWeight β: balance between vector (β) and feature (1-β) similarity
-     * @return composite score
-     */
-    public static double compositeScore(double featureScore, double vectorScore,
-                                         double vectorWeight) {
-        return vectorWeight * vectorScore + (1.0 - vectorWeight) * featureScore;
-    }
-
     private static double localSimilarity(FeatureField field, Object queryVal, Object caseVal,
                                           Map<String, LocalSimilarityFunction> overrides) {
         LocalSimilarityFunction override = overrides.get(field.name());

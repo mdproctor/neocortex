@@ -15,7 +15,9 @@ public record CbrQuery(
     double minSimilarity,
     Instant notBefore,
     String problem,
-    double vectorWeight
+    double vectorWeight,
+    RetrievalMode retrievalMode,
+    CbrFusionStrategy fusionStrategy
 ) {
     public CbrQuery {
         Objects.requireNonNull(tenantId, "tenantId required");
@@ -36,32 +38,34 @@ public record CbrQuery(
         }
         if (problem != null && problem.isBlank())
             throw new IllegalArgumentException("problem must not be blank when provided");
+        Objects.requireNonNull(retrievalMode, "retrievalMode required");
+        Objects.requireNonNull(fusionStrategy, "fusionStrategy required");
     }
 
     public static CbrQuery of(String tenantId, MemoryDomain domain,
                                String caseType, Map<String, Object> features, int topK) {
         return new CbrQuery(tenantId, domain, caseType, features, Map.of(), topK,
-                            0.0, null, null, 0.5);
+                            0.0, null, null, 0.5, RetrievalMode.HYBRID, CbrFusionStrategy.RRF);
     }
 
     public CbrQuery withProblem(String problem) {
         return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
-                            minSimilarity, notBefore, problem, vectorWeight);
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withMinSimilarity(double minSimilarity) {
         return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
-                            minSimilarity, notBefore, problem, vectorWeight);
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withNotBefore(Instant notBefore) {
         return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
-                            minSimilarity, notBefore, problem, vectorWeight);
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withWeights(Map<String, Double> weights) {
         return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
-                            minSimilarity, notBefore, problem, vectorWeight);
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withWeight(String field, double weight) {
@@ -72,6 +76,16 @@ public record CbrQuery(
 
     public CbrQuery withVectorWeight(double vectorWeight) {
         return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
-                            minSimilarity, notBefore, problem, vectorWeight);
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
+    }
+
+    public CbrQuery withRetrievalMode(RetrievalMode retrievalMode) {
+        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
+    }
+
+    public CbrQuery withFusionStrategy(CbrFusionStrategy fusionStrategy) {
+        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 }

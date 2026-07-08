@@ -92,11 +92,10 @@ class QdrantCbrDenseSearchTest {
         store.store(new TextualCbrCase("beta", "solution-b", null, null),
             "starcraft-game", ENTITY, CBR, TENANT, "case-filter-beta");
 
-        // Query with high threshold and full vector weight — "beta" should be excluded
-        // (orthogonal to "alpha", cos≈0.0). vectorWeight=1.0 so composite = vectorScore.
+        // SEMANTIC_ONLY + high threshold — "beta" should be excluded (cos≈0.0)
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of(), 10)
             .withProblem("alpha")
-            .withVectorWeight(1.0)
+            .withRetrievalMode(RetrievalMode.SEMANTIC_ONLY)
             .withMinSimilarity(0.5);
 
         var results = store.retrieveSimilar(query, CbrCase.class);
@@ -142,10 +141,9 @@ class QdrantCbrDenseSearchTest {
 
         var results = store.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
-        // Both returned but Zerg ranks first with higher composite score
         assertThat(results).hasSize(2);
         assertThat(results.get(0).cbrCase().features().get("opponent_race")).isEqualTo("Zerg");
-        assertThat(results.get(0).score()).isGreaterThan(results.get(1).score());
+        assertThat(results.get(0).score()).isGreaterThanOrEqualTo(results.get(1).score());
     }
 
     /**

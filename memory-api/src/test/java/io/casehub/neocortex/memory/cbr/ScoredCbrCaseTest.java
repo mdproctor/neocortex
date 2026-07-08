@@ -60,4 +60,27 @@ class ScoredCbrCaseTest {
             .isInstanceOf(NullPointerException.class)
             .hasMessageContaining("cbrCase required");
     }
+
+    @Test
+    void constructor_twoArg_defaultsRerankedFalse() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        assertThat(new ScoredCbrCase<>(cbrCase, 0.5).reranked()).isFalse();
+    }
+
+    @Test
+    void constructor_threeArg_setsReranked() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        assertThat(new ScoredCbrCase<>(cbrCase, 0.5, true).reranked()).isTrue();
+    }
+
+    @Test
+    void withReranked_returnsNewInstanceWithRerankedTrue() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var original = new ScoredCbrCase<>(cbrCase, 0.8);
+        var reranked = original.withReranked();
+        assertThat(reranked.reranked()).isTrue();
+        assertThat(reranked.score()).isEqualTo(0.8);
+        assertThat(reranked.cbrCase()).isSameAs(cbrCase);
+        assertThat(original.reranked()).isFalse();
+    }
 }

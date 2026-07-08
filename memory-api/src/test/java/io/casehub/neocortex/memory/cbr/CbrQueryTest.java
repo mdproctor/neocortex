@@ -44,7 +44,8 @@ class CbrQueryTest {
 
     @Test
     void minSimilarityOutOfRangeRejected() {
-        assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), Map.of(), 5, 1.5, null, null, 0.5))
+        assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), Map.of(), 5, 1.5, null, null, 0.5,
+                RetrievalMode.HYBRID, CbrFusionStrategy.RRF))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -159,5 +160,51 @@ class CbrQueryTest {
             .withNotBefore(java.time.Instant.now());
         assertThat(q.weights()).containsEntry("a", 2.0);
         assertThat(q.vectorWeight()).isEqualTo(0.3);
+    }
+
+    @Test
+    void of_defaultsToHybridRetrievalMode() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5);
+        assertThat(q.retrievalMode()).isEqualTo(RetrievalMode.HYBRID);
+    }
+
+    @Test
+    void of_defaultsToRrfFusionStrategy() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5);
+        assertThat(q.fusionStrategy()).isEqualTo(CbrFusionStrategy.RRF);
+    }
+
+    @Test
+    void withRetrievalMode_setsMode() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        assertThat(q.retrievalMode()).isEqualTo(RetrievalMode.FEATURE_ONLY);
+    }
+
+    @Test
+    void withFusionStrategy_setsStrategy() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
+            .withFusionStrategy(CbrFusionStrategy.CC);
+        assertThat(q.fusionStrategy()).isEqualTo(CbrFusionStrategy.CC);
+    }
+
+    @Test
+    void withRetrievalMode_preservesOtherFields() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
+            .withWeights(Map.of("a", 2.0)).withVectorWeight(0.3)
+            .withProblem("test").withFusionStrategy(CbrFusionStrategy.CC)
+            .withRetrievalMode(RetrievalMode.SEMANTIC_ONLY);
+        assertThat(q.weights()).containsEntry("a", 2.0);
+        assertThat(q.vectorWeight()).isEqualTo(0.3);
+        assertThat(q.problem()).isEqualTo("test");
+        assertThat(q.fusionStrategy()).isEqualTo(CbrFusionStrategy.CC);
+    }
+
+    @Test
+    void withFusionStrategy_preservesOtherFields() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY)
+            .withFusionStrategy(CbrFusionStrategy.CC);
+        assertThat(q.retrievalMode()).isEqualTo(RetrievalMode.FEATURE_ONLY);
     }
 }

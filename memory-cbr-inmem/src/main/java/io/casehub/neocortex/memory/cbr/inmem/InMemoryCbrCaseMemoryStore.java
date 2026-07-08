@@ -41,6 +41,14 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     @Override
     @SuppressWarnings("unchecked")
     public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery query, Class<C> caseClass) {
+        if (query.retrievalMode() == RetrievalMode.SEMANTIC_ONLY) {
+            return List.of();
+        }
+        if (query.retrievalMode() == RetrievalMode.HYBRID && query.problem() != null) {
+            java.util.logging.Logger.getLogger(getClass().getName())
+                .warning("HYBRID mode degraded to FEATURE_ONLY — no EmbeddingModel available");
+        }
+
         CbrFeatureSchema schema = schemas.get(query.caseType());
         if (schema != null) {
             validateQueryFeatures(query.features(), schema);
