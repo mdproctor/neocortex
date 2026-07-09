@@ -1,5 +1,6 @@
 package io.casehub.neocortex.memory.cbr;
 
+import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.MemoryDomain;
 import org.junit.jupiter.api.Test;
 import java.util.Map;
@@ -45,7 +46,7 @@ class CbrQueryTest {
     @Test
     void minSimilarityOutOfRangeRejected() {
         assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), Map.of(), 5, 1.5, null, null, 0.5,
-                RetrievalMode.HYBRID, CbrFusionStrategy.RRF))
+                RetrievalMode.HYBRID, FusionStrategy.RRF))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -171,7 +172,7 @@ class CbrQueryTest {
     @Test
     void of_defaultsToRrfFusionStrategy() {
         var q = CbrQuery.of("t", CBR, "type", Map.of(), 5);
-        assertThat(q.fusionStrategy()).isEqualTo(CbrFusionStrategy.RRF);
+        assertThat(q.fusionStrategy()).isEqualTo(FusionStrategy.RRF);
     }
 
     @Test
@@ -184,27 +185,27 @@ class CbrQueryTest {
     @Test
     void withFusionStrategy_setsStrategy() {
         var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
-            .withFusionStrategy(CbrFusionStrategy.CC);
-        assertThat(q.fusionStrategy()).isEqualTo(CbrFusionStrategy.CC);
+            .withFusionStrategy(FusionStrategy.CC);
+        assertThat(q.fusionStrategy()).isEqualTo(FusionStrategy.CC);
     }
 
     @Test
     void withRetrievalMode_preservesOtherFields() {
         var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
             .withWeights(Map.of("a", 2.0)).withVectorWeight(0.3)
-            .withProblem("test").withFusionStrategy(CbrFusionStrategy.CC)
+            .withProblem("test").withFusionStrategy(FusionStrategy.CC)
             .withRetrievalMode(RetrievalMode.SEMANTIC_ONLY);
         assertThat(q.weights()).containsEntry("a", 2.0);
         assertThat(q.vectorWeight()).isEqualTo(0.3);
         assertThat(q.problem()).isEqualTo("test");
-        assertThat(q.fusionStrategy()).isEqualTo(CbrFusionStrategy.CC);
+        assertThat(q.fusionStrategy()).isEqualTo(FusionStrategy.CC);
     }
 
     @Test
     void withFusionStrategy_preservesOtherFields() {
         var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
             .withRetrievalMode(RetrievalMode.FEATURE_ONLY)
-            .withFusionStrategy(CbrFusionStrategy.CC);
+            .withFusionStrategy(FusionStrategy.CC);
         assertThat(q.retrievalMode()).isEqualTo(RetrievalMode.FEATURE_ONLY);
     }
 }

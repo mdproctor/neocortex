@@ -1,9 +1,9 @@
-package io.casehub.neocortex.rag.runtime;
+package io.casehub.neocortex.fusion;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-final class CamelCaseExpander {
+public final class CamelCaseExpander {
 
     private static final Pattern TOKEN = Pattern.compile("\\S+");
     private static final Pattern CAMEL_BOUNDARY =
@@ -11,7 +11,7 @@ final class CamelCaseExpander {
 
     private CamelCaseExpander() {}
 
-    static String expand(String text) {
+    public static String expand(String text) {
         if (text == null || text.isEmpty()) return "";
 
         StringBuilder result = new StringBuilder(text.length() * 2);

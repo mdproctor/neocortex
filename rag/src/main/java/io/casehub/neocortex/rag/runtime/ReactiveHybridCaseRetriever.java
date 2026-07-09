@@ -3,9 +3,10 @@ package io.casehub.neocortex.rag.runtime;
 import io.casehub.neocortex.inference.EmbeddingMode;
 import io.casehub.neocortex.inference.MultiModalEmbedder;
 import io.casehub.neocortex.inference.MultiModalEmbedding;
-import io.casehub.neocortex.rag.ConvexCombinationFusion;
+import io.casehub.neocortex.fusion.CamelCaseExpander;
+import io.casehub.neocortex.fusion.FusionStrategy;
+import io.casehub.neocortex.fusion.ScoreFusion;
 import io.casehub.neocortex.rag.CorpusRef;
-import io.casehub.neocortex.rag.FusionStrategy;
 import io.casehub.neocortex.rag.PayloadFilter;
 import io.casehub.neocortex.rag.ReactiveCaseRetriever;
 import io.casehub.neocortex.rag.RetrievalQuery;
@@ -332,14 +333,14 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
         if (hasBm25Uni) unis.add(bm25Uni);
 
         return Uni.combine().all().unis(unis).combinedWith(results -> {
-            List<ConvexCombinationFusion.ScoredLeg> legs = new ArrayList<>();
+            List<ScoreFusion.ScoredLeg<RetrievedChunk>> legs = new ArrayList<>();
 
             // Dense leg (always present at index 0)
             @SuppressWarnings("unchecked")
             List<RetrievedChunk> denseChunks = (List<RetrievedChunk>) results.get(0);
             if (!denseChunks.isEmpty()) {
-                legs.add(new ConvexCombinationFusion.ScoredLeg(
-                    denseChunks, config.retrieval().ccWeights().dense()));
+                legs.add(new ScoreFusion.ScoredLeg<>(
+                    denseChunks, RetrievedChunk::relevanceScore, config.retrieval().ccWeights().dense()));
             }
 
             // Sparse leg (if present, at index 1)
@@ -347,8 +348,8 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                 @SuppressWarnings("unchecked")
                 List<RetrievedChunk> sparseChunks = (List<RetrievedChunk>) results.get(1);
                 if (!sparseChunks.isEmpty()) {
-                    legs.add(new ConvexCombinationFusion.ScoredLeg(
-                        sparseChunks, config.retrieval().ccWeights().sparse()));
+                    legs.add(new ScoreFusion.ScoredLeg<>(
+                        sparseChunks, RetrievedChunk::relevanceScore, config.retrieval().ccWeights().sparse()));
                 }
             }
 
@@ -358,12 +359,13 @@ public class ReactiveHybridCaseRetriever implements ReactiveCaseRetriever {
                 @SuppressWarnings("unchecked")
                 List<RetrievedChunk> bm25Chunks = (List<RetrievedChunk>) results.get(bm25Index);
                 if (!bm25Chunks.isEmpty()) {
-                    legs.add(new ConvexCombinationFusion.ScoredLeg(
-                        bm25Chunks, config.retrieval().ccWeights().bm25()));
+                    legs.add(new ScoreFusion.ScoredLeg<>(
+                        bm25Chunks, RetrievedChunk::relevanceScore, config.retrieval().ccWeights().bm25()));
                 }
             }
 
-            return ConvexCombinationFusion.fuse(legs, maxResults);
+            return ScoreFusion.convexCombination(legs, RetrievedChunk::fusionKey, maxResults)
+                .stream().map(f -> f.item().withRelevanceScore(f.score())).toList();
         });
     }
 }

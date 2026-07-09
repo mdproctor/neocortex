@@ -20,6 +20,7 @@ class DependencyConstraintTest {
                     String pkg = cls.getPackageName();
                     return pkg.startsWith("io.casehub.")
                         && !pkg.startsWith("io.casehub.neocortex.rag")
+                        && !pkg.startsWith("io.casehub.neocortex.fusion")
                         && !pkg.startsWith("io.casehub.neocortex.inference")
                         && !pkg.startsWith("io.casehub.neocortex.corpus")
                         && !pkg.startsWith("io.casehub.neocortex.memory")

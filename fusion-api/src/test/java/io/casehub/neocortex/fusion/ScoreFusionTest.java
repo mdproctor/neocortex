@@ -1,4 +1,4 @@
-package io.casehub.neocortex.memory;
+package io.casehub.neocortex.fusion;
 
 import org.junit.jupiter.api.Test;
 import java.util.List;
@@ -24,8 +24,6 @@ class ScoreFusionTest {
         var legB = leg(1.0, item("c", 0.7), item("d", 0.6));
         var results = ScoreFusion.rrf(List.of(legA, legB), Item::id, 4, 60);
         assertThat(results).hasSize(4);
-        // a and c both rank 1 in their legs: 1/(60+1) each
-        // normalized by 2/(60+1) → 0.5
         assertThat(results.get(0).score()).isCloseTo(0.5, within(0.01));
         assertThat(results.get(1).score()).isCloseTo(0.5, within(0.01));
     }
@@ -35,8 +33,6 @@ class ScoreFusionTest {
         var legA = leg(1.0, item("a", 0.9), item("b", 0.8));
         var legB = leg(1.0, item("a", 0.7), item("c", 0.6));
         var results = ScoreFusion.rrf(List.of(legA, legB), Item::id, 3, 60);
-        // a: rank 1 in both → 1/(60+1) + 1/(60+1) = 2/61
-        // normalized by 2/61 = 1.0
         assertThat(results.get(0).item().id()).isEqualTo("a");
         assertThat(results.get(0).score()).isCloseTo(1.0, within(0.01));
     }
@@ -96,9 +92,6 @@ class ScoreFusionTest {
         var legB = leg(0.4, item("a", 0.9), item("b", 0.1));
         var results = ScoreFusion.convexCombination(
             List.of(legA, legB), Item::id, 10);
-        // legA normalized: b=1.0, a=0.0. legB normalized: a=1.0, b=0.0
-        // a: 0.6*0.0 + 0.4*1.0 = 0.4
-        // b: 0.6*1.0 + 0.4*0.0 = 0.6
         assertThat(results.get(0).item().id()).isEqualTo("b");
         assertThat(results.get(0).score()).isCloseTo(0.6, within(0.01));
         assertThat(results.get(1).item().id()).isEqualTo("a");
@@ -111,9 +104,6 @@ class ScoreFusionTest {
         var legB = leg(0.5, item("b", 0.8));
         var results = ScoreFusion.convexCombination(
             List.of(legA, legB), Item::id, 10);
-        // single item per leg → min=max → normalized to 1.0
-        // a: 0.5*1.0 + 0.5*0.0 = 0.5
-        // b: 0.5*0.0 + 0.5*1.0 = 0.5
         assertThat(results).hasSize(2);
         assertThat(results.get(0).score()).isCloseTo(0.5, within(0.01));
     }

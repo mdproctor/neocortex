@@ -3,7 +3,7 @@ package io.casehub.neocortex.rag.runtime;
 import io.casehub.neocortex.inference.EmbeddingMode;
 import io.casehub.neocortex.inference.MultiModalEmbedder;
 import io.casehub.neocortex.inference.MultiModalEmbedding;
-import io.casehub.neocortex.rag.FusionStrategy;
+import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 
 import java.util.ArrayList;

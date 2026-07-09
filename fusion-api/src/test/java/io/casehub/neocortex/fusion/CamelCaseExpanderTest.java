@@ -1,4 +1,4 @@
-package io.casehub.neocortex.rag.runtime;
+package io.casehub.neocortex.fusion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,15 +59,12 @@ class CamelCaseExpanderTest {
 
     @Test
     void consecutiveUppercaseEdgeCase() {
-        // Non-standard: XMLHTTPRequest violates Java naming conventions
-        // The algorithm produces XMLHTTP + Request, not XML + HTTP + Request
         assertThat(CamelCaseExpander.expand("XMLHTTPRequest"))
             .isEqualTo("XMLHTTPRequest XMLHTTP Request");
     }
 
     @Test
     void numberBoundary() {
-        // Letter-to-number boundary splits at each transition: Base|64|Encoder
         assertThat(CamelCaseExpander.expand("Base64Encoder"))
             .isEqualTo("Base64Encoder Base 64 Encoder");
     }

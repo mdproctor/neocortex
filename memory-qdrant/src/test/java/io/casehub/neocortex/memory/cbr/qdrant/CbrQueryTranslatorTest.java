@@ -1,7 +1,7 @@
 package io.casehub.neocortex.memory.cbr.qdrant;
 
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
-import io.casehub.neocortex.memory.cbr.CbrFusionStrategy;
+import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.NumericRange;
@@ -108,7 +108,7 @@ class CbrQueryTranslatorTest {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
             Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
-            RetrievalMode.HYBRID, CbrFusionStrategy.RRF);
+            RetrievalMode.HYBRID, FusionStrategy.RRF);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         assertThat(filter.getMustCount()).isEqualTo(4);
@@ -161,7 +161,7 @@ class CbrQueryTranslatorTest {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
             Map.of("opponent_race", "Zerg"), Map.of(), 5, 0.0, notBefore, null, 0.5,
-            RetrievalMode.HYBRID, CbrFusionStrategy.RRF);
+            RetrievalMode.HYBRID, FusionStrategy.RRF);
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
 
         // 3 identity + 1 notBefore

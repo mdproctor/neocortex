@@ -21,6 +21,7 @@
     <module>inference-inmem</module>
     <module>inference-bge-m3</module>
     <module>inference-quarkus</module>
+    <module>fusion-api</module>
     <module>rag-api</module>
     <module>rag</module>
     <module>rag-tika</module>
@@ -159,6 +160,11 @@
       <dependency>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-neocortex-inference-quarkus</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-fusion-api</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

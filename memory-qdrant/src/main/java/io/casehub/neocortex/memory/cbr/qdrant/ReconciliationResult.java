@@ -5,5 +5,6 @@ public record ReconciliationResult(
     String tenantId,
     int orphansRemoved,
     int entriesReindexed,
+    int entriesEnriched,
     int errors
 ) {}

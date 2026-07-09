@@ -1,3 +1,3 @@
-package io.casehub.neocortex.rag;
+package io.casehub.neocortex.fusion;
 
 public enum FusionStrategy { RRF, DBSF, CC }

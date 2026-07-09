@@ -5,7 +5,10 @@ import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Collections.Distance;
+import io.qdrant.client.grpc.Collections.Modifier;
 import io.qdrant.client.grpc.Collections.PayloadSchemaType;
+import io.qdrant.client.grpc.Collections.SparseVectorConfig;
+import io.qdrant.client.grpc.Collections.SparseVectorParams;
 import io.qdrant.client.grpc.Collections.VectorParams;
 import io.qdrant.client.grpc.Collections.VectorParamsMap;
 import io.qdrant.client.grpc.Collections.VectorsConfig;
@@ -78,10 +81,26 @@ final class CbrCollectionManager {
                             + ") — recreating. ALL tenants sharing caseType=" + caseType
                             + " are affected. Run reconciliation per tenant to recover data.");
                         client.deleteCollectionAsync(collection).get();
+                    } else if (hasMissingSparseVectors(info)) {
+                        if (!config.allowSparseVectorMigration()) {
+                            throw new CbrSparseVectorMigrationException(collection);
+                        }
+                        LOG.warning("Collection " + collection
+                            + " missing required sparse vectors — recreating."
+                            + " Run reconciliation per tenant to recover data.");
+                        client.deleteCollectionAsync(collection).get();
                     } else {
                         knownCollections.add(collection);
                         return;
                     }
+                } else if (hasMissingSparseVectors(info)) {
+                    if (!config.allowSparseVectorMigration()) {
+                        throw new CbrSparseVectorMigrationException(collection);
+                    }
+                    LOG.warning("Collection " + collection
+                        + " missing required sparse vectors — recreating."
+                        + " Run reconciliation per tenant to recover data.");
+                    client.deleteCollectionAsync(collection).get();
                 } else {
                     knownCollections.add(collection);
                     return;
@@ -101,11 +120,23 @@ final class CbrCollectionManager {
                         .build())
                     .build());
 
+            if (config.spladeEnabled() || config.bm25Enabled()) {
+                SparseVectorConfig.Builder sparseBuilder = SparseVectorConfig.newBuilder();
+                if (config.spladeEnabled()) {
+                    sparseBuilder.putMap(config.spladeVectorName(), SparseVectorParams.getDefaultInstance());
+                }
+                if (config.bm25Enabled()) {
+                    sparseBuilder.putMap(config.bm25VectorName(),
+                        SparseVectorParams.newBuilder().setModifier(Modifier.Idf).build());
+                }
+                createBuilder.setSparseVectorsConfig(sparseBuilder.build());
+            }
+
             client.createCollectionAsync(createBuilder.build()).get();
             createBasePayloadIndexes(collection);
             knownCollections.add(collection);
 
-        } catch (CbrDimensionMismatchException e) {
+        } catch (CbrDimensionMismatchException | CbrSparseVectorMigrationException e) {
             throw e;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -184,6 +215,16 @@ final class CbrCollectionManager {
         client.createPayloadIndexAsync(collection, "_stored_at",
             PayloadSchemaType.Float, null, true, null, null).get();
     }
+
+    private boolean hasMissingSparseVectors(io.qdrant.client.grpc.Collections.CollectionInfo info) {
+        var existingSparse = info.getConfig().getParams()
+            .getSparseVectorsConfig().getMapMap();
+        if (config.spladeEnabled() && !existingSparse.containsKey(config.spladeVectorName())) {
+            return true;
+        }
+        return config.bm25Enabled() && !existingSparse.containsKey(config.bm25VectorName());
+    }
+
 
     /**
      * Invalidate the cached state for a collection, forcing the next

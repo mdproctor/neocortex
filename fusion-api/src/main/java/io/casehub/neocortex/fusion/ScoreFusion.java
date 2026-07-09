@@ -1,4 +1,4 @@
-package io.casehub.neocortex.memory;
+package io.casehub.neocortex.fusion;
 
 import java.util.ArrayList;
 import java.util.Comparator;

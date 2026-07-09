@@ -30,9 +30,46 @@ public interface QdrantCbrConfig {
     @WithDefault("false")
     boolean allowDimensionMigration();
 
+    @WithDefault("false")
+    default boolean allowSparseVectorMigration() { return false; }
+
     @WithDefault("3")
     int oversampleFactor();
 
     @WithDefault("200")
     int overFetchLimit();
+
+    @WithDefault("false")
+    default boolean spladeEnabled() { return false; }
+
+    @WithDefault("sparse")
+    default String spladeVectorName() { return "sparse"; }
+
+    @WithDefault("0")
+    default int spladeTopK() { return 0; }
+
+    @WithDefault("false")
+    default boolean bm25Enabled() { return false; }
+
+    @WithDefault("bm25")
+    default String bm25VectorName() { return "bm25"; }
+
+    @WithDefault("Qdrant/bm25")
+    default String bm25Model() { return "Qdrant/bm25"; }
+
+    @WithDefault("0")
+    default int bm25TopK() { return 0; }
+
+    default CcWeightsConfig ccWeights() { return new CcWeightsConfig() {}; }
+
+    interface CcWeightsConfig {
+        @WithDefault("0.6")
+        default double dense() { return 0.6; }
+
+        @WithDefault("0.2")
+        default double sparse() { return 0.2; }
+
+        @WithDefault("0.2")
+        default double bm25() { return 0.2; }
+    }
 }

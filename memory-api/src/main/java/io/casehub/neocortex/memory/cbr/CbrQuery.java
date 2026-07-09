@@ -1,5 +1,6 @@
 package io.casehub.neocortex.memory.cbr;
 
+import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.MemoryDomain;
 import java.time.Instant;
 import java.util.Map;
@@ -17,7 +18,7 @@ public record CbrQuery(
     String problem,
     double vectorWeight,
     RetrievalMode retrievalMode,
-    CbrFusionStrategy fusionStrategy
+    FusionStrategy fusionStrategy
 ) {
     public CbrQuery {
         Objects.requireNonNull(tenantId, "tenantId required");
@@ -45,7 +46,7 @@ public record CbrQuery(
     public static CbrQuery of(String tenantId, MemoryDomain domain,
                                String caseType, Map<String, Object> features, int topK) {
         return new CbrQuery(tenantId, domain, caseType, features, Map.of(), topK,
-                            0.0, null, null, 0.5, RetrievalMode.HYBRID, CbrFusionStrategy.RRF);
+                            0.0, null, null, 0.5, RetrievalMode.HYBRID, FusionStrategy.RRF);
     }
 
     public CbrQuery withProblem(String problem) {
@@ -84,7 +85,7 @@ public record CbrQuery(
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
-    public CbrQuery withFusionStrategy(CbrFusionStrategy fusionStrategy) {
+    public CbrQuery withFusionStrategy(FusionStrategy fusionStrategy) {
         return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }

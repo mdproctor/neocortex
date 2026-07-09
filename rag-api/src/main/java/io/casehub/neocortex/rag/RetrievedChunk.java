@@ -27,4 +27,14 @@ public record RetrievedChunk(String content, String sourceDocumentId,
     public RetrievedChunk withMetadata(Map<String, String> metadata) {
         return new RetrievedChunk(content, sourceDocumentId, relevanceScore, metadata, grade);
     }
+
+    public String fusionKey() {
+        return sourceDocumentId + "\0" + content;
+    }
+
+    public RetrievedChunk withRelevanceScore(double score) {
+        return new RetrievedChunk(content, sourceDocumentId, score, metadata, grade);
+    }
+
+
 }

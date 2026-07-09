@@ -6,7 +6,7 @@ import io.casehub.neocortex.rag.QueryExpander;
 import io.casehub.neocortex.rag.ReactiveCaseRetriever;
 import io.casehub.neocortex.rag.RetrievalQuery;
 import io.casehub.neocortex.rag.RetrievedChunk;
-import io.casehub.neocortex.rag.RrfFusion;
+import io.casehub.neocortex.fusion.ScoreFusion;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import io.smallrye.mutiny.Uni;
@@ -78,7 +78,11 @@ public class ReactiveQueryExpandingCaseRetriever implements ReactiveCaseRetrieve
                     // Type-erased List<?> from combinator - cast to List<List<RetrievedChunk>>
                     @SuppressWarnings("unchecked")
                     List<List<RetrievedChunk>> typedResultSets = (List<List<RetrievedChunk>>) resultSets;
-                    return RrfFusion.fuse(typedResultSets, maxResults);
+                    List<ScoreFusion.ScoredLeg<RetrievedChunk>> legs = typedResultSets.stream()
+                        .map(rs -> new ScoreFusion.ScoredLeg<>(rs, RetrievedChunk::relevanceScore, 1.0))
+                        .toList();
+                    return ScoreFusion.rrf(legs, RetrievedChunk::fusionKey, maxResults, 60)
+                        .stream().map(f -> f.item().withRelevanceScore(f.score())).toList();
                 });
             });
     }

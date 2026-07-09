@@ -13,7 +13,10 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryAttributeKeys;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.MemoryInput;
-import io.casehub.neocortex.memory.ScoreFusion;
+import io.casehub.neocortex.fusion.CamelCaseExpander;
+import io.casehub.neocortex.fusion.FusionStrategy;
+import io.casehub.neocortex.fusion.ScoreFusion;
+import io.casehub.neocortex.inference.splade.SparseEmbedder;
 import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.grpc.Common.Filter;
@@ -57,6 +60,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private final CbrCollectionManager collectionManager;
     private final EmbeddingModel embeddingModel; // nullable
+    private final SparseEmbedder sparseEmbedder; // nullable — optional SPLADE embedder
     private final QdrantCbrConfig config;
     private final CaseMemoryStore delegate; // nullable — when present, delegate durable storage
     private final Map<String, CbrFeatureSchema> schemas = new ConcurrentHashMap<>();
@@ -65,21 +69,32 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
                               Instance<EmbeddingModel> embeddingModelInstance,
                               QdrantCbrConfig config,
-                              Instance<CaseMemoryStore> delegateInstance) {
+                              Instance<CaseMemoryStore> delegateInstance,
+                              Instance<SparseEmbedder> sparseEmbedderInstance) {
         this.collectionManager = collectionManager;
         this.embeddingModel = embeddingModelInstance.isResolvable() ? embeddingModelInstance.get() : null;
         this.config = config;
         this.delegate = delegateInstance.isResolvable() ? delegateInstance.get() : null;
+        this.sparseEmbedder = sparseEmbedderInstance.isResolvable() ? sparseEmbedderInstance.get() : null;
     }
 
     QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
                               EmbeddingModel embeddingModel,
                               QdrantCbrConfig config,
                               CaseMemoryStore delegate) {
+        this(collectionManager, embeddingModel, config, delegate, null);
+    }
+
+    QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
+                              EmbeddingModel embeddingModel,
+                              QdrantCbrConfig config,
+                              CaseMemoryStore delegate,
+                              SparseEmbedder sparseEmbedder) {
         this.collectionManager = collectionManager;
         this.embeddingModel = embeddingModel;
         this.config = config;
         this.delegate = delegate;
+        this.sparseEmbedder = sparseEmbedder;
     }
 
     @Override
@@ -106,9 +121,23 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             embedding = embeddingModel.embed(TextSegment.from(cbrCase.problem())).content();
         }
 
+        // SPLADE sparse embedding
+        Map<Integer, Float> sparseEmbedding = null;
+        if (sparseEmbedder != null && config.spladeEnabled() && cbrCase.problem() != null) {
+            sparseEmbedding = sparseEmbedder.embed(cbrCase.problem());
+        }
+
+        // BM25 text (camel-case expanded)
+        String bm25Text = null;
+        if (config.bm25Enabled() && cbrCase.problem() != null) {
+            bm25Text = CamelCaseExpander.expand(cbrCase.problem());
+        }
+
         PointStruct point = CbrPointBuilder.buildPoint(
             cbrCase, caseType, entityId, domain.name(), tenantId, caseId,
-            embedding, config.denseVectorName());
+            embedding, config.denseVectorName(),
+            sparseEmbedding, config.spladeVectorName(),
+            bm25Text, config.bm25VectorName(), config.bm25Model());
 
         String collection = collectionManager.collectionName(caseType);
 
@@ -256,54 +285,124 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             CbrFeatureSchema schema) {
         List<ScoredPoint> densePoints = executeDenseSearch(collection, filter, query);
         List<ScoredPoint> filterPoints = executeFilterQuery(collection, filter,
-            Math.max(query.topK(), config.overFetchLimit()));
+                                                            Math.max(query.topK(), config.overFetchLimit()));
 
         Map<String, ReconstructedCandidate<C>> candidateMap = new LinkedHashMap<>();
         mergePoints(densePoints, candidateMap, caseClass, true);
+
+        // SPLADE leg — merge results into candidate map
+        List<ScoredPoint> spladePoints = List.of();
+        if (sparseEmbedder != null && config.spladeEnabled() && query.problem() != null) {
+            try {
+                spladePoints = executeSpladeSearch(collection, filter, query);
+                mergePoints(spladePoints, candidateMap, caseClass, false);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "SPLADE search failed — skipping sparse leg", e);
+            }
+        }
+
+        // BM25 leg — merge results into candidate map
+        List<ScoredPoint> bm25Points = List.of();
+        if (config.bm25Enabled() && query.problem() != null) {
+            try {
+                bm25Points = executeBm25Search(collection, filter, query);
+                mergePoints(bm25Points, candidateMap, caseClass, false);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "BM25 search failed — skipping keyword leg", e);
+            }
+        }
+
         mergePoints(filterPoints, candidateMap, caseClass, false);
         List<ReconstructedCandidate<C>> allCandidates = new ArrayList<>(candidateMap.values());
 
         EmbeddingTextSimilarity textSim = (schema != null && embeddingModel != null)
-            ? new EmbeddingTextSimilarity(embeddingModel) : null;
+                                          ? new EmbeddingTextSimilarity(embeddingModel) : null;
         Map<String, LocalSimilarityFunction> overrides = schema != null
-            ? buildTextOverrides(schema, textSim) : Map.of();
+                                                         ? buildTextOverrides(schema, textSim) : Map.of();
         if (textSim != null && !overrides.isEmpty()) {
             textSim.precompute(collectSemanticTextValues(query, allCandidates, overrides.keySet()));
         }
 
         record FusionEntry<C extends CbrCase>(String pointId, C cbrCase, double score) {}
 
+        // Build feature leg (always present)
         List<FusionEntry<C>> featureLeg = new ArrayList<>();
-        List<FusionEntry<C>> semanticLeg = new ArrayList<>();
         for (var rc : allCandidates) {
             double featureScore = CbrSimilarityScorer.score(
-                query.features(), rc.cbrCase().features(), query.weights(), schema, overrides);
+                    query.features(), rc.cbrCase().features(), query.weights(), schema, overrides);
             featureLeg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), featureScore));
+        }
+
+        // Build semantic legs — dense is always present when embeddingModel exists
+        List<FusionEntry<C>> denseLeg = new ArrayList<>();
+        for (var rc : allCandidates) {
             if (rc.vectorScore() > 0) {
-                semanticLeg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), rc.vectorScore()));
+                denseLeg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), rc.vectorScore()));
             }
         }
 
-        var featureScoredLeg = new ScoreFusion.ScoredLeg<>(
-            featureLeg, FusionEntry::score, 1.0 - query.vectorWeight());
-        var semanticScoredLeg = new ScoreFusion.ScoredLeg<>(
-            semanticLeg, FusionEntry::score, query.vectorWeight());
-
-        java.util.function.Function<FusionEntry<C>, String> idExtractor = FusionEntry::pointId;
-
-        List<ScoreFusion.FusedResult<FusionEntry<C>>> fused;
-        if (query.fusionStrategy() == CbrFusionStrategy.RRF) {
-            fused = ScoreFusion.rrf(List.of(featureScoredLeg, semanticScoredLeg),
-                idExtractor, query.topK(), 60);
-        } else {
-            fused = ScoreFusion.convexCombination(List.of(featureScoredLeg, semanticScoredLeg),
-                idExtractor, query.topK());
+        // Build SPLADE and BM25 legs from their scored points
+        Map<String, Float> spladeScores = new HashMap<>();
+        for (var sp : spladePoints) {
+            spladeScores.put(sp.getId().getUuid(), sp.getScore());
         }
+        List<FusionEntry<C>> spladeLeg = new ArrayList<>();
+        for (var rc : allCandidates) {
+            Float score = spladeScores.get(rc.pointId());
+            if (score != null && score > 0) {
+                spladeLeg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), score));
+            }
+        }
+
+        Map<String, Float> bm25Scores = new HashMap<>();
+        for (var sp : bm25Points) {
+            bm25Scores.put(sp.getId().getUuid(), sp.getScore());
+        }
+        List<FusionEntry<C>> bm25Leg = new ArrayList<>();
+        for (var rc : allCandidates) {
+            Float score = bm25Scores.get(rc.pointId());
+            if (score != null && score > 0) {
+                bm25Leg.add(new FusionEntry<>(rc.pointId(), rc.cbrCase(), score));
+            }
+        }
+
+        // Assemble fusion legs with CC weight renormalization
+        java.util.function.Function<FusionEntry<C>, String> idExtractor      = FusionEntry::pointId;
+        double                                              featureWeight    = 1.0 - query.vectorWeight();
+        var                                                 featureScoredLeg = new ScoreFusion.ScoredLeg<>(featureLeg, FusionEntry::score, featureWeight);
+
+        // Compute renormalized semantic sub-weights among active legs
+        double rawDense      = (!denseLeg.isEmpty()) ? config.ccWeights().dense() : 0.0;
+        double rawSparse     = (!spladeLeg.isEmpty()) ? config.ccWeights().sparse() : 0.0;
+        double rawBm25       = (!bm25Leg.isEmpty()) ? config.ccWeights().bm25() : 0.0;
+        double semanticTotal = rawDense + rawSparse + rawBm25;
+
+        List<ScoreFusion.ScoredLeg<FusionEntry<C>>> legs = new ArrayList<>();
+        legs.add(featureScoredLeg);
+        if (!denseLeg.isEmpty() && semanticTotal > 0) {
+            legs.add(new ScoreFusion.ScoredLeg<>(
+                    denseLeg, FusionEntry::score, query.vectorWeight() * rawDense / semanticTotal));
+        }
+        if (!spladeLeg.isEmpty() && semanticTotal > 0) {
+            legs.add(new ScoreFusion.ScoredLeg<>(
+                    spladeLeg, FusionEntry::score, query.vectorWeight() * rawSparse / semanticTotal));
+        }
+        if (!bm25Leg.isEmpty() && semanticTotal > 0) {
+            legs.add(new ScoreFusion.ScoredLeg<>(
+                    bm25Leg, FusionEntry::score, query.vectorWeight() * rawBm25 / semanticTotal));
+        }
+
+        List<ScoreFusion.FusedResult<FusionEntry<C>>> fused = switch (query.fusionStrategy()) {
+            case RRF -> ScoreFusion.rrf(legs, idExtractor, query.topK(), 60);
+            case CC -> ScoreFusion.convexCombination(legs, idExtractor, query.topK());
+            case DBSF -> throw new UnsupportedOperationException(
+                    "DBSF is not supported for CBR — use RRF or CC");
+        };
 
         List<ScoredCbrCase<C>> results = new ArrayList<>(fused.size());
         for (var f : fused) {
             double score = Math.max(-1.0, Math.min(1.0, f.score()));
-            if (query.fusionStrategy() == CbrFusionStrategy.RRF || score >= query.minSimilarity()) {
+            if (query.fusionStrategy() == FusionStrategy.RRF || score >= query.minSimilarity()) {
                 results.add(new ScoredCbrCase<>(f.item().cbrCase(), score));
             }
         }
@@ -473,6 +572,62 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             throw new RuntimeException("Dense search failed", e.getCause());
         }
     }
+
+    private List<ScoredPoint> executeSpladeSearch(String collection, Filter filter, CbrQuery query) {
+        Map<Integer, Float> sparseEmbedding = sparseEmbedder.embed(query.problem());
+        List<Float>         sparseValues    = new ArrayList<>(sparseEmbedding.size());
+        List<Integer>       sparseIndices   = new ArrayList<>(sparseEmbedding.size());
+        for (Map.Entry<Integer, Float> entry : sparseEmbedding.entrySet()) {
+            sparseIndices.add(entry.getKey());
+            sparseValues.add(entry.getValue());
+        }
+
+        int limit = config.spladeTopK() > 0 ? config.spladeTopK() : query.topK();
+        var queryPoints = io.qdrant.client.grpc.Points.QueryPoints.newBuilder()
+                                                                  .setCollectionName(collection)
+                                                                  .setQuery(io.qdrant.client.QueryFactory.nearest(sparseValues, sparseIndices))
+                                                                  .setUsing(config.spladeVectorName())
+                                                                  .setFilter(filter)
+                                                                  .setLimit(limit)
+                                                                  .setWithPayload(io.qdrant.client.WithPayloadSelectorFactory.enable(true))
+                                                                  .build();
+
+        try {
+            return collectionManager.client().queryAsync(queryPoints).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted during SPLADE search", e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("SPLADE search failed", e.getCause());
+        }
+    }
+
+    private List<ScoredPoint> executeBm25Search(String collection, Filter filter, CbrQuery query) {
+        String expandedQuery = CamelCaseExpander.expand(query.problem());
+        int    limit         = config.bm25TopK() > 0 ? config.bm25TopK() : query.topK();
+        var queryPoints = io.qdrant.client.grpc.Points.QueryPoints.newBuilder()
+                                                                  .setCollectionName(collection)
+                                                                  .setQuery(io.qdrant.client.QueryFactory.nearest(
+                                                                          io.qdrant.client.grpc.Points.Document.newBuilder()
+                                                                                                               .setText(expandedQuery)
+                                                                                                               .setModel(config.bm25Model())
+                                                                                                               .build()))
+                                                                  .setUsing(config.bm25VectorName())
+                                                                  .setFilter(filter)
+                                                                  .setLimit(limit)
+                                                                  .setWithPayload(io.qdrant.client.WithPayloadSelectorFactory.enable(true))
+                                                                  .build();
+
+        try {
+            return collectionManager.client().queryAsync(queryPoints).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted during BM25 search", e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("BM25 search failed", e.getCause());
+        }
+    }
+
 
     private List<ScoredPoint> executeFilterQuery(String collection, Filter filter, int limit) {
         try {

@@ -6,7 +6,7 @@ import io.casehub.neocortex.rag.PayloadFilter;
 import io.casehub.neocortex.rag.QueryExpander;
 import io.casehub.neocortex.rag.RetrievalQuery;
 import io.casehub.neocortex.rag.RetrievedChunk;
-import io.casehub.neocortex.rag.RrfFusion;
+import io.casehub.neocortex.fusion.ScoreFusion;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import jakarta.annotation.Priority;
@@ -76,6 +76,10 @@ public class QueryExpandingCaseRetriever implements CaseRetriever {
             resultSets.add(results);
         }
 
-        return RrfFusion.fuse(resultSets, maxResults);
+        List<ScoreFusion.ScoredLeg<RetrievedChunk>> legs = resultSets.stream()
+            .map(rs -> new ScoreFusion.ScoredLeg<>(rs, RetrievedChunk::relevanceScore, 1.0))
+            .toList();
+        return ScoreFusion.rrf(legs, RetrievedChunk::fusionKey, maxResults, 60)
+            .stream().map(f -> f.item().withRelevanceScore(f.score())).toList();
     }
 }

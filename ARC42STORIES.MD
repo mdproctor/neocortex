@@ -174,6 +174,10 @@ C4Container
     Container(inference_quarkus, "inference-quarkus", "Quarkus extension", "@InferenceModel qualifier, CDI wiring, Dev Services")
   }
 
+  Container_Boundary(b_fusion, "Layer: Fusion") {
+    Container(fusion_api, "fusion-api", "Pure Java, zero deps", "ScoreFusion (RRF + CC), FusionStrategy enum, CamelCaseExpander — shared by RAG and CBR")
+  }
+
   Container_Boundary(b_rag_spi, "Layer: RAG SPI") {
     Container(rag_api, "rag-api", "Pure Java", "EmbeddingIngestor SPI, CaseRetriever SPI, RetrievedChunk, CorpusRef")
     Container(rag_testing, "rag-testing", "Pure Java", "In-memory EmbeddingIngestor + CaseRetriever stubs")
@@ -206,19 +210,21 @@ C4Container
   Rel(inference_quarkus, inference_rt, "CDI wires")
   Rel(rag, rag_api, "implements EmbeddingIngestor + CaseRetriever")
   Rel(rag, inference_splade, "SparseEmbedder for sparse search leg")
+  Rel(rag, fusion_api, "ScoreFusion + CamelCaseExpander")
   Rel(rag, corpus_api, "CorpusIngestionService reads ChangeSource + CorpusReader")
   Rel(rag_testing, rag_api, "implements stubs")
   Rel(corpus, corpus_api, "implements CorpusStore, CorpusReader, ChangeSource")
   Rel(rag_crossencoder, rag_api, "decorates CaseRetriever")
   Rel(rag_crossencoder, inference_tasks, "uses CrossEncoderReranker")
   Rel(rag_expansion, rag_api, "decorates CaseRetriever")
+  Rel(rag_expansion, fusion_api, "ScoreFusion for multi-query merge")
 ```
 
 ### Layers
 
 | Layer | Module | Tier | Hortora? |
 |---|---|---|---|
-| L1 SPI Foundation | `inference-api`, `inference-inmem` | Pure Java, zero deps | ✅ yes |
+| L1 SPI Foundation | `inference-api`, `inference-inmem`, `fusion-api` | Pure Java, zero deps | ✅ yes |
 | L2 Runtime Core | `inference-runtime` | ONNX Runtime JVM + HF Tokenizers JNI | ✅ yes |
 | L3 Task Adapters | `inference-tasks` | Pure Java | ✅ yes |
 | L4 Sparse Embeddings | `inference-splade` | Pure Java | ✅ yes |

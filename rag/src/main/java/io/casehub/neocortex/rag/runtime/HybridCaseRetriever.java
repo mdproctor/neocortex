@@ -4,9 +4,10 @@ import io.casehub.neocortex.inference.EmbeddingMode;
 import io.casehub.neocortex.inference.MultiModalEmbedder;
 import io.casehub.neocortex.inference.MultiModalEmbedding;
 import io.casehub.neocortex.rag.CaseRetriever;
-import io.casehub.neocortex.rag.ConvexCombinationFusion;
+import io.casehub.neocortex.fusion.CamelCaseExpander;
+import io.casehub.neocortex.fusion.FusionStrategy;
+import io.casehub.neocortex.fusion.ScoreFusion;
 import io.casehub.neocortex.rag.CorpusRef;
-import io.casehub.neocortex.rag.FusionStrategy;
 import io.casehub.neocortex.rag.PayloadFilter;
 import io.casehub.neocortex.rag.RetrievalQuery;
 import io.casehub.neocortex.rag.RetrievedChunk;
@@ -260,7 +261,7 @@ public class HybridCaseRetriever implements CaseRetriever {
             MultiModalEmbedding originalTextEmbedding, Optional<Filter> mergedFilter, int maxResults) {
 
         List<Float> denseVector = QdrantPointBuilder.floatListFrom(searchTextEmbedding.dense());
-        List<ConvexCombinationFusion.ScoredLeg> legs = new ArrayList<>();
+        List<ScoreFusion.ScoredLeg<RetrievedChunk>> legs = new ArrayList<>();
 
         // Dense leg
         QueryPoints.Builder denseQuery = QueryPoints.newBuilder()
@@ -276,8 +277,8 @@ public class HybridCaseRetriever implements CaseRetriever {
 
         List<ScoredPoint> densePoints = executeQuery(denseQuery.build());
         if (!densePoints.isEmpty()) {
-            legs.add(new ConvexCombinationFusion.ScoredLeg(
-                mapToChunks(densePoints), config.retrieval().ccWeights().dense()));
+            legs.add(new ScoreFusion.ScoredLeg<>(
+                mapToChunks(densePoints), RetrievedChunk::relevanceScore, config.retrieval().ccWeights().dense()));
         }
 
         // Sparse leg (if available)
@@ -300,8 +301,8 @@ public class HybridCaseRetriever implements CaseRetriever {
 
             List<ScoredPoint> sparsePoints = executeQuery(sparseQuery.build());
             if (!sparsePoints.isEmpty()) {
-                legs.add(new ConvexCombinationFusion.ScoredLeg(
-                    mapToChunks(sparsePoints), config.retrieval().ccWeights().sparse()));
+                legs.add(new ScoreFusion.ScoredLeg<>(
+                    mapToChunks(sparsePoints), RetrievedChunk::relevanceScore, config.retrieval().ccWeights().sparse()));
             }
         }
 
@@ -322,12 +323,13 @@ public class HybridCaseRetriever implements CaseRetriever {
 
             List<ScoredPoint> bm25Points = executeQuery(bm25Query.build());
             if (!bm25Points.isEmpty()) {
-                legs.add(new ConvexCombinationFusion.ScoredLeg(
-                    mapToChunks(bm25Points), config.retrieval().ccWeights().bm25()));
+                legs.add(new ScoreFusion.ScoredLeg<>(
+                    mapToChunks(bm25Points), RetrievedChunk::relevanceScore, config.retrieval().ccWeights().bm25()));
             }
         }
 
-        return ConvexCombinationFusion.fuse(legs, maxResults);
+        return ScoreFusion.convexCombination(legs, RetrievedChunk::fusionKey, maxResults)
+            .stream().map(f -> f.item().withRelevanceScore(f.score())).toList();
     }
 
     private List<RetrievedChunk> mapToChunks(List<ScoredPoint> scoredPoints) {

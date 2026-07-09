@@ -210,6 +210,143 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         }
     }
 
+    @Test
+    void ensureCollection_addsSparseVector_whenSpladeEnabled() throws Exception {
+        int sharedTestId = TEST_COUNTER.incrementAndGet();
+        QdrantClient client = new QdrantClient(
+                QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
+
+        // Phase 1: Create collection with default config (SPLADE disabled)
+        var config1  = testConfig(sharedTestId, false);
+        var manager1 = new CbrCollectionManager(client, config1);
+        var store1   = new QdrantCbrCaseMemoryStore(manager1,
+            (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
+            (io.casehub.neocortex.memory.CaseMemoryStore) null);
+        store1.registerSchema(CbrFeatureSchema.of("splade-evolve",
+                                                  FeatureField.categorical("cat")));
+        store1.store(new TextualCbrCase("p", "s", null, null),
+                     "splade-evolve", ENTITY, CBR, TENANT, "case-1");
+
+        // Verify no sparse vectors exist yet
+        String collection = config1.collectionPrefix() + "_splade-evolve";
+        var    info1      = client.getCollectionInfoAsync(collection).get();
+        assertThat(info1.getConfig().getParams().getSparseVectorsConfig().getMapMap()).isEmpty();
+
+        // Phase 2: New manager with SPLADE enabled, same collection prefix
+        var config2 = new QdrantCbrConfig() {
+            @Override
+            public String host()                     {return qdrant.getHost();}
+
+            @Override
+            public int port()                        {return qdrant.getMappedPort(6334);}
+
+            @Override
+            public Optional<String> apiKey()         {return Optional.empty();}
+
+            @Override
+            public boolean useTls()                  {return false;}
+
+            @Override
+            public String collectionPrefix()         {return "cbr_test_" + sharedTestId;}
+
+            @Override
+            public String denseVectorName()          {return "dense";}
+
+            @Override
+            public int maxRetries()                  {return 3;}
+
+            @Override
+            public boolean allowDimensionMigration() {return false;}
+
+            @Override
+            public int oversampleFactor()            {return 3;}
+
+            @Override
+            public int overFetchLimit()              {return 200;}
+
+            @Override
+            public boolean spladeEnabled()           {return true;}
+
+            @Override
+            public boolean allowSparseVectorMigration() {return true;}
+        };
+        var manager2 = new CbrCollectionManager(client, config2);
+        manager2.ensureCollection("splade-evolve", 1);
+
+        // Verify sparse vector was added
+        var info2 = client.getCollectionInfoAsync(collection).get();
+        assertThat(info2.getConfig().getParams().getSparseVectorsConfig().getMapMap())
+                .containsKey("sparse");
+    }
+
+    @Test
+    void ensureCollection_addsBm25Vector_whenBm25Enabled() throws Exception {
+        int sharedTestId = TEST_COUNTER.incrementAndGet();
+        QdrantClient client = new QdrantClient(
+                QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
+
+        // Phase 1: Create collection with default config (BM25 disabled)
+        var config1  = testConfig(sharedTestId, false);
+        var manager1 = new CbrCollectionManager(client, config1);
+        var store1   = new QdrantCbrCaseMemoryStore(manager1,
+            (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
+            (io.casehub.neocortex.memory.CaseMemoryStore) null);
+        store1.registerSchema(CbrFeatureSchema.of("bm25-evolve",
+                                                  FeatureField.categorical("cat")));
+        store1.store(new TextualCbrCase("p", "s", null, null),
+                     "bm25-evolve", ENTITY, CBR, TENANT, "case-1");
+
+        // Phase 2: New manager with BM25 enabled, same collection prefix
+        var config2 = new QdrantCbrConfig() {
+            @Override
+            public String host()                     {return qdrant.getHost();}
+
+            @Override
+            public int port()                        {return qdrant.getMappedPort(6334);}
+
+            @Override
+            public Optional<String> apiKey()         {return Optional.empty();}
+
+            @Override
+            public boolean useTls()                  {return false;}
+
+            @Override
+            public String collectionPrefix()         {return "cbr_test_" + sharedTestId;}
+
+            @Override
+            public String denseVectorName()          {return "dense";}
+
+            @Override
+            public int maxRetries()                  {return 3;}
+
+            @Override
+            public boolean allowDimensionMigration() {return false;}
+
+            @Override
+            public int oversampleFactor()            {return 3;}
+
+            @Override
+            public int overFetchLimit()              {return 200;}
+
+            @Override
+            public boolean bm25Enabled()             {return true;}
+
+            @Override
+            public boolean allowSparseVectorMigration() {return true;}
+        };
+        var manager2 = new CbrCollectionManager(client, config2);
+        manager2.ensureCollection("bm25-evolve", 1);
+
+        // Verify BM25 sparse vector was added with IDF modifier
+        String collection    = config1.collectionPrefix() + "_bm25-evolve";
+        var    info2         = client.getCollectionInfoAsync(collection).get();
+        var    sparseVectors = info2.getConfig().getParams().getSparseVectorsConfig().getMapMap();
+        assertThat(sparseVectors).containsKey("bm25");
+        assertThat(sparseVectors.get("bm25").getModifier())
+                .isEqualTo(io.qdrant.client.grpc.Collections.Modifier.Idf);
+    }
+
+
     private record StubEmbeddingModel(int dim) implements EmbeddingModel {
         @Override public Response<Embedding> embed(String text) {
             float[] vec = new float[dim];

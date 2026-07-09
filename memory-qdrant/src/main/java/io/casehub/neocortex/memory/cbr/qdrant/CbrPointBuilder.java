@@ -15,6 +15,7 @@ import io.qdrant.client.grpc.Points.Vector;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,27 +33,24 @@ final class CbrPointBuilder {
 
     private CbrPointBuilder() {}
 
-    /**
-     * Build a Qdrant point from a CBR case.
-     *
-     * @param cbrCase     the case to index
-     * @param caseType    case type discriminator
-     * @param entityId    owning entity
-     * @param domainName  memory domain name
-     * @param tenantId    tenant discriminator
-     * @param caseId      unique case identifier
-     * @param embedding   optional dense embedding of problem() text (null if no EmbeddingModel)
-     * @param denseVectorName name for the dense vector in the named-vectors map
-     * @return a Qdrant point ready for upsert
-     */
     static PointStruct buildPoint(CbrCase cbrCase, String caseType,
-                                   String entityId, String domainName,
-                                   String tenantId, String caseId,
-                                   Embedding embedding, String denseVectorName) {
+                                  String entityId, String domainName,
+                                  String tenantId, String caseId,
+                                  Embedding embedding, String denseVectorName) {
+        return buildPoint(cbrCase, caseType, entityId, domainName, tenantId, caseId,
+                          embedding, denseVectorName, null, null, null, null, null);
+    }
+
+    static PointStruct buildPoint(CbrCase cbrCase, String caseType,
+                                  String entityId, String domainName,
+                                  String tenantId, String caseId,
+                                  Embedding embedding, String denseVectorName,
+                                  Map<Integer, Float> sparseEmbedding, String sparseVectorName,
+                                  String bm25Text, String bm25VectorName, String bm25Model) {
 
         // Deterministic UUID from tenantId + caseType + caseId
         String idInput = tenantId + "#" + caseType + "#" + caseId;
-        UUID pointId = UUID.nameUUIDFromBytes(idInput.getBytes(StandardCharsets.UTF_8));
+        UUID   pointId = UUID.nameUUIDFromBytes(idInput.getBytes(StandardCharsets.UTF_8));
 
         // Payload
         Map<String, Value> payload = new HashMap<>();
@@ -97,20 +95,37 @@ final class CbrPointBuilder {
         payload.put("_cbr_type", ValueFactory.value(cbrCase.cbrType()));
         payload.put("_stored_at", ValueFactory.value(Instant.now().toEpochMilli()));
 
-        // Build point — always include a named vector (real or placeholder)
+        // Build named vectors
         Map<String, Vector> namedVectors = new HashMap<>();
         if (embedding != null) {
             namedVectors.put(denseVectorName, VectorFactory.vector(embedding.vectorAsList()));
         } else {
-            // Placeholder 1-dimensional vector for payload-filter-only mode
             namedVectors.put(denseVectorName, VectorFactory.vector(List.of(0.0f)));
         }
 
+        if (sparseEmbedding != null && sparseVectorName != null) {
+            List<Float>   sparseValues  = new ArrayList<>(sparseEmbedding.size());
+            List<Integer> sparseIndices = new ArrayList<>(sparseEmbedding.size());
+            for (Map.Entry<Integer, Float> entry : sparseEmbedding.entrySet()) {
+                sparseIndices.add(entry.getKey());
+                sparseValues.add(entry.getValue());
+            }
+            namedVectors.put(sparseVectorName, VectorFactory.vector(sparseValues, sparseIndices));
+        }
+
+        if (bm25Text != null && bm25VectorName != null) {
+            namedVectors.put(bm25VectorName, VectorFactory.vector(
+                    io.qdrant.client.grpc.Points.Document.newBuilder()
+                                                         .setText(bm25Text)
+                                                         .setModel(bm25Model)
+                                                         .build()));
+        }
+
         return PointStruct.newBuilder()
-            .setId(PointIdFactory.id(pointId))
-            .setVectors(VectorsFactory.namedVectors(namedVectors))
-            .putAllPayload(payload)
-            .build();
+                          .setId(PointIdFactory.id(pointId))
+                          .setVectors(VectorsFactory.namedVectors(namedVectors))
+                          .putAllPayload(payload)
+                          .build();
     }
 
     /**

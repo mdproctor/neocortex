@@ -1,5 +1,6 @@
 package io.casehub.neocortex.rag.runtime;
 
+import io.casehub.neocortex.fusion.CamelCaseExpander;
 import io.casehub.neocortex.inference.MultiModalEmbedding;
 import io.casehub.neocortex.rag.ChunkInput;
 import io.casehub.neocortex.rag.CorpusRef;

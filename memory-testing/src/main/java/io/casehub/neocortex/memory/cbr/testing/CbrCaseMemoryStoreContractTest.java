@@ -1,5 +1,6 @@
 package io.casehub.neocortex.memory.cbr.testing;
 
+import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.cbr.*;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
@@ -235,7 +236,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
 
         var q = new CbrQuery(TENANT, CBR, "starcraft-game",
             Map.of("opponent_race", "Zerg"), Map.of(), 10, 0.0, boundary, null, 0.5,
-            RetrievalMode.HYBRID, CbrFusionStrategy.RRF);
+            RetrievalMode.HYBRID, FusionStrategy.RRF);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("new game");
@@ -679,7 +680,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void retrieveSimilar_defaultFusionStrategy_isRrf() {
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
             Map.of("opponent_race", "Zerg"), 5);
-        assertThat(query.fusionStrategy()).isEqualTo(CbrFusionStrategy.RRF);
+        assertThat(query.fusionStrategy()).isEqualTo(FusionStrategy.RRF);
     }
 
     @Test

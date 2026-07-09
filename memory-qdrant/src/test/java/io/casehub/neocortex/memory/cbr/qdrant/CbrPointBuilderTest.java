@@ -131,4 +131,67 @@ class CbrPointBuilderTest {
         UUID expectedUuid = UUID.nameUUIDFromBytes(expectedIdInput.getBytes(StandardCharsets.UTF_8));
         assertThat(expected).isEqualTo(expectedUuid);
     }
+
+    @Test
+    void buildPoint_withSparseEmbedding_includesSparseVector() {
+        var                 cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        Map<Integer, Float> sparse  = Map.of(5, 0.8f, 12, 0.3f);
+        PointStruct point = CbrPointBuilder.buildPoint(cbrCase, "type",
+                                                       "e1", "d1", "t1", "c1", null, "dense",
+                                                       sparse, "sparse", null, null, null);
+
+        var vectors = point.getVectors().getVectors().getVectorsMap();
+        assertThat(vectors).containsKey("sparse");
+        var sparseVec = vectors.get("sparse").getSparse();
+        assertThat(sparseVec.getIndicesList()).containsExactlyInAnyOrder(5, 12);
+        assertThat(sparseVec.getValuesList()).hasSize(2);
+    }
+
+    @Test
+    void buildPoint_withBm25Text_includesBm25Vector() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        PointStruct point = CbrPointBuilder.buildPoint(cbrCase, "type",
+                                                       "e1", "d1", "t1", "c1", null, "dense",
+                                                       null, null, "expanded bm25 text", "bm25", "Qdrant/bm25");
+
+        var vectors = point.getVectors().getVectors().getVectorsMap();
+        assertThat(vectors).containsKey("bm25");
+        var bm25Vec = vectors.get("bm25");
+        assertThat(bm25Vec.getDocument().getText()).isEqualTo("expanded bm25 text");
+        assertThat(bm25Vec.getDocument().getModel()).isEqualTo("Qdrant/bm25");
+    }
+
+    @Test
+    void buildPoint_withDenseAndSparseAndBm25_allVectorsPresent() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        float[] vector = {0.1f, 0.2f, 0.3f, 0.4f};
+        Embedding embedding = Embedding.from(vector);
+        Map<Integer, Float> sparse = Map.of(5, 0.8f, 12, 0.3f);
+        PointStruct point = CbrPointBuilder.buildPoint(cbrCase, "type",
+                                                       "e1", "d1", "t1", "c1", embedding, "dense",
+                                                       sparse, "sparse", "expanded text", "bm25", "Qdrant/bm25");
+
+        var vectors = point.getVectors().getVectors().getVectorsMap();
+        assertThat(vectors).containsKey("dense");
+        assertThat(vectors).containsKey("sparse");
+        assertThat(vectors).containsKey("bm25");
+        assertThat(vectors.get("dense").getDense().getDataList()).hasSize(4);
+        assertThat(vectors.get("sparse").getSparse().getIndicesList()).containsExactlyInAnyOrder(5, 12);
+        assertThat(vectors.get("bm25").getDocument().getText()).isEqualTo("expanded text");
+        assertThat(vectors.get("bm25").getDocument().getModel()).isEqualTo("Qdrant/bm25");
+    }
+
+    @Test
+    void buildPoint_withoutSparseOrBm25_noExtraVectors() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        PointStruct point = CbrPointBuilder.buildPoint(cbrCase, "type",
+                                                       "e1", "d1", "t1", "c1", null, "dense",
+                                                       null, null, null, null, null);
+
+        var vectors = point.getVectors().getVectors().getVectorsMap();
+        assertThat(vectors).containsKey("dense");
+        assertThat(vectors).doesNotContainKey("sparse");
+        assertThat(vectors).doesNotContainKey("bm25");
+    }
+
 }

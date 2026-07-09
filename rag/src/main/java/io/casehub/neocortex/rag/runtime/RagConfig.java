@@ -1,6 +1,6 @@
 package io.casehub.neocortex.rag.runtime;
 
-import io.casehub.neocortex.rag.FusionStrategy;
+import io.casehub.neocortex.fusion.FusionStrategy;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import java.util.Optional;
