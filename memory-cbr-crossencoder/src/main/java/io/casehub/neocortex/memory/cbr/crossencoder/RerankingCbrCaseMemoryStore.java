@@ -4,7 +4,12 @@ import io.casehub.neocortex.inference.tasks.CrossEncoderReranker;
 import io.casehub.neocortex.inference.tasks.RankedResult;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
-import io.casehub.neocortex.memory.cbr.*;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.RetrievalMode;
+import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import jakarta.annotation.Priority;
@@ -65,13 +70,13 @@ public class RerankingCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         int fetchSize = Math.max(query.topK(), config.rerankPoolSize());
         CbrQuery overfetchQuery = new CbrQuery(
-            query.tenantId(), query.domain(), query.caseType(),
-            query.features(), query.weights(), fetchSize,
-            query.minSimilarity(), query.notBefore(), query.problem(),
-            query.vectorWeight(), query.retrievalMode(), query.fusionStrategy());
+                query.tenantId(), query.domain(), query.caseType(),
+                query.features(), query.filters(), query.weights(), fetchSize,
+                query.minSimilarity(), query.notBefore(), query.problem(),
+                query.vectorWeight(), query.retrievalMode(), query.fusionStrategy());
 
         List<ScoredCbrCase<C>> candidates = delegate.retrieveSimilar(overfetchQuery, caseClass);
-        if (candidates.isEmpty()) return candidates;
+        if (candidates.isEmpty()) {return candidates;}
 
         if (candidates.stream().allMatch(ScoredCbrCase::reranked)) {
             int limit = Math.min(candidates.size(), query.topK());
@@ -79,22 +84,21 @@ public class RerankingCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         List<String> problemTexts = candidates.stream()
-            .map(c -> c.cbrCase().problem() != null ? c.cbrCase().problem() : "")
-            .toList();
+                                              .map(c -> c.cbrCase().problem() != null ? c.cbrCase().problem() : "")
+                                              .toList();
 
         List<RankedResult> ranked = reranker.rerank(query.problem(), problemTexts);
 
         List<ScoredCbrCase<C>> results = new ArrayList<>(
-            Math.min(ranked.size(), query.topK()));
+                Math.min(ranked.size(), query.topK()));
         for (int i = 0; i < Math.min(ranked.size(), query.topK()); i++) {
-            RankedResult r = ranked.get(i);
-            ScoredCbrCase<C> original = candidates.get(r.originalIndex());
-            double sigmoidScore = 1.0 / (1.0 + Math.exp(-r.score()));
+            RankedResult     r            = ranked.get(i);
+            ScoredCbrCase<C> original     = candidates.get(r.originalIndex());
+            double           sigmoidScore = 1.0 / (1.0 + Math.exp(-r.score()));
             results.add(new ScoredCbrCase<C>(original.cbrCase(), sigmoidScore).withReranked());
         }
 
-        return Collections.unmodifiableList(results);
-    }
+        return Collections.unmodifiableList(results);}
 
     @Override
     public Integer erase(EraseRequest request) {

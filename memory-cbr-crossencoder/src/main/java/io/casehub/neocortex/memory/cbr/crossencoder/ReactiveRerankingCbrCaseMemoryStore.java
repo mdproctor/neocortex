@@ -4,7 +4,12 @@ import io.casehub.neocortex.inference.tasks.CrossEncoderReranker;
 import io.casehub.neocortex.inference.tasks.RankedResult;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
-import io.casehub.neocortex.memory.cbr.*;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.RetrievalMode;
+import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 import io.smallrye.mutiny.Uni;
@@ -59,26 +64,25 @@ public class ReactiveRerankingCbrCaseMemoryStore implements ReactiveCbrCaseMemor
 
         int fetchSize = Math.max(query.topK(), config.rerankPoolSize());
         CbrQuery overfetchQuery = new CbrQuery(
-            query.tenantId(), query.domain(), query.caseType(),
-            query.features(), query.weights(), fetchSize,
-            query.minSimilarity(), query.notBefore(), query.problem(),
-            query.vectorWeight(), query.retrievalMode(), query.fusionStrategy());
+                query.tenantId(), query.domain(), query.caseType(),
+                query.features(), query.filters(), query.weights(), fetchSize,
+                query.minSimilarity(), query.notBefore(), query.problem(),
+                query.vectorWeight(), query.retrievalMode(), query.fusionStrategy());
 
         return delegate.retrieveSimilar(overfetchQuery, caseClass)
-            .onItem().transformToUni(candidates -> {
-                if (candidates.isEmpty()) {
-                    return Uni.createFrom().item(candidates);
-                }
-                if (candidates.stream().allMatch(ScoredCbrCase::reranked)) {
-                    int limit = Math.min(candidates.size(), query.topK());
-                    return Uni.createFrom().item(
-                        Collections.unmodifiableList(new ArrayList<>(candidates.subList(0, limit))));
-                }
-                return Uni.createFrom().item(() ->
-                    rerankBlocking(query, candidates))
-                    .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
-            });
-    }
+                       .onItem().transformToUni(candidates -> {
+                    if (candidates.isEmpty()) {
+                        return Uni.createFrom().item(candidates);
+                    }
+                    if (candidates.stream().allMatch(ScoredCbrCase::reranked)) {
+                        int limit = Math.min(candidates.size(), query.topK());
+                        return Uni.createFrom().item(
+                                Collections.unmodifiableList(new ArrayList<>(candidates.subList(0, limit))));
+                    }
+                    return Uni.createFrom().item(() ->
+                                                         rerankBlocking(query, candidates))
+                              .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+                });}
 
     @Override
     public Uni<Integer> erase(EraseRequest request) {

@@ -11,6 +11,7 @@ public record CbrQuery(
     MemoryDomain domain,
     String caseType,
     Map<String, Object> features,
+    Map<String, CbrFilter> filters,
     Map<String, Double> weights,
     int topK,
     double minSimilarity,
@@ -26,6 +27,8 @@ public record CbrQuery(
         Objects.requireNonNull(caseType, "caseType required");
         Objects.requireNonNull(features, "features required");
         features = Map.copyOf(features);
+        Objects.requireNonNull(filters, "filters required");
+        filters = Map.copyOf(filters);
         Objects.requireNonNull(weights, "weights required");
         weights = Map.copyOf(weights);
         if (topK < 1) throw new IllegalArgumentException("topK must be >= 1, got: " + topK);
@@ -45,27 +48,27 @@ public record CbrQuery(
 
     public static CbrQuery of(String tenantId, MemoryDomain domain,
                                String caseType, Map<String, Object> features, int topK) {
-        return new CbrQuery(tenantId, domain, caseType, features, Map.of(), topK,
+        return new CbrQuery(tenantId, domain, caseType, features, Map.of(), Map.of(), topK,
                             0.0, null, null, 0.5, RetrievalMode.HYBRID, FusionStrategy.RRF);
     }
 
     public CbrQuery withProblem(String problem) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withMinSimilarity(double minSimilarity) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withNotBefore(Instant notBefore) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withWeights(Map<String, Double> weights) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
@@ -76,17 +79,28 @@ public record CbrQuery(
     }
 
     public CbrQuery withVectorWeight(double vectorWeight) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withRetrievalMode(RetrievalMode retrievalMode) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 
     public CbrQuery withFusionStrategy(FusionStrategy fusionStrategy) {
-        return new CbrQuery(tenantId, domain, caseType, features, weights, topK,
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
+                            minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
+    }
+
+    public CbrQuery withFilter(String field, CbrFilter filter) {
+        Map<String, CbrFilter> newFilters = new java.util.HashMap<>(filters);
+        newFilters.put(field, filter);
+        return withFilters(newFilters);
+    }
+
+    public CbrQuery withFilters(Map<String, CbrFilter> filters) {
+        return new CbrQuery(tenantId, domain, caseType, features, filters, weights, topK,
                             minSimilarity, notBefore, problem, vectorWeight, retrievalMode, fusionStrategy);
     }
 }

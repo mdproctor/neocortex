@@ -1,7 +1,9 @@
 package io.casehub.neocortex.memory.cbr;
 
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FeatureFieldTest {
 
@@ -143,5 +145,125 @@ class FeatureFieldTest {
         var f1 = FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.3));
         var f2 = FeatureField.numeric("s", 0, 100, new SimilaritySpec.GaussianDecay(0.3));
         assertThat(f1).isEqualTo(f2);
+    }
+
+    // --- CategoricalList ---
+    @Test
+    void categoricalList_validName() {
+        var f = FeatureField.categoricalList("phases");
+        assertThat(f).isInstanceOf(FeatureField.CategoricalList.class);
+        assertThat(f.name()).isEqualTo("phases");
+    }
+
+    @Test
+    void categoricalList_nullNameRejected() {
+        assertThatThrownBy(() -> FeatureField.categoricalList(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    // --- NestedObject ---
+    @Test
+    void nestedObject_validConstruction() {
+        var f = FeatureField.nestedObject("economy",
+                                          FeatureField.numeric("minute_3", 0, 100),
+                                          FeatureField.categorical("tier"));
+        assertThat(f).isInstanceOf(FeatureField.NestedObject.class);
+        assertThat(f.name()).isEqualTo("economy");
+        assertThat(((FeatureField.NestedObject) f).innerFields()).hasSize(2);
+    }
+
+    @Test
+    void nestedObject_rejectsNestedInnerFields_categoricalList() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.categoricalList("nested_list")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("CategoricalList");
+    }
+
+    @Test
+    void nestedObject_rejectsNestedInnerFields_nestedObject() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.nestedObject("inner", FeatureField.categorical("c"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NestedObject");
+    }
+
+    @Test
+    void nestedObject_rejectsNestedInnerFields_objectList() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.objectList("inner", FeatureField.categorical("c"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ObjectList");
+    }
+
+    @Test
+    void nestedObject_rejectsSimilaritySpecOnInnerCategorical() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.categorical("cat", SimilaritySpec.categoricalTableBuilder()
+                                                                                                         .add("A", "B", 0.5).build())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SimilaritySpec not supported");
+    }
+
+    @Test
+    void nestedObject_rejectsSimilaritySpecOnInnerNumeric() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.numeric("num", 0, 100, new SimilaritySpec.GaussianDecay(0.3))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SimilaritySpec not supported");
+    }
+
+    @Test
+    void nestedObject_rejectsSemanticInnerText() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.semanticText("desc")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("semantic matching not supported");
+    }
+
+    @Test
+    void nestedObject_rejectsDuplicateInnerFieldNames() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.categorical("name"),
+                                                           FeatureField.numeric("name", 0, 10)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate inner field name");
+    }
+
+    @Test
+    void nestedObject_innerFieldsDefensivelyCopied() {
+        var inner = new java.util.ArrayList<>(java.util.List.of(
+                FeatureField.categorical("type")));
+        var f = new FeatureField.NestedObject("moments", inner);
+        inner.add(FeatureField.numeric("extra", 0, 10));
+        assertThat(f.innerFields()).hasSize(1);
+    }
+
+    // --- ObjectList ---
+    @Test
+    void objectList_validConstruction() {
+        var f = FeatureField.objectList("moments",
+                                        FeatureField.categorical("type"),
+                                        FeatureField.numeric("minute", 0, 90));
+        assertThat(f).isInstanceOf(FeatureField.ObjectList.class);
+        assertThat(f.name()).isEqualTo("moments");
+        assertThat(((FeatureField.ObjectList) f).innerFields()).hasSize(2);
+    }
+
+    @Test
+    void objectList_rejectsNestedInnerFields() {
+        assertThatThrownBy(() -> FeatureField.objectList("bad",
+                                                         FeatureField.nestedObject("inner", FeatureField.categorical("c"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NestedObject");
+    }
+
+    @Test
+    void objectList_rejectsDuplicateInnerFieldNames() {
+        assertThatThrownBy(() -> FeatureField.objectList("bad",
+                                                         FeatureField.categorical("x"),
+                                                         FeatureField.text("x")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate inner field name");
     }
 }

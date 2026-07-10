@@ -1,15 +1,31 @@
 package io.casehub.neocortex.memory.cbr.testing;
 
 import io.casehub.neocortex.fusion.FusionStrategy;
-import io.casehub.neocortex.memory.cbr.*;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrFilter;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
+import io.casehub.neocortex.memory.cbr.NumericRange;
+import io.casehub.neocortex.memory.cbr.PlanCbrCase;
+import io.casehub.neocortex.memory.cbr.PlanTrace;
+import io.casehub.neocortex.memory.cbr.RetrievalMode;
+import io.casehub.neocortex.memory.cbr.SimilaritySpec;
+import io.casehub.neocortex.memory.cbr.TextualCbrCase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public abstract class CbrCaseMemoryStoreContractTest {
 
@@ -235,7 +251,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
             "starcraft-game", ENTITY, CBR, TENANT, "case-new");
 
         var q = new CbrQuery(TENANT, CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg"), Map.of(), 10, 0.0, boundary, null, 0.5,
+            Map.of("opponent_race", "Zerg"), Map.of(), Map.of(), 10, 0.0, boundary, null, 0.5,
             RetrievalMode.HYBRID, FusionStrategy.RRF);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -709,5 +725,341 @@ public abstract class CbrCaseMemoryStoreContractTest {
             .withRetrievalMode(RetrievalMode.SEMANTIC_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).isEmpty();
+    }
+
+// ==========================================================================
+// Structured case fields — contract tests for #89
+// ==========================================================================
+
+    private void registerStructuredSchema() {
+        store().registerSchema(CbrFeatureSchema.of("game",
+                                                   FeatureField.categorical("posture"),
+                                                   FeatureField.numeric("score", 0, 100),
+                                                   FeatureField.categoricalList("phases"),
+                                                   FeatureField.nestedObject("economy",
+                                                                             FeatureField.numeric("minute_3", 0, 100),
+                                                                             FeatureField.categorical("tier")),
+                                                   FeatureField.objectList("moments",
+                                                                           FeatureField.categorical("type"),
+                                                                           FeatureField.numeric("minute", 0, 90))));
+    }
+
+    private String storeGameCase(String problem, Map<String, Object> features, String caseId) {
+        return store().store(
+                new FeatureVectorCbrCase(problem, "solution", "WIN", null, features),
+                "game", ENTITY, CBR, TENANT, caseId);
+    }
+
+    @Test
+    void structuredFields_categoricalList_containsFilter() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "ALL_IN",
+                                      "phases", List.of("EARLY_AGGRESSION", "MID_SKIRMISH", "LATE_PUSH")), "g1");
+        storeGameCase("game2", Map.of("posture", "DEFENSIVE",
+                                      "phases", List.of("TURTLE", "LATE_PUSH")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.contains("EARLY_AGGRESSION"));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_categoricalList_noFilter_returnsAll() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "ALL_IN",
+                                      "phases", List.of("EARLY", "MID")), "g1");
+        storeGameCase("game2", Map.of("posture", "DEFENSIVE",
+                                      "phases", List.of("TURTLE")), "g2");
+
+        var q       = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
+    void structuredFields_containsAll_matchesSubset() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of("A", "B", "C")), "g1");
+        storeGameCase("game2", Map.of("posture", "Y",
+                                      "phases", List.of("A", "D")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.containsAll(List.of("A", "B")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_containsAll_rejectsMissingElement() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of("A", "B")), "g1");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.containsAll(List.of("A", "C")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void structuredFields_containsAny_matchesAnyPresent() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of("A", "B")), "g1");
+        storeGameCase("game2", Map.of("posture", "Y",
+                                      "phases", List.of("C", "D")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.containsAny(List.of("X", "A")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_containsAny_rejectsAllAbsent() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of("A", "B")), "g1");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.containsAny(List.of("X", "Y")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void structuredFields_nestedObject_hasMatch_categoricalSubField() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "economy", Map.of("minute_3", 45, "tier", "gold")), "g1");
+        storeGameCase("game2", Map.of("posture", "Y",
+                                      "economy", Map.of("minute_3", 30, "tier", "silver")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("tier", "gold")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_nestedObject_hasMatch_numericRange() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "economy", Map.of("minute_3", 45, "tier", "gold")), "g1");
+        storeGameCase("game2", Map.of("posture", "Y",
+                                      "economy", Map.of("minute_3", 80, "tier", "gold")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("minute_3", NumericRange.of(40, 50))));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_nestedObject_hasMatch_exactNumeric() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "economy", Map.of("minute_3", 45, "tier", "gold")), "g1");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("minute_3", 45)));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+    }
+
+    @Test
+    void structuredFields_objectList_hasMatch_anyElementMatching() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "moments", List.of(
+                        Map.of("type", "FIRST_CONTACT", "minute", 3.2),
+                        Map.of("type", "BATTLE_WON", "minute", 5.1))), "g1");
+        storeGameCase("game2", Map.of("posture", "Y",
+                                      "moments", List.of(
+                        Map.of("type", "RETREAT", "minute", 8.0))), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_objectList_hasMatch_multipleSubFields_sameElement() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "moments", List.of(
+                        Map.of("type", "FIRST_CONTACT", "minute", 3.2),
+                        Map.of("type", "BATTLE_WON", "minute", 5.1))), "g1");
+
+        var qMatch = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                             .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT", "minute", 3.2)));
+        assertThat(store().retrieveSimilar(qMatch, FeatureVectorCbrCase.class)).hasSize(1);
+
+        var qCross = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                             .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT", "minute", 5.1)));
+        assertThat(store().retrieveSimilar(qCross, FeatureVectorCbrCase.class)).isEmpty();
+    }
+
+    @Test
+    void structuredFields_objectList_hasMatch_noMatchingElement() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "moments", List.of(Map.of("type", "RETREAT", "minute", 8.0))), "g1");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT")));
+        assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).isEmpty();
+    }
+
+    @Test
+    void structuredFields_mixedFlatAndStructured() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "ALL_IN", "score", 85,
+                                      "phases", List.of("EARLY", "MID")), "g1");
+        storeGameCase("game2", Map.of("posture", "DEFENSIVE", "score", 30,
+                                      "phases", List.of("EARLY", "LATE")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game",
+                            Map.of("posture", "ALL_IN", "score", 80), 10)
+                        .withFilter("phases", CbrFilter.contains("MID"));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_multipleFiltersAndSemantics() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of("EARLY", "MID"),
+                                      "economy", Map.of("minute_3", 50, "tier", "gold")), "g1");
+        storeGameCase("game2", Map.of("posture", "Y",
+                                      "phases", List.of("EARLY", "MID"),
+                                      "economy", Map.of("minute_3", 50, "tier", "silver")), "g2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.contains("EARLY"))
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("tier", "gold")));
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
+    }
+
+    @Test
+    void structuredFields_filterOnMissingFieldReturnsEmpty() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X"), "g1");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.contains("A"));
+        assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).isEmpty();
+    }
+
+    @Test
+    void structuredFields_emptyCategoricalListFiltered() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of()), "g1");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.contains("A"));
+        assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).isEmpty();
+    }
+
+    @Test
+    void structuredFields_validation_wrongFilterTypeOnField() {
+        registerStructuredSchema();
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("posture", CbrFilter.contains("A"));
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void structuredFields_validation_storeTimeMismatch() {
+        registerStructuredSchema();
+        assertThatThrownBy(() -> storeGameCase("bad", Map.of("phases", "not_a_list"), "bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void structuredFields_validation_structuredFieldInFeatures() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "phases", List.of("A")), "g1");
+        var q = CbrQuery.of(TENANT, CBR, "game",
+                            Map.of("phases", List.of("A")), 10);
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must be queried via filters");
+    }
+
+    @Test
+    void structuredFields_validation_filtersWithNoSchema() {
+        var q = CbrQuery.of(TENANT, CBR, "unregistered-type", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.contains("A"));
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void structuredFields_validation_duplicateSchemaFieldNames() {
+        assertThatThrownBy(() -> store().registerSchema(CbrFeatureSchema.of("dup",
+                                                                            FeatureField.categorical("name"),
+                                                                            FeatureField.categoricalList("name"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate field name");
+    }
+
+    @Test
+    void structuredFields_validation_innerCategoricalWithSimilaritySpec() {
+        assertThatThrownBy(() -> store().registerSchema(CbrFeatureSchema.of("bad",
+                                                                            FeatureField.nestedObject("nested",
+                                                                                                      FeatureField.categorical("cat", SimilaritySpec.categoricalTableBuilder()
+                                                                                                                                                    .add("A", "B", 0.5).build())))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SimilaritySpec not supported");
+    }
+
+    @Test
+    void structuredFields_validation_innerSemanticText() {
+        assertThatThrownBy(() -> store().registerSchema(CbrFeatureSchema.of("bad",
+                                                                            FeatureField.nestedObject("nested",
+                                                                                                      FeatureField.semanticText("desc")))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("semantic matching not supported");
+    }
+
+    @Test
+    void structuredFields_validation_hasMatchNonexistentSubField() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "moments", List.of(Map.of("type", "X", "minute", 1.0))), "g1");
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("nonexistent", "val")));
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found in inner schema");
+    }
+
+    @Test
+    void structuredFields_validation_hasMatchWrongSubFieldType() {
+        registerStructuredSchema();
+        storeGameCase("game1", Map.of("posture", "X",
+                                      "moments", List.of(Map.of("type", "X", "minute", 1.0))), "g1");
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("minute", "not_a_number")));
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("requires Number or NumericRange");
     }
 }

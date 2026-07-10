@@ -106,6 +106,11 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     @Override
     public String store(CbrCase cbrCase, String caseType, String entityId,
                         MemoryDomain domain, String tenantId, String caseId) {
+        CbrFeatureSchema schema = schemas.get(caseType);
+        if (schema != null) {
+            CbrFeatureValidator.validateStoreFeatures(cbrCase.features(), schema);
+        }
+
         // Delegate durable storage to CaseMemoryStore if present
         String memoryId = caseId;
         if (delegate != null) {
@@ -178,6 +183,11 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         if (schema != null) {
             CbrQueryTranslator.validateQueryFeatures(query.features(), schema);
         }
+        if (!query.filters().isEmpty() && schema == null) {
+            throw new IllegalStateException(
+                "Cannot apply structural filters: no schema registered for caseType '"
+                + query.caseType() + "'");
+        }
 
         String collection = collectionManager.collectionName(query.caseType());
 
@@ -193,6 +203,9 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
+        if (!query.filters().isEmpty()) {
+            filter = CbrQueryTranslator.applyStructuralFilters(filter, query.filters(), schema);
+        }
         RetrievalMode effectiveMode = resolveEffectiveMode(query);
         if (effectiveMode == null) {
             return List.of();
@@ -535,6 +548,9 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 }
                 case FeatureField.Categorical c -> {}
                 case FeatureField.Numeric n -> {}
+                case FeatureField.CategoricalList cl -> {}
+                case FeatureField.NestedObject no -> {}
+                case FeatureField.ObjectList ol -> {}
             }
         }
         return overrides.isEmpty() ? Map.of() : Collections.unmodifiableMap(overrides);

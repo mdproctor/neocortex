@@ -1,6 +1,8 @@
 package io.casehub.neocortex.memory.cbr.qdrant;
 
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
+import io.casehub.neocortex.memory.cbr.CbrFilter;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.NumericRange;
@@ -96,6 +98,12 @@ final class CbrQueryTranslator {
                     }
                     case FeatureField.Text t ->
                         builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
+                    case FeatureField.CategoricalList cl -> throw new IllegalStateException(
+                        "Structured field in toFilter — use applyStructuralFilters");
+                    case FeatureField.NestedObject no -> throw new IllegalStateException(
+                        "Structured field in toFilter — use applyStructuralFilters");
+                    case FeatureField.ObjectList ol -> throw new IllegalStateException(
+                        "Structured field in toFilter — use applyStructuralFilters");
                 }
             }
         }
@@ -110,41 +118,59 @@ final class CbrQueryTranslator {
         return builder.build();
     }
 
-    /**
-     * Validate query features against schema types.
-     * Throws IllegalArgumentException on type mismatches.
-     */
-    static void validateQueryFeatures(Map<String, Object> features, CbrFeatureSchema schema) {
-        for (Map.Entry<String, Object> entry : features.entrySet()) {
-            FeatureField field = findField(schema, entry.getKey());
-            if (field == null) continue;
+    static Filter applyStructuralFilters(Filter baseFilter,
+                                         Map<String, CbrFilter> filters,
+                                         CbrFeatureSchema schema) {
+        if (filters.isEmpty()) {return baseFilter;}
+        CbrFeatureValidator.validateFilters(filters, schema);
 
-            Object value = entry.getValue();
-            switch (field) {
-                case FeatureField.Categorical c -> {
-                    if (!(value instanceof String)) {
-                        throw new IllegalArgumentException(
-                            "Categorical field '" + entry.getKey() + "' requires String, got: "
-                            + value.getClass().getSimpleName());
-                    }
-                }
-                case FeatureField.Numeric n -> {
-                    if (!(value instanceof Number) && !(value instanceof NumericRange)) {
-                        throw new IllegalArgumentException(
-                            "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
-                            + value.getClass().getSimpleName());
-                    }
-                }
-                case FeatureField.Text t -> {
-                    if (!(value instanceof String)) {
-                        throw new IllegalArgumentException(
-                            "Text field '" + entry.getKey() + "' requires String, got: "
-                            + value.getClass().getSimpleName());
+        Filter.Builder builder = baseFilter.toBuilder();
+        for (var entry : filters.entrySet()) {
+            String       payloadKey = "f_" + entry.getKey();
+            CbrFilter    filter     = entry.getValue();
+            FeatureField field      = CbrFeatureValidator.findField(schema, entry.getKey());
+
+            switch (filter) {
+                case CbrFilter.Contains c -> builder.addMust(ConditionFactory.matchKeyword(payloadKey, c.value()));
+                case CbrFilter.ContainsAll ca -> ca.values().forEach(v ->
+                                                                             builder.addMust(ConditionFactory.matchKeyword(payloadKey, v)));
+                case CbrFilter.ContainsAny ca -> builder.addMust(ConditionFactory.matchKeywords(payloadKey, ca.values()));
+                case CbrFilter.HasMatch hm -> {
+                    if (field instanceof FeatureField.ObjectList) {
+                        Filter.Builder inner = Filter.newBuilder();
+                        for (var sub : hm.subFields().entrySet()) {
+                            addSubFieldCondition(inner, sub.getKey(), sub.getValue());
+                        }
+                        builder.addMust(ConditionFactory.nested(payloadKey, inner.build()));
+                    } else {
+                        for (var sub : hm.subFields().entrySet()) {
+                            addSubFieldCondition(builder, payloadKey + "." + sub.getKey(), sub.getValue());
+                        }
                     }
                 }
             }
         }
+        return builder.build();
     }
+
+    private static void addSubFieldCondition(Filter.Builder builder, String key, Object value) {
+        if (value instanceof String s) {
+            builder.addMust(ConditionFactory.matchKeyword(key, s));
+        } else if (value instanceof NumericRange range) {
+            builder.addMust(ConditionFactory.range(key,
+                                                   Range.newBuilder().setGte(range.min()).setLte(range.max()).build()));
+        } else if (value instanceof Number n) {
+            builder.addMust(ConditionFactory.range(key,
+                                                   Range.newBuilder().setGte(n.doubleValue()).setLte(n.doubleValue()).build()));
+        }
+    }
+
+
+    /**
+     * Validate query features against schema types.
+     * Throws IllegalArgumentException on type mismatches.
+     */
+    static void validateQueryFeatures(Map<String, Object> features, CbrFeatureSchema schema) {CbrFeatureValidator.validateQueryFeatures(features, schema);}
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {
         for (FeatureField f : schema.fields()) {

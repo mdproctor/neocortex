@@ -81,6 +81,10 @@ final class CbrPointBuilder {
                 payload.put(key, ValueFactory.value(s));
             } else if (val instanceof Number n) {
                 payload.put(key, ValueFactory.value(n.doubleValue()));
+            } else if (val instanceof List<?> list) {
+                payload.put(key, toListValue(list));
+            } else if (val instanceof Map<?,?> map) {
+                payload.put(key, toStructValue(map));
             }
         }
 
@@ -135,4 +139,35 @@ final class CbrPointBuilder {
         String idInput = tenantId + "#" + caseType + "#" + caseId;
         return UUID.nameUUIDFromBytes(idInput.getBytes(StandardCharsets.UTF_8));
     }
+
+    private static Value toListValue(List<?> list) {
+        List<Value> values = new ArrayList<>(list.size());
+        for (Object elem : list) {
+            if (elem instanceof String s) {values.add(ValueFactory.value(s));} else if (elem instanceof Number n) {
+                values.add(ValueFactory.value(n.doubleValue()));
+            } else if (elem instanceof Map<?, ?> map) {values.add(toStructValue(map));} else {
+                throw new IllegalArgumentException("Unsupported list element type: " + elem.getClass());
+            }
+        }
+        return ValueFactory.list(values);
+    }
+
+    private static Value toStructValue(Map<?, ?> map) {
+        Map<String, Value> struct = new HashMap<>();
+        for (var entry : map.entrySet()) {
+            String k = String.valueOf(entry.getKey());
+            Object v = entry.getValue();
+            if (v instanceof String s) {struct.put(k, ValueFactory.value(s));} else if (v instanceof Number n) {
+                struct.put(k, ValueFactory.value(n.doubleValue()));
+            } else if (v instanceof List<?> list) {
+                struct.put(k, toListValue(list));
+            } else if (v instanceof Map<?, ?> m) {
+                struct.put(k, toStructValue(m));
+            } else {
+                throw new IllegalArgumentException("Unsupported value type: " + v.getClass());
+            }
+        }
+        return ValueFactory.value(struct);
+    }
+
 }

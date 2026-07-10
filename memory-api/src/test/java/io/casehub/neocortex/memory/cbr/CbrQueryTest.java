@@ -3,8 +3,11 @@ package io.casehub.neocortex.memory.cbr;
 import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.MemoryDomain;
 import org.junit.jupiter.api.Test;
+
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CbrQueryTest {
 
@@ -45,7 +48,7 @@ class CbrQueryTest {
 
     @Test
     void minSimilarityOutOfRangeRejected() {
-        assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), Map.of(), 5, 1.5, null, null, 0.5,
+        assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), Map.of(), Map.of(), 5, 1.5, null, null, 0.5,
                 RetrievalMode.HYBRID, FusionStrategy.RRF))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -207,5 +210,49 @@ class CbrQueryTest {
             .withRetrievalMode(RetrievalMode.FEATURE_ONLY)
             .withFusionStrategy(FusionStrategy.CC);
         assertThat(q.retrievalMode()).isEqualTo(RetrievalMode.FEATURE_ONLY);
+    }
+
+// --- Filter tests ---
+
+    @Test
+    void of_hasEmptyFilters() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5);
+        assertThat(q.filters()).isEmpty();
+    }
+
+    @Test
+    void withFilter_addsFilter() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
+                        .withFilter("phases", CbrFilter.contains("A"));
+        assertThat(q.filters()).hasSize(1);
+        assertThat(q.filters().get("phases")).isInstanceOf(CbrFilter.Contains.class);
+    }
+
+    @Test
+    void withFilters_replacesAll() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
+                        .withFilter("phases", CbrFilter.contains("A"))
+                        .withFilters(Map.of("moments", CbrFilter.hasMatch(Map.of("type", "X"))));
+        assertThat(q.filters()).hasSize(1);
+        assertThat(q.filters()).containsKey("moments");
+    }
+
+    @Test
+    void filtersDefensivelyCopied() {
+        var filters = new java.util.HashMap<String, CbrFilter>();
+        filters.put("f", CbrFilter.contains("X"));
+        var q = CbrQuery.of("t", CBR, "type", Map.of(), 5).withFilters(filters);
+        filters.put("extra", CbrFilter.contains("Y"));
+        assertThat(q.filters()).hasSize(1);
+    }
+
+    @Test
+    void withFilter_preservesOtherFields() {
+        var q = CbrQuery.of("t", CBR, "type", Map.of("race", "Zerg"), 5)
+                        .withWeights(Map.of("race", 2.0)).withProblem("test")
+                        .withFilter("phases", CbrFilter.contains("A"));
+        assertThat(q.features()).containsEntry("race", "Zerg");
+        assertThat(q.weights()).containsEntry("race", 2.0);
+        assertThat(q.problem()).isEqualTo("test");
     }
 }

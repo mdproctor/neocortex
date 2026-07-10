@@ -33,6 +33,10 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     @Override
     public String store(CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
                         String tenantId, String caseId) {
+        CbrFeatureSchema schema = schemas.get(caseType);
+        if (schema != null) {
+            CbrFeatureValidator.validateStoreFeatures(cbrCase.features(), schema);
+        }
         String id = UUID.randomUUID().toString();
         cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, Instant.now()));
         return id;
@@ -51,19 +55,28 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         CbrFeatureSchema schema = schemas.get(query.caseType());
         if (schema != null) {
-            validateQueryFeatures(query.features(), schema);
+            CbrFeatureValidator.validateQueryFeatures(query.features(), schema);
+        }
+
+        if (!query.filters().isEmpty()) {
+            if (schema == null) {
+                throw new IllegalStateException(
+                    "Cannot apply structural filters: no schema registered for caseType '"
+                    + query.caseType() + "'");
+            }
+            CbrFeatureValidator.validateFilters(query.filters(), schema);
         }
 
         List<ScoredCbrCase<C>> candidates = new ArrayList<>();
         for (StoredCase stored : cases) {
-            // Identity filters — hard constraints
             if (!stored.tenantId().equals(query.tenantId())) continue;
             if (!stored.domain().equals(query.domain())) continue;
             if (!stored.caseType().equals(query.caseType())) continue;
             if (query.notBefore() != null && stored.storedAt().isBefore(query.notBefore())) continue;
             if (!caseClass.isInstance(stored.cbrCase())) continue;
 
-            // Graded feature similarity scoring
+            if (!matchesFilters(stored.cbrCase(), query.filters(), schema)) continue;
+
             double featureScore = CbrSimilarityScorer.score(
                 query.features(), stored.cbrCase().features(), query.weights(), schema, Map.of());
 
@@ -72,7 +85,6 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
             }
         }
 
-        // Sort by score descending, take topK
         candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
         List<ScoredCbrCase<C>> results = candidates.size() <= query.topK()
             ? candidates
@@ -99,31 +111,59 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         return before - cases.size();
     }
 
-    private void validateQueryFeatures(Map<String, Object> features, CbrFeatureSchema schema) {
-        for (var entry : features.entrySet()) {
-            FeatureField field = schema.fields().stream()
-                .filter(f -> f.name().equals(entry.getKey()))
-                .findFirst()
-                .orElse(null);
-            if (field == null) continue;
+    @SuppressWarnings("unchecked")
+    private boolean matchesFilters(CbrCase storedCase, Map<String, CbrFilter> filters,
+                                    CbrFeatureSchema schema) {
+        if (filters.isEmpty()) return true;
+        for (var entry : filters.entrySet()) {
+            String fieldName = entry.getKey();
+            CbrFilter filter = entry.getValue();
+            Object storedValue = storedCase.features().get(fieldName);
+            if (storedValue == null) return false;
 
-            if (field instanceof FeatureField.Categorical && !(entry.getValue() instanceof String)) {
-                throw new IllegalArgumentException(
-                    "Categorical field '" + entry.getKey() + "' requires String, got: "
-                    + entry.getValue().getClass().getSimpleName());
-            }
-            if (field instanceof FeatureField.Numeric
-                    && !(entry.getValue() instanceof Number)
-                    && !(entry.getValue() instanceof NumericRange)) {
-                throw new IllegalArgumentException(
-                    "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
-                    + entry.getValue().getClass().getSimpleName());
-            }
-            if (field instanceof FeatureField.Text && !(entry.getValue() instanceof String)) {
-                throw new IllegalArgumentException(
-                    "Text field '" + entry.getKey() + "' requires String, got: "
-                    + entry.getValue().getClass().getSimpleName());
+            FeatureField field = CbrFeatureValidator.findField(schema, fieldName);
+
+            boolean matches = switch (filter) {
+                case CbrFilter.Contains c ->
+                    storedValue instanceof List<?> list && list.contains(c.value());
+                case CbrFilter.ContainsAll ca ->
+                    storedValue instanceof List<?> list && list.containsAll(ca.values());
+                case CbrFilter.ContainsAny ca ->
+                    storedValue instanceof List<?> list && ca.values().stream().anyMatch(list::contains);
+                case CbrFilter.HasMatch hm -> matchesHasMatch(storedValue, hm, field);
+            };
+            if (!matches) return false;
+        }
+        return true;
+    }
+
+    private boolean matchesHasMatch(Object storedValue, CbrFilter.HasMatch hm, FeatureField field) {
+        if (field instanceof FeatureField.ObjectList) {
+            if (!(storedValue instanceof List<?> list)) return false;
+            return list.stream().anyMatch(elem ->
+                elem instanceof Map<?,?> map && allSubFieldsMatch(map, hm.subFields()));
+        } else {
+            if (!(storedValue instanceof Map<?,?> map)) return false;
+            return allSubFieldsMatch(map, hm.subFields());
+        }
+    }
+
+    private boolean allSubFieldsMatch(Map<?,?> stored, Map<String, Object> subFields) {
+        for (var sub : subFields.entrySet()) {
+            Object storedVal = stored.get(sub.getKey());
+            if (storedVal == null) return false;
+            Object queryVal = sub.getValue();
+            if (queryVal instanceof NumericRange range) {
+                if (!(storedVal instanceof Number num)) return false;
+                double d = num.doubleValue();
+                if (d < range.min() || d > range.max()) return false;
+            } else if (queryVal instanceof Number qn) {
+                if (!(storedVal instanceof Number sn)) return false;
+                if (Double.compare(qn.doubleValue(), sn.doubleValue()) != 0) return false;
+            } else {
+                if (!queryVal.equals(storedVal)) return false;
             }
         }
+        return true;
     }
 }

@@ -61,39 +61,43 @@ public final class CbrSimilarityScorer {
                                 CbrFeatureSchema schema,
                                 Map<String, LocalSimilarityFunction> overrides) {
         Objects.requireNonNull(overrides, "overrides");
-        if (queryFeatures.isEmpty()) return 1.0;
-        if (schema == null) return 1.0;
+        if (queryFeatures.isEmpty()) {return 1.0;}
+        if (schema == null) {return 1.0;}
 
         double weightedSum = 0.0;
         double totalWeight = 0.0;
 
         for (Map.Entry<String, Object> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
-            if (field == null) continue;
+            if (field == null) {continue;}
+            if (field instanceof FeatureField.CategoricalList
+                || field instanceof FeatureField.NestedObject
+                || field instanceof FeatureField.ObjectList) {continue;}
 
-            double weight = weights.getOrDefault(entry.getKey(), 1.0);
+            double weight    = weights.getOrDefault(entry.getKey(), 1.0);
             Object caseValue = caseFeatures.get(entry.getKey());
             double localSim = caseValue == null ? 0.0
-                : localSimilarity(field, entry.getValue(), caseValue, overrides);
+                                                : localSimilarity(field, entry.getValue(), caseValue, overrides);
 
             weightedSum += weight * localSim;
             totalWeight += weight;
         }
 
-        return totalWeight > 0 ? weightedSum / totalWeight : 1.0;
-    }
+        return totalWeight > 0 ? weightedSum / totalWeight : 1.0;}
 
     private static double localSimilarity(FeatureField field, Object queryVal, Object caseVal,
                                           Map<String, LocalSimilarityFunction> overrides) {
         LocalSimilarityFunction override = overrides.get(field.name());
-        if (override != null) return override.compute(queryVal, caseVal);
+        if (override != null) {return override.compute(queryVal, caseVal);}
 
         return switch (field) {
             case FeatureField.Numeric n -> numericSimilarity(n, queryVal, caseVal);
             case FeatureField.Categorical c -> categoricalSimilarity(c, queryVal, caseVal);
             case FeatureField.Text t -> queryVal.equals(caseVal) ? 1.0 : 0.0;
-        };
-    }
+            case FeatureField.CategoricalList cl -> throw new IllegalStateException("Structured field in scorer");
+            case FeatureField.NestedObject no -> throw new IllegalStateException("Structured field in scorer");
+            case FeatureField.ObjectList ol -> throw new IllegalStateException("Structured field in scorer");
+        };}
 
     private static double categoricalSimilarity(FeatureField.Categorical field,
                                                  Object queryVal, Object caseVal) {

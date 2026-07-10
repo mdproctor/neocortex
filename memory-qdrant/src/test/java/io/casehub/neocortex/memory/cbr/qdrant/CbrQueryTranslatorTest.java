@@ -107,7 +107,7 @@ class CbrQueryTranslatorTest {
     void toFilter_notBefore_addsStoredAtRangeCondition() {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
-            Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
+            Map.of(), Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
             RetrievalMode.HYBRID, FusionStrategy.RRF);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
@@ -160,7 +160,7 @@ class CbrQueryTranslatorTest {
     void toIdentityFilter_includesNotBefore() {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg"), Map.of(), 5, 0.0, notBefore, null, 0.5,
+            Map.of("opponent_race", "Zerg"), Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
             RetrievalMode.HYBRID, FusionStrategy.RRF);
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
 

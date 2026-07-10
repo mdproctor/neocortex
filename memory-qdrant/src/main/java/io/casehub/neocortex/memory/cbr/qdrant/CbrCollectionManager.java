@@ -16,7 +16,6 @@ import io.qdrant.client.grpc.Collections.VectorsConfig;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -159,15 +158,30 @@ final class CbrCollectionManager {
             for (FeatureField field : schema.fields()) {
                 String payloadKey = "f_" + field.name();
                 switch (field) {
-                    case FeatureField.Categorical c ->
-                        client.createPayloadIndexAsync(collection, payloadKey,
-                            PayloadSchemaType.Keyword, null, true, null, null).get();
-                    case FeatureField.Numeric n ->
-                        client.createPayloadIndexAsync(collection, payloadKey,
-                            PayloadSchemaType.Float, null, true, null, null).get();
-                    case FeatureField.Text t ->
-                        client.createPayloadIndexAsync(collection, payloadKey,
-                            PayloadSchemaType.Keyword, null, true, null, null).get();
+                    case FeatureField.Categorical c -> client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                      PayloadSchemaType.Keyword, null, true, null, null).get();
+                    case FeatureField.Numeric n -> client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                  PayloadSchemaType.Float, null, true, null, null).get();
+                    case FeatureField.Text t -> client.createPayloadIndexAsync(collection, payloadKey,
+                                                                               PayloadSchemaType.Keyword, null, true, null, null).get();
+                    case FeatureField.CategoricalList cl -> client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                           PayloadSchemaType.Keyword, null, true, null, null).get();
+                    case FeatureField.NestedObject no -> {
+                        for (FeatureField inner : no.innerFields()) {
+                            String            innerKey = payloadKey + "." + inner.name();
+                            PayloadSchemaType type     = innerPayloadType(inner);
+                            client.createPayloadIndexAsync(collection, innerKey,
+                                                           type, null, true, null, null).get();
+                        }
+                    }
+                    case FeatureField.ObjectList ol -> {
+                        for (FeatureField inner : ol.innerFields()) {
+                            String            innerKey = payloadKey + "[]." + inner.name();
+                            PayloadSchemaType type     = innerPayloadType(inner);
+                            client.createPayloadIndexAsync(collection, innerKey,
+                                                           type, null, true, null, null).get();
+                        }
+                    }
                 }
             }
         } catch (InterruptedException e) {
@@ -175,8 +189,17 @@ final class CbrCollectionManager {
             throw new RuntimeException("Interrupted during registerSchemaIndexes", e);
         } catch (ExecutionException e) {
             throw new RuntimeException("registerSchemaIndexes failed", e.getCause());
-        }
+        }}
+
+    private static PayloadSchemaType innerPayloadType(FeatureField field) {
+        return switch (field) {
+            case FeatureField.Categorical c -> PayloadSchemaType.Keyword;
+            case FeatureField.Numeric n -> PayloadSchemaType.Float;
+            case FeatureField.Text t -> PayloadSchemaType.Keyword;
+            default -> throw new IllegalStateException("Unexpected inner field type: " + field);
+        };
     }
+
 
     /**
      * Delete all points matching a filter from a collection.

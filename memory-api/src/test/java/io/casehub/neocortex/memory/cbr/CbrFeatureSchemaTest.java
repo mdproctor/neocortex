@@ -1,7 +1,9 @@
 package io.casehub.neocortex.memory.cbr;
 
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CbrFeatureSchemaTest {
 
@@ -33,5 +35,23 @@ class CbrFeatureSchemaTest {
         var schema = new CbrFeatureSchema("type", fields);
         fields.add(FeatureField.text("extra"));
         assertThat(schema.fields()).hasSize(1);
+    }
+
+    @Test
+    void duplicateFieldNamesRejected() {
+        assertThatThrownBy(() -> CbrFeatureSchema.of("test",
+                                                     FeatureField.categorical("name"),
+                                                     FeatureField.numeric("name", 0, 10)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate field name: 'name'");
+    }
+
+    @Test
+    void duplicateFieldNamesAcrossTypes() {
+        assertThatThrownBy(() -> CbrFeatureSchema.of("test",
+                                                     FeatureField.categorical("field"),
+                                                     FeatureField.categoricalList("field")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate field name");
     }
 }
