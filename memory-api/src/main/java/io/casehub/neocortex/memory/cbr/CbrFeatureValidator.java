@@ -53,6 +53,8 @@ public final class CbrFeatureValidator {
                         validateInnerValues(entry.getKey(), map, ol.innerFields());
                     }
                 }
+                case FeatureField.TimeSeries ts -> validateTimeSeries(entry.getKey(), value, ts);
+                case FeatureField.DiscreteSequence ds -> validateDiscreteSequence(entry.getKey(), value);
             }
         }
     }
@@ -77,6 +79,8 @@ public final class CbrFeatureValidator {
                     "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
                 case FeatureField.ObjectList ol -> throw new IllegalArgumentException(
                     "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
+                case FeatureField.TimeSeries ts -> validateTimeSeries(entry.getKey(), value, ts);
+                case FeatureField.DiscreteSequence ds -> validateDiscreteSequence(entry.getKey(), value);
             }
         }
     }
@@ -143,10 +147,55 @@ public final class CbrFeatureValidator {
     }
 
     private static void requireCategoricalList(String name, FeatureField field) {
+        if (field instanceof FeatureField.TimeSeries || field instanceof FeatureField.DiscreteSequence)
+            throw new IllegalArgumentException(
+                "Temporal field '" + name + "' does not support filters");
         if (!(field instanceof FeatureField.CategoricalList))
             throw new IllegalArgumentException(
                 "Contains/ContainsAll/ContainsAny filter on '" + name
                 + "' requires CategoricalList field, got: " + field.getClass().getSimpleName());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void validateTimeSeries(String fieldName, Object value, FeatureField.TimeSeries ts) {
+        if (!(value instanceof List<?> list))
+            throw new IllegalArgumentException(
+                "TimeSeries field '" + fieldName + "' requires List, got: " + value.getClass().getSimpleName());
+        if (list.isEmpty()) return;
+        double prevTimestamp = Double.NEGATIVE_INFINITY;
+        for (Object elem : list) {
+            if (!(elem instanceof Map<?, ?> map))
+                throw new IllegalArgumentException(
+                    "TimeSeries field '" + fieldName + "' requires List<Map>, element is: "
+                    + elem.getClass().getSimpleName());
+            Object tsVal = map.get(ts.timestampField());
+            if (tsVal == null)
+                throw new IllegalArgumentException(
+                    "TimeSeries field '" + fieldName + "': observation missing timestamp field '"
+                    + ts.timestampField() + "'");
+            if (!(tsVal instanceof Number num))
+                throw new IllegalArgumentException(
+                    "TimeSeries field '" + fieldName + "': timestamp field '"
+                    + ts.timestampField() + "' requires Number, got: " + tsVal.getClass().getSimpleName());
+            double currentTs = num.doubleValue();
+            if (currentTs <= prevTimestamp)
+                throw new IllegalArgumentException(
+                    "TimeSeries field '" + fieldName + "': observations must be in strictly ascending timestamp order");
+            prevTimestamp = currentTs;
+            validateInnerValues(fieldName, (Map<String, ?>) map, ts.innerFields());
+        }
+    }
+
+    private static void validateDiscreteSequence(String fieldName, Object value) {
+        if (!(value instanceof List<?> list))
+            throw new IllegalArgumentException(
+                "DiscreteSequence field '" + fieldName + "' requires List, got: " + value.getClass().getSimpleName());
+        for (Object elem : list) {
+            if (!(elem instanceof String))
+                throw new IllegalArgumentException(
+                    "DiscreteSequence field '" + fieldName + "' requires List<String>, element is: "
+                    + elem.getClass().getSimpleName());
+        }
     }
 
     private static void requireType(String name, Object value, Class<?> expected, String fieldTypeName) {

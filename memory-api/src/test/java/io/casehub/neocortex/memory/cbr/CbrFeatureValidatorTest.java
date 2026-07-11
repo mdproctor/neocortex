@@ -195,4 +195,157 @@ class CbrFeatureValidatorTest {
         CbrFeatureValidator.validateFilters(
             Map.of("moments", CbrFilter.hasMatch(Map.of("minute", NumericRange.of(0, 10)))), SCHEMA);
     }
+
+    // --- Temporal: store-time TimeSeries ---
+
+    private static final CbrFeatureSchema TEMPORAL_SCHEMA = CbrFeatureSchema.of("game",
+        FeatureField.timeSeries("curve", "t",
+            FeatureField.numeric("t", 0, 30),
+            FeatureField.numeric("val", 0, 100),
+            FeatureField.categorical("label")),
+        FeatureField.discreteSequence("phases"),
+        FeatureField.categorical("race"));
+
+    @Test
+    void store_timeSeries_validAscending() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("t", 1, "val", 30, "label", "A"),
+            Map.of("t", 3, "val", 45, "label", "B")));
+        assertThatNoException().isThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA));
+    }
+
+    @Test
+    void store_timeSeries_nonAscending_rejected() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("t", 3, "val", 45, "label", "B"),
+            Map.of("t", 1, "val", 30, "label", "A")));
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ascending");
+    }
+
+    @Test
+    void store_timeSeries_equalTimestamps_rejected() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("t", 1, "val", 30, "label", "A"),
+            Map.of("t", 1, "val", 45, "label", "B")));
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ascending");
+    }
+
+    @Test
+    void store_timeSeries_missingTimestampField_rejected() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("val", 30, "label", "A")));
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("timestamp");
+    }
+
+    @Test
+    void store_timeSeries_wrongType_rejected() {
+        var features = Map.<String, Object>of("curve", "not-a-list");
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void store_timeSeries_wrongInnerType_rejected() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("t", 1, "val", "not-a-number", "label", "A")));
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void store_timeSeries_emptyList_accepted() {
+        var features = Map.<String, Object>of("curve", List.of());
+        assertThatNoException().isThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA));
+    }
+
+    // --- Temporal: store-time DiscreteSequence ---
+
+    @Test
+    void store_discreteSequence_valid() {
+        var features = Map.<String, Object>of("phases", List.of("A", "B", "C"));
+        assertThatNoException().isThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA));
+    }
+
+    @Test
+    void store_discreteSequence_wrongType_rejected() {
+        var features = Map.<String, Object>of("phases", "not-a-list");
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void store_discreteSequence_nonStringElement_rejected() {
+        var features = Map.<String, Object>of("phases", List.of("A", 42));
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void store_discreteSequence_emptyList_accepted() {
+        var features = Map.<String, Object>of("phases", List.of());
+        assertThatNoException().isThrownBy(() ->
+            CbrFeatureValidator.validateStoreFeatures(features, TEMPORAL_SCHEMA));
+    }
+
+    // --- Temporal: query-time ---
+
+    @Test
+    void query_timeSeries_allowed() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("t", 1, "val", 30, "label", "A")));
+        assertThatNoException().isThrownBy(() ->
+            CbrFeatureValidator.validateQueryFeatures(features, TEMPORAL_SCHEMA));
+    }
+
+    @Test
+    void query_discreteSequence_allowed() {
+        var features = Map.<String, Object>of("phases", List.of("A", "B"));
+        assertThatNoException().isThrownBy(() ->
+            CbrFeatureValidator.validateQueryFeatures(features, TEMPORAL_SCHEMA));
+    }
+
+    @Test
+    void query_timeSeries_nonAscending_rejected() {
+        var features = Map.<String, Object>of("curve", List.of(
+            Map.of("t", 3, "val", 45, "label", "B"),
+            Map.of("t", 1, "val", 30, "label", "A")));
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateQueryFeatures(features, TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ascending");
+    }
+
+    // --- Temporal: filters rejected ---
+
+    @Test
+    void filter_onTimeSeries_rejected() {
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateFilters(
+                Map.of("curve", CbrFilter.contains("X")), TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void filter_onDiscreteSequence_rejected() {
+        assertThatThrownBy(() ->
+            CbrFeatureValidator.validateFilters(
+                Map.of("phases", CbrFilter.contains("X")), TEMPORAL_SCHEMA))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
 }

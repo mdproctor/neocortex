@@ -97,6 +97,8 @@ public final class CbrSimilarityScorer {
             case FeatureField.CategoricalList cl -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.NestedObject no -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.ObjectList ol -> throw new IllegalStateException("Structured field in scorer");
+            case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal);
+            case FeatureField.DiscreteSequence ds -> editDistanceSimilarity(queryVal, caseVal);
         };}
 
     private static double categoricalSimilarity(FeatureField.Categorical field,
@@ -153,6 +155,21 @@ public final class CbrSimilarityScorer {
 
         double queryNum = ((Number) queryVal).doubleValue();
         return Math.abs(queryNum - caseNum) / range;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static double dtwSimilarity(FeatureField.TimeSeries ts,
+                                         Object queryVal, Object caseVal) {
+        return DtwSimilarity.compute(
+            (java.util.List<java.util.Map<String, Object>>) queryVal,
+            (java.util.List<java.util.Map<String, Object>>) caseVal, ts);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static double editDistanceSimilarity(Object queryVal, Object caseVal) {
+        return EditDistanceSimilarity.compute(
+            (java.util.List<String>) queryVal,
+            (java.util.List<String>) caseVal);
     }
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {

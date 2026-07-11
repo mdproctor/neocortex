@@ -182,6 +182,8 @@ final class CbrCollectionManager {
                                                            type, null, true, null, null).get();
                         }
                     }
+                    case FeatureField.TimeSeries ts -> {}
+                    case FeatureField.DiscreteSequence ds -> {}
                 }
             }
         } catch (InterruptedException e) {

@@ -26,6 +26,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 public abstract class CbrCaseMemoryStoreContractTest {
 
@@ -1061,5 +1062,356 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("requires Number or NumericRange");
+    }
+
+    // ========================= Temporal fields =========================
+
+    private void registerTemporalSchema() {
+        store().registerSchema(CbrFeatureSchema.of("temporal-game",
+            FeatureField.categorical("race"),
+            FeatureField.numeric("mmr", 0, 8000),
+            FeatureField.timeSeries("economyCurve", "minute",
+                FeatureField.numeric("minute", 0, 30),
+                FeatureField.numeric("economy", 0, 500),
+                FeatureField.numeric("army", 0, 200),
+                FeatureField.categorical("posture")),
+            FeatureField.discreteSequence("phaseProgression")));
+    }
+
+    private String storeTemporalCase(String problem, Map<String, Object> features, String caseId) {
+        return store().store(
+            new FeatureVectorCbrCase(problem, "solution", null, null, features),
+            "temporal-game", ENTITY, CBR, TENANT, caseId);
+    }
+
+    @Test
+    void temporal_timeSeries_schemaCreation() {
+        registerTemporalSchema();
+    }
+
+    @Test
+    void temporal_timeSeries_validation_storeAscendingTimestamps() {
+        registerTemporalSchema();
+        storeTemporalCase("test", Map.of(
+            "race", "Terran",
+            "economyCurve", List.of(
+                Map.of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+                Map.of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))),
+            "valid");
+    }
+
+    @Test
+    void temporal_timeSeries_validation_storeNonAscending_rejected() {
+        registerTemporalSchema();
+        assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
+            "race", "Terran",
+            "economyCurve", List.of(
+                Map.of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"),
+                Map.of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))),
+            "invalid"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_timeSeries_validation_missingTimestampField_rejected() {
+        registerTemporalSchema();
+        assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
+            "race", "Terran",
+            "economyCurve", List.of(Map.of("economy", 30, "army", 0, "posture", "MACRO"))),
+            "invalid"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_timeSeries_validation_innerFieldTypes() {
+        registerTemporalSchema();
+        assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
+            "race", "Terran",
+            "economyCurve", List.of(Map.of("minute", 1, "economy", "not-a-number", "army", 0, "posture", "MACRO"))),
+            "invalid"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_timeSeries_validation_emptyList_accepted() {
+        registerTemporalSchema();
+        storeTemporalCase("test", Map.of("race", "Terran", "economyCurve", List.of()), "empty");
+    }
+
+    @Test
+    void temporal_discreteSequence_validation_storeListOfStrings() {
+        registerTemporalSchema();
+        storeTemporalCase("test", Map.of(
+            "race", "Terran",
+            "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "valid-seq");
+    }
+
+    @Test
+    void temporal_discreteSequence_validation_storeWrongType_rejected() {
+        registerTemporalSchema();
+        assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
+            "race", "Terran",
+            "phaseProgression", "not-a-list"), "invalid"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_filter_onTemporalField_rejected() {
+        registerTemporalSchema();
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", "Terran"), 10)
+            .withFilter("economyCurve", CbrFilter.contains("X"));
+        assertThatThrownBy(() -> store().retrieveSimilar(query, FeatureVectorCbrCase.class))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_timeSeries_identicalSequences_scorePerfect() {
+        registerTemporalSchema();
+        var curve = List.of(
+            Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+            Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"));
+        storeTemporalCase("game", Map.of("race", "Terran", "economyCurve", curve), "c1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("economyCurve", curve), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).score()).isCloseTo(1.0, within(0.001));
+    }
+
+    @Test
+    void temporal_timeSeries_differentSequences_scoredByDtw() {
+        registerTemporalSchema();
+        storeTemporalCase("close", Map.of("race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 32, "army", 1, "posture", "MACRO"),
+                Map.<String, Object>of("minute", 3, "economy", 47, "army", 6, "posture", "MACRO"))), "close");
+        storeTemporalCase("far", Map.of("race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 200, "army", 100, "posture", "AGGRESSIVE"),
+                Map.<String, Object>of("minute", 3, "economy", 400, "army", 150, "posture", "ALL_IN"))), "far");
+
+        var queryCurve = List.of(
+            Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+            Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"));
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("economyCurve", queryCurve), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("close");
+    }
+
+    @Test
+    void temporal_timeSeries_variableLength_handledByDtw() {
+        registerTemporalSchema();
+        storeTemporalCase("short", Map.of("race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "short");
+        storeTemporalCase("long", Map.of("race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+                Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"),
+                Map.<String, Object>of("minute", 5, "economy", 60, "army", 10, "posture", "AGGRESSIVE"))), "long");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+                Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
+    void temporal_timeSeries_dtwExcludesTimestampField() {
+        registerTemporalSchema();
+        storeTemporalCase("game", Map.of("race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 29, "economy", 50, "army", 10, "posture", "MACRO"))), "c1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 50, "army", 10, "posture", "MACRO"))), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).score()).isEqualTo(1.0);
+    }
+
+    @Test
+    void temporal_discreteSequence_identicalSequences_scorePerfect() {
+        registerTemporalSchema();
+        storeTemporalCase("game", Map.of("race", "Terran",
+            "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "c1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).score()).isEqualTo(1.0);
+    }
+
+    @Test
+    void temporal_discreteSequence_oneSubstitution_scoreLessThanPerfect() {
+        registerTemporalSchema();
+        storeTemporalCase("game", Map.of("race", "Terran",
+            "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "c1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("phaseProgression", List.of("MACRO", "DEFENSIVE", "ALL_IN")), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).score()).isLessThan(1.0).isGreaterThan(0.0);
+    }
+
+    @Test
+    void temporal_discreteSequence_completelyDifferent_scoreNearZero() {
+        registerTemporalSchema();
+        storeTemporalCase("game", Map.of("race", "Terran",
+            "phaseProgression", List.of("A", "B", "C")), "c1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("phaseProgression", List.of("X", "Y", "Z")), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).score()).isEqualTo(0.0);
+    }
+
+    @Test
+    void temporal_discreteSequence_bothEmpty_scorePerfect() {
+        registerTemporalSchema();
+        storeTemporalCase("game", Map.of("race", "Terran",
+            "phaseProgression", List.of()), "c1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("phaseProgression", List.of()), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).score()).isEqualTo(1.0);
+    }
+
+    @Test
+    void temporal_mixedFlatAndTemporal_weightedScoring() {
+        registerTemporalSchema();
+        storeTemporalCase("sameRaceDiffCurve", Map.of(
+            "race", "Terran", "mmr", 4500,
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 200, "army", 100, "posture", "AGGRESSIVE"))), "c1");
+        storeTemporalCase("diffRaceSameCurve", Map.of(
+            "race", "Zerg", "mmr", 4500,
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "c2");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("race", "Terran", "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
+    void temporal_weightOverride_temporalFieldDominates() {
+        registerTemporalSchema();
+        storeTemporalCase("sameRaceDiffCurve", Map.of(
+            "race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 200, "army", 100, "posture", "AGGRESSIVE"))), "c1");
+        storeTemporalCase("diffRaceSameCurve", Map.of(
+            "race", "Zerg",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "c2");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("race", "Terran", "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), 10)
+            .withWeight("economyCurve", 10.0).withWeight("race", 0.1)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("diffRaceSameCurve");
+    }
+
+    @Test
+    void temporal_timeSeries_storeAndRetrieve_roundTrip() {
+        registerTemporalSchema();
+        var curve = List.of(
+            Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+            Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"));
+        storeTemporalCase("game", Map.of("race", "Terran", "economyCurve", curve), "rt1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", "Terran"), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        @SuppressWarnings("unchecked")
+        var retrieved = (List<Map<String, Object>>) results.get(0).cbrCase().features().get("economyCurve");
+        assertThat(retrieved).hasSize(2);
+    }
+
+    @Test
+    void temporal_discreteSequence_storeAndRetrieve_roundTrip() {
+        registerTemporalSchema();
+        storeTemporalCase("game", Map.of("race", "Terran",
+            "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "rt2");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", "Terran"), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        @SuppressWarnings("unchecked")
+        var retrieved = (List<String>) results.get(0).cbrCase().features().get("phaseProgression");
+        assertThat(retrieved).containsExactly("MACRO", "AGGRESSIVE", "ALL_IN");
+    }
+
+    @Test
+    void temporal_coexistsWithStructuredFields() {
+        store().registerSchema(CbrFeatureSchema.of("mixed",
+            FeatureField.categorical("race"),
+            FeatureField.categoricalList("tags"),
+            FeatureField.timeSeries("trajectory", "t",
+                FeatureField.numeric("t", 0, 10),
+                FeatureField.numeric("v", 0, 100)),
+            FeatureField.discreteSequence("phases")));
+
+        store().store(
+            new FeatureVectorCbrCase("problem", "solution", null, null, Map.of(
+                "race", "Terran",
+                "tags", List.of("aggro", "fast"),
+                "trajectory", List.of(Map.<String, Object>of("t", 1, "v", 50)),
+                "phases", List.of("A", "B"))),
+            "mixed", ENTITY, CBR, TENANT, "mixed-1");
+
+        var query = CbrQuery.of(TENANT, CBR, "mixed", Map.of("race", "Terran"), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+    }
+
+    @Test
+    void temporal_flatFeatureFilter_reducesCandidatesBeforeDtw() {
+        registerTemporalSchema();
+        storeTemporalCase("terran-game", Map.of(
+            "race", "Terran",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "t1");
+        storeTemporalCase("zerg-game", Map.of(
+            "race", "Zerg",
+            "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "z1");
+
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game",
+            Map.of("race", "Terran", "economyCurve", List.of(
+                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), 10)
+            .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("terran-game");
     }
 }

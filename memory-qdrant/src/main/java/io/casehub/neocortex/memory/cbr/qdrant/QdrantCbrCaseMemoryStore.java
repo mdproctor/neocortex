@@ -551,6 +551,8 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 case FeatureField.CategoricalList cl -> {}
                 case FeatureField.NestedObject no -> {}
                 case FeatureField.ObjectList ol -> {}
+                case FeatureField.TimeSeries ts -> {}
+                case FeatureField.DiscreteSequence ds -> {}
             }
         }
         return overrides.isEmpty() ? Map.of() : Collections.unmodifiableMap(overrides);

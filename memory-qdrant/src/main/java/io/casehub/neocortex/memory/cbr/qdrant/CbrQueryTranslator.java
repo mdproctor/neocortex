@@ -104,6 +104,8 @@ final class CbrQueryTranslator {
                         "Structured field in toFilter — use applyStructuralFilters");
                     case FeatureField.ObjectList ol -> throw new IllegalStateException(
                         "Structured field in toFilter — use applyStructuralFilters");
+                    case FeatureField.TimeSeries ts -> {}
+                    case FeatureField.DiscreteSequence ds -> {}
                 }
             }
         }

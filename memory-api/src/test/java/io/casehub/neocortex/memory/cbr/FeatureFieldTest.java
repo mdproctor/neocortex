@@ -266,4 +266,122 @@ class FeatureFieldTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Duplicate inner field name");
     }
+
+    // --- TimeSeries ---
+    @Test
+    void timeSeries_validConstruction() {
+        var f = FeatureField.timeSeries("economyCurve", "minute",
+                                        FeatureField.numeric("minute", 0, 30),
+                                        FeatureField.numeric("economy", 0, 500),
+                                        FeatureField.categorical("posture"));
+        assertThat(f).isInstanceOf(FeatureField.TimeSeries.class);
+        assertThat(f.name()).isEqualTo("economyCurve");
+        var ts = (FeatureField.TimeSeries) f;
+        assertThat(ts.innerFields()).hasSize(3);
+        assertThat(ts.timestampField()).isEqualTo("minute");
+    }
+
+    @Test
+    void timeSeries_timestampFieldMustExist() {
+        assertThatThrownBy(() -> FeatureField.timeSeries("ts", "nonexistent",
+                                                         FeatureField.numeric("minute", 0, 30),
+                                                         FeatureField.numeric("val", 0, 100)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("timestampField");
+    }
+
+    @Test
+    void timeSeries_timestampFieldMustBeNumeric() {
+        assertThatThrownBy(() -> FeatureField.timeSeries("ts", "phase",
+                                                         FeatureField.categorical("phase"),
+                                                         FeatureField.numeric("val", 0, 100)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Numeric");
+    }
+
+    @Test
+    void timeSeries_requiresNonTimestampNumericField() {
+        assertThatThrownBy(() -> FeatureField.timeSeries("ts", "minute",
+                                                         FeatureField.numeric("minute", 0, 30),
+                                                         FeatureField.categorical("phase")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non-timestamp Numeric");
+    }
+
+    @Test
+    void timeSeries_rejectsEmptyInnerFields() {
+        assertThatThrownBy(() -> FeatureField.timeSeries("ts", "minute"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void timeSeries_nullNameRejected() {
+        assertThatThrownBy(() -> FeatureField.timeSeries(null, "minute",
+                                                         FeatureField.numeric("minute", 0, 30),
+                                                         FeatureField.numeric("val", 0, 100)))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void timeSeries_innerFieldsDefensivelyCopied() {
+        var inner = new java.util.ArrayList<>(java.util.List.of(
+                FeatureField.numeric("minute", 0, 30),
+                FeatureField.numeric("val", 0, 100)));
+        var f = new FeatureField.TimeSeries("ts", inner, "minute");
+        inner.add(FeatureField.numeric("extra", 0, 10));
+        assertThat(((FeatureField.TimeSeries) f).innerFields()).hasSize(2);
+    }
+
+    // --- DiscreteSequence ---
+    @Test
+    void discreteSequence_validConstruction() {
+        var f = FeatureField.discreteSequence("phases");
+        assertThat(f).isInstanceOf(FeatureField.DiscreteSequence.class);
+        assertThat(f.name()).isEqualTo("phases");
+    }
+
+    @Test
+    void discreteSequence_nullNameRejected() {
+        assertThatThrownBy(() -> FeatureField.discreteSequence(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    // --- Temporal types rejected as inner fields ---
+    @Test
+    void nestedObject_rejectsTimeSeries() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.timeSeries("inner", "t",
+                                                                                   FeatureField.numeric("t", 0, 10),
+                                                                                   FeatureField.numeric("v", 0, 100))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("TimeSeries");
+    }
+
+    @Test
+    void nestedObject_rejectsDiscreteSequence() {
+        assertThatThrownBy(() -> FeatureField.nestedObject("bad",
+                                                           FeatureField.discreteSequence("seq")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DiscreteSequence");
+    }
+
+    @Test
+    void objectList_rejectsTimeSeries() {
+        assertThatThrownBy(() -> FeatureField.objectList("bad",
+                                                         FeatureField.timeSeries("inner", "t",
+                                                                                 FeatureField.numeric("t", 0, 10),
+                                                                                 FeatureField.numeric("v", 0, 100))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("TimeSeries");
+    }
+
+    @Test
+    void timeSeries_rejectsTemporalInnerFields() {
+        assertThatThrownBy(() -> FeatureField.timeSeries("outer", "t",
+                                                         FeatureField.numeric("t", 0, 10),
+                                                         FeatureField.numeric("v", 0, 100),
+                                                         FeatureField.discreteSequence("nested")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DiscreteSequence");
+    }
 }

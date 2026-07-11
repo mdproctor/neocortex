@@ -6,7 +6,8 @@ import java.util.Objects;
 import java.util.Set;
 
 public sealed interface FeatureField permits FeatureField.Categorical, FeatureField.Numeric, FeatureField.Text,
-                                             FeatureField.CategoricalList, FeatureField.NestedObject, FeatureField.ObjectList {
+                                             FeatureField.CategoricalList, FeatureField.NestedObject, FeatureField.ObjectList,
+                                             FeatureField.TimeSeries, FeatureField.DiscreteSequence {
     String name();
 
     record Categorical(String name, SimilaritySpec similaritySpec) implements FeatureField {
@@ -83,6 +84,52 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
         }
     }
 
+    record TimeSeries(String name, List<FeatureField> innerFields, String timestampField) implements FeatureField {
+        public TimeSeries {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(innerFields, "innerFields");
+            Objects.requireNonNull(timestampField, "timestampField");
+            innerFields = List.copyOf(innerFields);
+            if (innerFields.isEmpty()) {
+                throw new IllegalArgumentException("innerFields must not be empty");
+            }
+            validateFlatFields(innerFields);
+            FeatureField tsField = null;
+            for (FeatureField f : innerFields) {
+                if (f.name().equals(timestampField)) {
+                    tsField = f;
+                    break;
+                }
+            }
+            if (tsField == null) {
+                throw new IllegalArgumentException(
+                        "timestampField '" + timestampField + "' not found in innerFields");
+            }
+            if (!(tsField instanceof Numeric)) {
+                throw new IllegalArgumentException(
+                        "timestampField '" + timestampField + "' must be Numeric, got: "
+                        + tsField.getClass().getSimpleName());
+            }
+            boolean hasNonTimestampNumeric = false;
+            for (FeatureField f : innerFields) {
+                if (f instanceof Numeric && !f.name().equals(timestampField)) {
+                    hasNonTimestampNumeric = true;
+                    break;
+                }
+            }
+            if (!hasNonTimestampNumeric) {
+                throw new IllegalArgumentException(
+                        "TimeSeries requires at least one non-timestamp Numeric inner field for DTW distance");
+            }
+        }
+    }
+
+    record DiscreteSequence(String name) implements FeatureField {
+        public DiscreteSequence {
+            Objects.requireNonNull(name, "name");
+        }
+    }
+
     private static void validateFlatFields(List<FeatureField> fields) {
         Set<String> names = new HashSet<>();
         for (FeatureField f : fields) {
@@ -114,6 +161,10 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                         "Inner fields must be flat (Categorical/Numeric/Text), got: NestedObject");
                 case ObjectList ol -> throw new IllegalArgumentException(
                         "Inner fields must be flat (Categorical/Numeric/Text), got: ObjectList");
+                case TimeSeries ts -> throw new IllegalArgumentException(
+                        "Inner fields must be flat (Categorical/Numeric/Text), got: TimeSeries");
+                case DiscreteSequence ds -> throw new IllegalArgumentException(
+                        "Inner fields must be flat (Categorical/Numeric/Text), got: DiscreteSequence");
             }
         }
     }
@@ -143,4 +194,10 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
     static FeatureField objectList(String name, FeatureField... innerFields) {
         return new ObjectList(name, List.of(innerFields));
     }
+
+    static FeatureField timeSeries(String name, String timestampField, FeatureField... innerFields) {
+        return new TimeSeries(name, List.of(innerFields), timestampField);
+    }
+
+    static FeatureField discreteSequence(String name) {return new DiscreteSequence(name);}
 }
