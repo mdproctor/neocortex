@@ -384,4 +384,56 @@ class FeatureFieldTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("DiscreteSequence");
     }
+
+    // --- TimeSeries SimilaritySpec ---
+    @Test
+    void timeSeries_dtwSpec_accepted() {
+        var field = FeatureField.timeSeries("curve", "t",
+                                            new SimilaritySpec.DtwSpec(5),
+                                            FeatureField.numeric("t", 0, 30),
+                                            FeatureField.numeric("val", 0, 100));
+        assertThat(((FeatureField.TimeSeries) field).similaritySpec())
+                .isInstanceOf(SimilaritySpec.DtwSpec.class);
+    }
+
+    @Test
+    void timeSeries_editDistanceSpec_rejected() {
+        assertThatThrownBy(() -> FeatureField.timeSeries("curve", "t",
+                                                         new SimilaritySpec.EditDistanceSpec(java.util.Map.of()),
+                                                         FeatureField.numeric("t", 0, 30),
+                                                         FeatureField.numeric("val", 0, 100)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DtwSpec");
+    }
+
+    @Test
+    void timeSeries_noSpec_backwardCompatible() {
+        var field = FeatureField.timeSeries("curve", "t",
+                                            FeatureField.numeric("t", 0, 30),
+                                            FeatureField.numeric("val", 0, 100));
+        assertThat(((FeatureField.TimeSeries) field).similaritySpec()).isNull();
+    }
+
+    // --- DiscreteSequence SimilaritySpec ---
+    @Test
+    void discreteSequence_editDistanceSpec_accepted() {
+        var field = FeatureField.discreteSequence("phases",
+                                                  new SimilaritySpec.EditDistanceSpec(java.util.Map.of("A", java.util.Map.of("B", 0.5))));
+        assertThat(((FeatureField.DiscreteSequence) field).similaritySpec())
+                .isInstanceOf(SimilaritySpec.EditDistanceSpec.class);
+    }
+
+    @Test
+    void discreteSequence_dtwSpec_rejected() {
+        assertThatThrownBy(() -> FeatureField.discreteSequence("phases",
+                                                               new SimilaritySpec.DtwSpec(5)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("EditDistanceSpec");
+    }
+
+    @Test
+    void discreteSequence_noSpec_backwardCompatible() {
+        var field = FeatureField.discreteSequence("phases");
+        assertThat(((FeatureField.DiscreteSequence) field).similaritySpec()).isNull();
+    }
 }

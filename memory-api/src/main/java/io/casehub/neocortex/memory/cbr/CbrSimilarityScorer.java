@@ -98,32 +98,35 @@ public final class CbrSimilarityScorer {
             case FeatureField.NestedObject no -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.ObjectList ol -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal);
-            case FeatureField.DiscreteSequence ds -> editDistanceSimilarity(queryVal, caseVal);
+            case FeatureField.DiscreteSequence ds -> editDistanceSimilarity(ds, queryVal, caseVal);
         };}
 
     private static double categoricalSimilarity(FeatureField.Categorical field,
                                                  Object queryVal, Object caseVal) {
-        if (field.similaritySpec() == null) return queryVal.equals(caseVal) ? 1.0 : 0.0;
+        if (field.similaritySpec() == null) {return queryVal.equals(caseVal) ? 1.0 : 0.0;}
         return switch (field.similaritySpec()) {
             case SimilaritySpec.CategoricalTable ct -> {
                 String q = (String) queryVal;
                 String c = (String) caseVal;
-                if (q.equals(c)) yield 1.0;
+                if (q.equals(c)) {yield 1.0;}
                 yield ct.similarities().getOrDefault(q, Map.of()).getOrDefault(c, 0.0);
             }
             case SimilaritySpec.GaussianDecay gd -> throw new IllegalStateException(
-                "Unexpected spec on Categorical: " + field.similaritySpec());
+                    "Unexpected spec on Categorical: " + field.similaritySpec());
             case SimilaritySpec.StepDecay sd -> throw new IllegalStateException(
-                "Unexpected spec on Categorical: " + field.similaritySpec());
+                    "Unexpected spec on Categorical: " + field.similaritySpec());
             case SimilaritySpec.ExponentialDecay ed -> throw new IllegalStateException(
-                "Unexpected spec on Categorical: " + field.similaritySpec());
-        };
-    }
+                    "Unexpected spec on Categorical: " + field.similaritySpec());
+            case SimilaritySpec.DtwSpec ds -> throw new IllegalStateException(
+                    "Unexpected spec on Categorical: " + field.similaritySpec());
+            case SimilaritySpec.EditDistanceSpec es -> throw new IllegalStateException(
+                    "Unexpected spec on Categorical: " + field.similaritySpec());
+        };}
 
     private static double numericSimilarity(FeatureField.Numeric field,
                                              Object queryVal, Object caseVal) {
         double range = field.max() - field.min();
-        if (range <= 0) return queryVal.equals(caseVal) ? 1.0 : 0.0;
+        if (range <= 0) {return queryVal.equals(caseVal) ? 1.0 : 0.0;}
 
         double normalizedDistance = computeNormalizedDistance(field, queryVal, caseVal);
 
@@ -131,16 +134,16 @@ public final class CbrSimilarityScorer {
             return Math.max(0.0, 1.0 - normalizedDistance);
         }
         return switch (field.similaritySpec()) {
-            case SimilaritySpec.GaussianDecay gd ->
-                Math.exp(-normalizedDistance * normalizedDistance / (2 * gd.sigma() * gd.sigma()));
-            case SimilaritySpec.StepDecay sd ->
-                normalizedDistance <= sd.tolerance() ? 1.0 : 0.0;
-            case SimilaritySpec.ExponentialDecay ed ->
-                Math.exp(-ed.decayRate() * normalizedDistance);
+            case SimilaritySpec.GaussianDecay gd -> Math.exp(-normalizedDistance * normalizedDistance / (2 * gd.sigma() * gd.sigma()));
+            case SimilaritySpec.StepDecay sd -> normalizedDistance <= sd.tolerance() ? 1.0 : 0.0;
+            case SimilaritySpec.ExponentialDecay ed -> Math.exp(-ed.decayRate() * normalizedDistance);
             case SimilaritySpec.CategoricalTable ct -> throw new IllegalStateException(
-                "Unexpected spec on Numeric: " + field.similaritySpec());
-        };
-    }
+                    "Unexpected spec on Numeric: " + field.similaritySpec());
+            case SimilaritySpec.DtwSpec ds -> throw new IllegalStateException(
+                    "Unexpected spec on Numeric: " + field.similaritySpec());
+            case SimilaritySpec.EditDistanceSpec es -> throw new IllegalStateException(
+                    "Unexpected spec on Numeric: " + field.similaritySpec());
+        };}
 
     private static double computeNormalizedDistance(FeatureField.Numeric field,
                                                     Object queryVal, Object caseVal) {
@@ -159,17 +162,23 @@ public final class CbrSimilarityScorer {
 
     @SuppressWarnings("unchecked")
     private static double dtwSimilarity(FeatureField.TimeSeries ts,
-                                         Object queryVal, Object caseVal) {
+                                        Object queryVal, Object caseVal) {
+        Integer windowSize = ts.similaritySpec() instanceof SimilaritySpec.DtwSpec ds
+                             ? ds.windowSize() : null;
         return DtwSimilarity.compute(
-            (java.util.List<java.util.Map<String, Object>>) queryVal,
-            (java.util.List<java.util.Map<String, Object>>) caseVal, ts);
+                (java.util.List<java.util.Map<String, Object>>) queryVal,
+                (java.util.List<java.util.Map<String, Object>>) caseVal, ts, windowSize).score();
     }
 
     @SuppressWarnings("unchecked")
-    private static double editDistanceSimilarity(Object queryVal, Object caseVal) {
+    private static double editDistanceSimilarity(FeatureField.DiscreteSequence ds,
+                                                 Object queryVal, Object caseVal) {
+        java.util.Map<String, java.util.Map<String, Double>> subSim =
+                ds.similaritySpec() instanceof SimilaritySpec.EditDistanceSpec es
+                ? es.substitutionSimilarities() : null;
         return EditDistanceSimilarity.compute(
-            (java.util.List<String>) queryVal,
-            (java.util.List<String>) caseVal);
+                (java.util.List<String>) queryVal,
+                (java.util.List<String>) caseVal, subSim).score();
     }
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {

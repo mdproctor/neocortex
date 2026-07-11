@@ -397,4 +397,39 @@ class CbrSimilarityScorerTest {
             Map.of("score", 80.0), Map.of("score", 60.0), Map.of(), SCHEMA);
         assertThat(sim).isCloseTo(0.8, org.assertj.core.data.Offset.offset(1e-9));
     }
+
+    // --- Temporal SimilaritySpec integration ---
+    @Test
+    void dtwSpec_windowedDtw_affectsScore() {
+        var schema = CbrFeatureSchema.of("ts-test",
+                                         FeatureField.timeSeries("curve", "t",
+                                                                 new SimilaritySpec.DtwSpec(1),
+                                                                 FeatureField.numeric("t", 0, 10),
+                                                                 FeatureField.numeric("val", 0, 100)));
+        var q = java.util.Map.<String, Object>of("curve", java.util.List.of(
+                java.util.Map.of("t", 1, "val", 10),
+                java.util.Map.of("t", 2, "val", 90)));
+        var c = java.util.Map.<String, Object>of("curve", java.util.List.of(
+                java.util.Map.of("t", 1, "val", 90),
+                java.util.Map.of("t", 2, "val", 10)));
+        double score = CbrSimilarityScorer.score(q, c, Map.of(), schema);
+        assertThat(score).isGreaterThan(0.0).isLessThan(1.0);
+    }
+
+    @Test
+    void editDistanceSpec_weightedSubstitution_affectsScore() {
+        var spec = new SimilaritySpec.EditDistanceSpec(java.util.Map.of(
+                "MACRO", java.util.Map.of("DEFENSIVE", 0.8)));
+        var schema = CbrFeatureSchema.of("seq-test",
+                                         FeatureField.discreteSequence("phases", spec));
+        var    q        = java.util.Map.<String, Object>of("phases", java.util.List.of("MACRO"));
+        var    c        = java.util.Map.<String, Object>of("phases", java.util.List.of("DEFENSIVE"));
+        double withSpec = CbrSimilarityScorer.score(q, c, Map.of(), schema);
+
+        var schemaNoSpec = CbrFeatureSchema.of("seq-test2",
+                                               FeatureField.discreteSequence("phases"));
+        double withoutSpec = CbrSimilarityScorer.score(q, c, Map.of(), schemaNoSpec);
+
+        assertThat(withSpec).isGreaterThan(withoutSpec);
+    }
 }

@@ -26,7 +26,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.within;
 
 public abstract class CbrCaseMemoryStoreContractTest {
 
@@ -1413,5 +1412,119 @@ public abstract class CbrCaseMemoryStoreContractTest {
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(2);
         assertThat(results.get(0).cbrCase().problem()).isEqualTo("terran-game");
+    }
+
+// ========================= Temporal SimilaritySpec =========================
+
+    private void registerTemporalSchemaWithSpecs() {
+        store().registerSchema(CbrFeatureSchema.of("temporal-game-specs",
+                                                   FeatureField.categorical("race"),
+                                                   FeatureField.numeric("mmr", 0, 8000),
+                                                   FeatureField.timeSeries("economyCurve", "minute",
+                                                                           new SimilaritySpec.DtwSpec(5),
+                                                                           FeatureField.numeric("minute", 0, 30),
+                                                                           FeatureField.numeric("economy", 0, 500),
+                                                                           FeatureField.numeric("army", 0, 200),
+                                                                           FeatureField.categorical("posture")),
+                                                   FeatureField.discreteSequence("phaseProgression",
+                                                                                 new SimilaritySpec.EditDistanceSpec(Map.of(
+                                                                                         "MACRO", Map.of("DEFENSIVE", 0.8, "AGGRESSIVE", 0.3),
+                                                                                         "DEFENSIVE", Map.of("AGGRESSIVE", 0.1))))));
+    }
+
+    private String storeTemporalSpecCase(String problem, Map<String, Object> features, String caseId) {
+        return store().store(
+                new FeatureVectorCbrCase(problem, "solution", null, null, features),
+                "temporal-game-specs", ENTITY, CBR, TENANT, caseId);
+    }
+
+    @Test
+    void temporal_timeSeries_dtwSpec_acceptedBySchema() {
+        registerTemporalSchemaWithSpecs();
+    }
+
+    @Test
+    void temporal_timeSeries_editDistanceSpec_rejectedBySchema() {
+        assertThatThrownBy(() -> store().registerSchema(CbrFeatureSchema.of("bad-ts",
+                                                                            FeatureField.timeSeries("curve", "t",
+                                                                                                    new SimilaritySpec.EditDistanceSpec(Map.of()),
+                                                                                                    FeatureField.numeric("t", 0, 10),
+                                                                                                    FeatureField.numeric("val", 0, 100)))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_discreteSequence_editDistanceSpec_acceptedBySchema() {
+        registerTemporalSchemaWithSpecs();
+    }
+
+    @Test
+    void temporal_discreteSequence_dtwSpec_rejectedBySchema() {
+        assertThatThrownBy(() -> store().registerSchema(CbrFeatureSchema.of("bad-ds",
+                                                                            FeatureField.discreteSequence("phases", new SimilaritySpec.DtwSpec(3)))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void temporal_timeSeries_dtwSpec_affectsRetrieval() {
+        registerTemporalSchemaWithSpecs();
+        storeTemporalSpecCase("close match", Map.of(
+                                      "race", "Terran",
+                                      "economyCurve", List.of(
+                                              Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+                                              Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))),
+                              "close");
+        storeTemporalSpecCase("far match", Map.of(
+                                      "race", "Terran",
+                                      "economyCurve", List.of(
+                                              Map.<String, Object>of("minute", 1, "economy", 400, "army", 150, "posture", "AGGRESSIVE"),
+                                              Map.<String, Object>of("minute", 3, "economy", 100, "army", 50, "posture", "DEFENSIVE"))),
+                              "far");
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game-specs", Map.of(
+                                        "economyCurve", List.of(
+                                                Map.<String, Object>of("minute", 1, "economy", 32, "army", 2, "posture", "MACRO"),
+                                                Map.<String, Object>of("minute", 3, "economy", 47, "army", 7, "posture", "MACRO"))),
+                                10).withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("close match");
+    }
+
+    @Test
+    void temporal_discreteSequence_editDistanceSpec_affectsRetrieval() {
+        registerTemporalSchemaWithSpecs();
+        storeTemporalSpecCase("defensive", Map.of(
+                                      "race", "Terran",
+                                      "phaseProgression", List.of("MACRO", "DEFENSIVE")),
+                              "def");
+        storeTemporalSpecCase("aggressive", Map.of(
+                                      "race", "Terran",
+                                      "phaseProgression", List.of("MACRO", "AGGRESSIVE")),
+                              "agg");
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game-specs", Map.of(
+                                        "phaseProgression", List.of("MACRO", "MACRO")),
+                                10).withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("defensive");
+    }
+
+    @Test
+    void temporal_timeSeries_windowedDtw_similarResult() {
+        registerTemporalSchemaWithSpecs();
+        storeTemporalSpecCase("windowed test", Map.of(
+                                      "race", "Terran",
+                                      "economyCurve", List.of(
+                                              Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
+                                              Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))),
+                              "w1");
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game-specs", Map.of(
+                                        "economyCurve", List.of(
+                                                Map.<String, Object>of("minute", 1, "economy", 32, "army", 2, "posture", "MACRO"),
+                                                Map.<String, Object>of("minute", 3, "economy", 43, "army", 3, "posture", "MACRO"))),
+                                10).withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).isNotEmpty();
+        assertThat(results.get(0).score()).isGreaterThan(0.5);
     }
 }

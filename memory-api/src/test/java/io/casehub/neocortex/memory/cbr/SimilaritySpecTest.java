@@ -1,8 +1,11 @@
 package io.casehub.neocortex.memory.cbr;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SimilaritySpecTest {
 
@@ -181,5 +184,84 @@ class SimilaritySpecTest {
         var t1 = SimilaritySpec.categoricalTableBuilder().add("a", "b", 0.5).build();
         var t2 = SimilaritySpec.categoricalTableBuilder().add("a", "b", 0.5).build();
         assertThat(t1).isEqualTo(t2);
+    }
+
+    // --- DtwSpec ---
+    @Test
+    void dtwSpec_nullWindowSize_accepted() {
+        var spec = new SimilaritySpec.DtwSpec(null);
+        assertThat(spec.windowSize()).isNull();
+    }
+
+    @Test
+    void dtwSpec_positiveWindowSize_accepted() {
+        var spec = new SimilaritySpec.DtwSpec(5);
+        assertThat(spec.windowSize()).isEqualTo(5);
+    }
+
+    @Test
+    void dtwSpec_zeroWindowSize_rejected() {
+        assertThatThrownBy(() -> new SimilaritySpec.DtwSpec(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("windowSize must be >= 1");
+    }
+
+    @Test
+    void dtwSpec_negativeWindowSize_rejected() {
+        assertThatThrownBy(() -> new SimilaritySpec.DtwSpec(-3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("windowSize must be >= 1");
+    }
+
+    // --- EditDistanceSpec ---
+    @Test
+    void editDistanceSpec_emptyMap_accepted() {
+        var spec = new SimilaritySpec.EditDistanceSpec(Map.of());
+        assertThat(spec.substitutionSimilarities()).isEmpty();
+    }
+
+    @Test
+    void editDistanceSpec_mirrorValidation() {
+        var spec = new SimilaritySpec.EditDistanceSpec(Map.of(
+                "A", Map.of("B", 0.5)));
+        assertThat(spec.substitutionSimilarities().get("B").get("A")).isEqualTo(0.5);
+    }
+
+    @Test
+    void editDistanceSpec_nanScore_rejected() {
+        assertThatThrownBy(() -> new SimilaritySpec.EditDistanceSpec(Map.of(
+                "A", Map.of("B", Double.NaN))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void editDistanceSpec_outOfRangeScore_rejected() {
+        assertThatThrownBy(() -> new SimilaritySpec.EditDistanceSpec(Map.of(
+                "A", Map.of("B", 1.5))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void editDistanceSpec_conflictingScores_rejected() {
+        assertThatThrownBy(() -> new SimilaritySpec.EditDistanceSpec(Map.of(
+                "A", Map.of("B", 0.5),
+                "B", Map.of("A", 0.7))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Conflicting");
+    }
+
+    // --- NaN fix (pre-existing bug in CategoricalTable) ---
+    @Test
+    void categoricalTable_nanScore_rejected() {
+        assertThatThrownBy(() -> new SimilaritySpec.CategoricalTable(Map.of(
+                "A", Map.of("B", Double.NaN))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void builder_nanScore_rejected() {
+        assertThatThrownBy(() -> SimilaritySpec.categoricalTableBuilder()
+                                               .add("A", "B", Double.NaN))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

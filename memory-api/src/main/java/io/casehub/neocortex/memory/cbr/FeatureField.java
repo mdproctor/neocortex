@@ -24,6 +24,10 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                             "Categorical fields only support CategoricalTable specs");
                     case SimilaritySpec.ExponentialDecay ed -> throw new IllegalArgumentException(
                             "Categorical fields only support CategoricalTable specs");
+                    case SimilaritySpec.DtwSpec ds -> throw new IllegalArgumentException(
+                            "Categorical fields only support CategoricalTable specs");
+                    case SimilaritySpec.EditDistanceSpec es -> throw new IllegalArgumentException(
+                            "Categorical fields only support CategoricalTable specs");
                 }
             }
         }
@@ -45,6 +49,10 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                     case SimilaritySpec.ExponentialDecay ed -> {}
                     case SimilaritySpec.CategoricalTable ct -> throw new IllegalArgumentException(
                             "Numeric fields do not support CategoricalTable specs");
+                    case SimilaritySpec.DtwSpec ds -> throw new IllegalArgumentException(
+                            "Numeric fields do not support DtwSpec specs");
+                    case SimilaritySpec.EditDistanceSpec es -> throw new IllegalArgumentException(
+                            "Numeric fields do not support EditDistanceSpec specs");
                 }
             }
         }
@@ -84,7 +92,12 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
         }
     }
 
-    record TimeSeries(String name, List<FeatureField> innerFields, String timestampField) implements FeatureField {
+    record TimeSeries(String name, List<FeatureField> innerFields, String timestampField,
+                      SimilaritySpec similaritySpec) implements FeatureField {
+        public TimeSeries(String name, List<FeatureField> innerFields, String timestampField) {
+            this(name, innerFields, timestampField, null);
+        }
+
         public TimeSeries {
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(innerFields, "innerFields");
@@ -121,12 +134,46 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                 throw new IllegalArgumentException(
                         "TimeSeries requires at least one non-timestamp Numeric inner field for DTW distance");
             }
+            if (similaritySpec != null) {
+                switch (similaritySpec) {
+                    case SimilaritySpec.DtwSpec ds -> {}
+                    case SimilaritySpec.CategoricalTable ct -> throw new IllegalArgumentException(
+                            "TimeSeries fields only support DtwSpec");
+                    case SimilaritySpec.GaussianDecay gd -> throw new IllegalArgumentException(
+                            "TimeSeries fields only support DtwSpec");
+                    case SimilaritySpec.StepDecay sd -> throw new IllegalArgumentException(
+                            "TimeSeries fields only support DtwSpec");
+                    case SimilaritySpec.ExponentialDecay ed -> throw new IllegalArgumentException(
+                            "TimeSeries fields only support DtwSpec");
+                    case SimilaritySpec.EditDistanceSpec es -> throw new IllegalArgumentException(
+                            "TimeSeries fields only support DtwSpec");
+                }
+            }
         }
     }
 
-    record DiscreteSequence(String name) implements FeatureField {
+    record DiscreteSequence(String name, SimilaritySpec similaritySpec) implements FeatureField {
+        public DiscreteSequence(String name) {
+            this(name, null);
+        }
+
         public DiscreteSequence {
             Objects.requireNonNull(name, "name");
+            if (similaritySpec != null) {
+                switch (similaritySpec) {
+                    case SimilaritySpec.EditDistanceSpec es -> {}
+                    case SimilaritySpec.CategoricalTable ct -> throw new IllegalArgumentException(
+                            "DiscreteSequence fields only support EditDistanceSpec");
+                    case SimilaritySpec.GaussianDecay gd -> throw new IllegalArgumentException(
+                            "DiscreteSequence fields only support EditDistanceSpec");
+                    case SimilaritySpec.StepDecay sd -> throw new IllegalArgumentException(
+                            "DiscreteSequence fields only support EditDistanceSpec");
+                    case SimilaritySpec.ExponentialDecay ed -> throw new IllegalArgumentException(
+                            "DiscreteSequence fields only support EditDistanceSpec");
+                    case SimilaritySpec.DtwSpec ds -> throw new IllegalArgumentException(
+                            "DiscreteSequence fields only support EditDistanceSpec");
+                }
+            }
         }
     }
 
@@ -200,4 +247,14 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
     }
 
     static FeatureField discreteSequence(String name) {return new DiscreteSequence(name);}
+
+    static FeatureField timeSeries(String name, String timestampField,
+                                   SimilaritySpec spec, FeatureField... innerFields) {
+        return new TimeSeries(name, List.of(innerFields), timestampField, spec);
+    }
+
+    static FeatureField discreteSequence(String name, SimilaritySpec spec) {
+        return new DiscreteSequence(name, spec);
+    }
+
 }
