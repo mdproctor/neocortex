@@ -28,6 +28,12 @@ public final class CbrSimilarityScorer {
 
     private CbrSimilarityScorer() {}
 
+    public record SimilarityBreakdown(double score, Map<String, Double> featureSimilarities) {
+        public SimilarityBreakdown {
+            featureSimilarities = Map.copyOf(featureSimilarities);
+        }
+    }
+
     /**
      * Compute weighted similarity between query features and case features.
      *
@@ -60,12 +66,21 @@ public final class CbrSimilarityScorer {
                                 Map<String, Double> weights,
                                 CbrFeatureSchema schema,
                                 Map<String, LocalSimilarityFunction> overrides) {
+        return scoreDetailed(queryFeatures, caseFeatures, weights, schema, overrides).score();
+    }
+
+    public static SimilarityBreakdown scoreDetailed(Map<String, Object> queryFeatures,
+                                                     Map<String, Object> caseFeatures,
+                                                     Map<String, Double> weights,
+                                                     CbrFeatureSchema schema,
+                                                     Map<String, LocalSimilarityFunction> overrides) {
         Objects.requireNonNull(overrides, "overrides");
-        if (queryFeatures.isEmpty()) {return 1.0;}
-        if (schema == null) {return 1.0;}
+        if (queryFeatures.isEmpty()) {return new SimilarityBreakdown(1.0, Map.of());}
+        if (schema == null) {return new SimilarityBreakdown(1.0, Map.of());}
 
         double weightedSum = 0.0;
         double totalWeight = 0.0;
+        Map<String, Double> rawContributions = new java.util.LinkedHashMap<>();
 
         for (Map.Entry<String, Object> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
@@ -80,11 +95,20 @@ public final class CbrSimilarityScorer {
             double localSim = caseValue == null ? 0.0
                                                 : localSimilarity(field, entry.getValue(), caseValue, overrides);
 
-            weightedSum += weight * localSim;
+            double contribution = weight * localSim;
+            weightedSum += contribution;
             totalWeight += weight;
+            rawContributions.put(entry.getKey(), contribution);
         }
 
-        return totalWeight > 0 ? weightedSum / totalWeight : 1.0;}
+        double score = totalWeight > 0 ? weightedSum / totalWeight : 1.0;
+        Map<String, Double> featureSims = new java.util.LinkedHashMap<>();
+        if (totalWeight > 0) {
+            for (var e : rawContributions.entrySet()) {
+                featureSims.put(e.getKey(), e.getValue() / totalWeight);
+            }
+        }
+        return new SimilarityBreakdown(score, featureSims);}
 
     private static double localSimilarity(FeatureField field, Object queryVal, Object caseVal,
                                           Map<String, LocalSimilarityFunction> overrides) {

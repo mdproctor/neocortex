@@ -92,11 +92,12 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
             if (!matchesFilters(stored.cbrCase(), query.filters(), schema)) continue;
 
-            double featureScore = CbrSimilarityScorer.score(
+            CbrSimilarityScorer.SimilarityBreakdown breakdown = CbrSimilarityScorer.scoreDetailed(
                 query.features(), stored.cbrCase().features(), query.weights(), schema, Map.of());
 
-            if (featureScore >= query.minSimilarity()) {
-                candidates.add(new ScoredCbrCase<>((C) stored.cbrCase(), featureScore));
+            if (breakdown.score() >= query.minSimilarity()) {
+                candidates.add(new ScoredCbrCase<>((C) stored.cbrCase(), breakdown.score(), false,
+                    breakdown.featureSimilarities()));
             }
         }
 

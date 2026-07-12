@@ -83,4 +83,53 @@ class ScoredCbrCaseTest {
         assertThat(reranked.cbrCase()).isSameAs(cbrCase);
         assertThat(original.reranked()).isFalse();
     }
+
+    @Test
+    void featureSimilarities_present() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var sims = java.util.Map.of("posture", 0.6, "size", 0.3);
+        var scored = new ScoredCbrCase<>(cbrCase, 0.9, false, sims);
+        assertThat(scored.featureSimilarities()).isEqualTo(sims);
+    }
+
+    @Test
+    void featureSimilarities_immutable() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var sims = new java.util.HashMap<String, Double>();
+        sims.put("a", 0.5);
+        var scored = new ScoredCbrCase<>(cbrCase, 0.9, false, sims);
+        assertThatThrownBy(() -> scored.featureSimilarities().put("b", 0.1))
+            .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void twoArgConstructor_emptyFeatureSimilarities() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var scored = new ScoredCbrCase<>(cbrCase, 0.9);
+        assertThat(scored.featureSimilarities()).isEmpty();
+    }
+
+    @Test
+    void threeArgConstructor_emptyFeatureSimilarities() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var scored = new ScoredCbrCase<>(cbrCase, 0.9, true);
+        assertThat(scored.featureSimilarities()).isEmpty();
+    }
+
+    @Test
+    void withReranked_preservesFeatureSimilarities() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var sims = java.util.Map.of("posture", 0.6);
+        var scored = new ScoredCbrCase<>(cbrCase, 0.9, false, sims);
+        var reranked = scored.withReranked();
+        assertThat(reranked.reranked()).isTrue();
+        assertThat(reranked.featureSimilarities()).isEqualTo(sims);
+    }
+
+    @Test
+    void nullFeatureSimilarities_becomesEmpty() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var scored = new ScoredCbrCase<>(cbrCase, 0.9, false, null);
+        assertThat(scored.featureSimilarities()).isEmpty();
+    }
 }

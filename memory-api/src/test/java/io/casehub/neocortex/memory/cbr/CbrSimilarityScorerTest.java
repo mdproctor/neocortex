@@ -431,4 +431,67 @@ class CbrSimilarityScorerTest {
 
         assertThat(withSpec).isGreaterThan(withoutSpec);
     }
+
+    @Test
+    void scoreDetailed_returns_breakdown() {
+        CbrFeatureSchema schema = CbrFeatureSchema.of("test",
+            FeatureField.numeric("temperature", 0.0, 100.0),
+            FeatureField.categorical("severity"));
+
+        Map<String, Object> query = Map.of("temperature", 50.0, "severity", "high");
+        Map<String, Object> stored = Map.of("temperature", 60.0, "severity", "high");
+        Map<String, Double> weights = Map.of("temperature", 2.0, "severity", 1.0);
+
+        CbrSimilarityScorer.SimilarityBreakdown breakdown =
+            CbrSimilarityScorer.scoreDetailed(query, stored, weights, schema, Map.of());
+
+        assertThat(breakdown.featureSimilarities()).hasSize(2);
+        assertThat(breakdown.featureSimilarities()).containsKey("temperature");
+        assertThat(breakdown.featureSimilarities()).containsKey("severity");
+        double sum = breakdown.featureSimilarities().values().stream()
+            .mapToDouble(Double::doubleValue).sum();
+        assertThat(sum).isCloseTo(breakdown.score(), org.assertj.core.data.Offset.offset(0.001));
+    }
+
+    @Test
+    void scoreDetailed_matches_score() {
+        Map<String, Object> query = Map.of("score", 80.0);
+        Map<String, Object> stored = Map.of("score", 60.0);
+
+        double oldScore = CbrSimilarityScorer.score(query, stored, Map.of(), SCHEMA);
+        CbrSimilarityScorer.SimilarityBreakdown breakdown =
+            CbrSimilarityScorer.scoreDetailed(query, stored, Map.of(), SCHEMA, Map.of());
+
+        assertThat(breakdown.score()).isCloseTo(oldScore, org.assertj.core.data.Offset.offset(0.0001));
+    }
+
+    @Test
+    void scoreDetailed_empty_features_returns_empty_breakdown() {
+        CbrSimilarityScorer.SimilarityBreakdown breakdown =
+            CbrSimilarityScorer.scoreDetailed(Map.of(), Map.of("score", 50.0), Map.of(), SCHEMA, Map.of());
+
+        assertThat(breakdown.score()).isEqualTo(1.0);
+        assertThat(breakdown.featureSimilarities()).isEmpty();
+    }
+
+    @Test
+    void scoreDetailed_null_schema_returns_empty_breakdown() {
+        CbrSimilarityScorer.SimilarityBreakdown breakdown =
+            CbrSimilarityScorer.scoreDetailed(Map.of("score", 50.0), Map.of("score", 50.0), Map.of(), null, Map.of());
+
+        assertThat(breakdown.score()).isEqualTo(1.0);
+        assertThat(breakdown.featureSimilarities()).isEmpty();
+    }
+
+    @Test
+    void scoreDetailed_single_feature_contribution_equals_score() {
+        Map<String, Object> query = Map.of("color", "red");
+        Map<String, Object> stored = Map.of("color", "red");
+
+        CbrSimilarityScorer.SimilarityBreakdown breakdown =
+            CbrSimilarityScorer.scoreDetailed(query, stored, Map.of(), SCHEMA, Map.of());
+
+        assertThat(breakdown.score()).isEqualTo(1.0);
+        assertThat(breakdown.featureSimilarities().get("color")).isEqualTo(1.0);
+    }
 }
