@@ -8,12 +8,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public final class RerankingLogic {
 
     public static final String SCORE_KEY = "_crossEncoderScore";
-    public static final String RERANKED_KEY = "_reranked";
+    public static final String RERANKED_KEY          = "_reranked";
+    public static final String VECTOR_SIMILARITY_KEY = "_vectorSimilarity";
 
     private RerankingLogic() {}
 
@@ -21,38 +21,39 @@ public final class RerankingLogic {
                                                String queryText,
                                                List<RetrievedChunk> chunks,
                                                int maxResults) {
-        if (chunks.isEmpty()) return List.of();
+        if (chunks.isEmpty()) {return List.of();}
 
         if (hasPrecomputedScores(chunks)) {
             return sortByPrecomputedScores(chunks, maxResults);
         }
 
         List<String> contents = chunks.stream()
-            .map(RetrievedChunk::content).toList();
+                                      .map(RetrievedChunk::content).toList();
         List<RankedResult> ranked = reranker.rerank(queryText, contents);
 
         List<RetrievedChunk> result = new ArrayList<>(
-            Math.min(ranked.size(), maxResults));
+                Math.min(ranked.size(), maxResults));
         for (int i = 0; i < Math.min(ranked.size(), maxResults); i++) {
-            RankedResult r = ranked.get(i);
-            RetrievedChunk original = chunks.get(r.originalIndex());
-            var augmented = new HashMap<>(original.metadata());
+            RankedResult   r         = ranked.get(i);
+            RetrievedChunk original  = chunks.get(r.originalIndex());
+            var            augmented = new HashMap<>(original.metadata());
             augmented.put(SCORE_KEY, String.valueOf(r.score()));
-            result.add(original.withMetadata(augmented));
+            augmented.put(VECTOR_SIMILARITY_KEY, String.valueOf(original.relevanceScore()));
+            result.add(original.withMetadata(augmented).withRelevanceScore(r.score()));
         }
-        return List.copyOf(result);
-    }
+        return List.copyOf(result);}
 
     public static List<RetrievedChunk> attachScores(List<RetrievedChunk> chunks,
                                                      float[] scores) {
         List<RetrievedChunk> result = new ArrayList<>(chunks.size());
         for (int i = 0; i < chunks.size(); i++) {
-            var augmented = new HashMap<>(chunks.get(i).metadata());
+            RetrievedChunk original  = chunks.get(i);
+            var            augmented = new HashMap<>(original.metadata());
             augmented.put(SCORE_KEY, String.valueOf(scores[i]));
-            result.add(chunks.get(i).withMetadata(augmented));
+            augmented.put(VECTOR_SIMILARITY_KEY, String.valueOf(original.relevanceScore()));
+            result.add(original.withMetadata(augmented).withRelevanceScore(scores[i]));
         }
-        return List.copyOf(result);
-    }
+        return List.copyOf(result);}
 
     public static boolean hasPrecomputedScores(List<RetrievedChunk> chunks) {
         return !chunks.isEmpty()
