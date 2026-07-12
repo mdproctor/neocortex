@@ -100,6 +100,8 @@ final class CbrQueryTranslator {
                         builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
                     case FeatureField.CategoricalList cl -> throw new IllegalStateException(
                         "Structured field in toFilter — use applyStructuralFilters");
+                    case FeatureField.NumericList nl -> throw new IllegalStateException(
+                        "Structured field in toFilter — use applyStructuralFilters");
                     case FeatureField.NestedObject no -> throw new IllegalStateException(
                         "Structured field in toFilter — use applyStructuralFilters");
                     case FeatureField.ObjectList ol -> throw new IllegalStateException(
@@ -140,6 +142,8 @@ final class CbrQueryTranslator {
                 case CbrFilter.NotContains nc -> builder.addMustNot(ConditionFactory.matchKeyword(payloadKey, nc.value()));
                 case CbrFilter.NotContainsAny nca -> nca.values().forEach(v ->
                                                                                   builder.addMustNot(ConditionFactory.matchKeyword(payloadKey, v)));
+                case CbrFilter.ContainsRange cr -> builder.addMust(ConditionFactory.range(payloadKey,
+                    Range.newBuilder().setGte(cr.range().min()).setLte(cr.range().max()).build()));
                 case CbrFilter.HasMatch hm -> {
                     if (field instanceof FeatureField.ObjectList) {
                         Filter.Builder inner = Filter.newBuilder();

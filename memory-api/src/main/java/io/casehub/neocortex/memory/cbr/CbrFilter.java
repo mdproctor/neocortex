@@ -57,6 +57,12 @@ public sealed interface CbrFilter {
         }
     }
 
+    record ContainsRange(NumericRange range) implements CbrFilter {
+        public ContainsRange {
+            Objects.requireNonNull(range, "range");
+        }
+    }
+
 
     static Contains contains(String value) { return new Contains(value); }
     static ContainsAll containsAll(List<String> values) { return new ContainsAll(values); }
@@ -66,5 +72,8 @@ public sealed interface CbrFilter {
     static NotContains notContains(String value)            {return new NotContains(value);}
 
     static NotContainsAny notContainsAny(List<String> values) {return new NotContainsAny(values);}
+
+    static ContainsRange containsRange(NumericRange range)    {return new ContainsRange(range);}
+
 
 }

@@ -166,6 +166,8 @@ final class CbrCollectionManager {
                                                                                PayloadSchemaType.Keyword, null, true, null, null).get();
                     case FeatureField.CategoricalList cl -> client.createPayloadIndexAsync(collection, payloadKey,
                                                                                            PayloadSchemaType.Keyword, null, true, null, null).get();
+                    case FeatureField.NumericList nl -> client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                       PayloadSchemaType.Float, null, true, null, null).get();
                     case FeatureField.NestedObject no -> {
                         for (FeatureField inner : no.innerFields()) {
                             String            innerKey = payloadKey + "." + inner.name();

@@ -71,6 +71,7 @@ public final class CbrSimilarityScorer {
             FeatureField field = findField(schema, entry.getKey());
             if (field == null) {continue;}
             if (field instanceof FeatureField.CategoricalList
+                || field instanceof FeatureField.NumericList
                 || field instanceof FeatureField.NestedObject
                 || field instanceof FeatureField.ObjectList) {continue;}
 
@@ -95,6 +96,7 @@ public final class CbrSimilarityScorer {
             case FeatureField.Categorical c -> categoricalSimilarity(c, queryVal, caseVal);
             case FeatureField.Text t -> queryVal.equals(caseVal) ? 1.0 : 0.0;
             case FeatureField.CategoricalList cl -> throw new IllegalStateException("Structured field in scorer");
+            case FeatureField.NumericList nl -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.NestedObject no -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.ObjectList ol -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal);

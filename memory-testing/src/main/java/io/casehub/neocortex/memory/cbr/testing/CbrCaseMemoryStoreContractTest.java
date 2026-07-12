@@ -1102,6 +1102,80 @@ public abstract class CbrCaseMemoryStoreContractTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    private void registerNumericListSchema() {
+        store().registerSchema(CbrFeatureSchema.of("player-stats",
+                                                   FeatureField.categorical("region"),
+                                                   FeatureField.numericList("scores", 0, 100)));
+    }
+
+    private String storeNumericListCase(String problem, Map<String, Object> features, String caseId) {
+        return store().store(
+                new FeatureVectorCbrCase(problem, "solution", null, null, features),
+                "player-stats", ENTITY, CBR, TENANT, caseId);
+    }
+
+    @Test
+    void numericList_storeAndRetrieve() {
+        registerNumericListSchema();
+        storeNumericListCase("high scorer", Map.of("region", "NA", "scores", List.of(85, 92, 78)), "c1");
+        var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of("region", "NA"), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+    }
+
+    @Test
+    void numericList_containsRange_matchesElementInRange() {
+        registerNumericListSchema();
+        storeNumericListCase("has-90s", Map.of("region", "NA", "scores", List.of(85, 92, 78)), "c1");
+        storeNumericListCase("no-90s", Map.of("region", "NA", "scores", List.of(50, 60, 70)), "c2");
+
+        var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of(), 10)
+                        .withFilter("scores", CbrFilter.containsRange(new NumericRange(90, 100)))
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("has-90s");
+    }
+
+    @Test
+    void numericList_containsRange_noMatch() {
+        registerNumericListSchema();
+        storeNumericListCase("low", Map.of("region", "NA", "scores", List.of(10, 20, 30)), "c1");
+
+        var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of(), 10)
+                        .withFilter("scores", CbrFilter.containsRange(new NumericRange(90, 100)))
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void numericList_validation_queryFeaturesRejected() {
+        registerNumericListSchema();
+        assertThatThrownBy(() -> {
+            var q = CbrQuery.of(TENANT, CBR, "player-stats",
+                                Map.of("scores", List.of(50, 60)), 10);
+            store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        }).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void numericList_validation_storeNonNumberRejected() {
+        registerNumericListSchema();
+        assertThatThrownBy(() -> storeNumericListCase("bad", Map.of("scores", List.of("not-a-number")), "bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void numericList_validation_containsRangeOnCategoricalList_rejected() {
+        registerStructuredSchema();
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.containsRange(new NumericRange(1, 5)));
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
 
     // ========================= Temporal fields =========================
 

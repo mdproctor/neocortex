@@ -6,7 +6,8 @@ import java.util.Objects;
 import java.util.Set;
 
 public sealed interface FeatureField permits FeatureField.Categorical, FeatureField.Numeric, FeatureField.Text,
-                                             FeatureField.CategoricalList, FeatureField.NestedObject, FeatureField.ObjectList,
+                                             FeatureField.CategoricalList, FeatureField.NumericList,
+                                             FeatureField.NestedObject, FeatureField.ObjectList,
                                              FeatureField.TimeSeries, FeatureField.DiscreteSequence {
     String name();
 
@@ -73,6 +74,17 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
             Objects.requireNonNull(name, "name");
         }
     }
+
+    record NumericList(String name, double min, double max) implements FeatureField {
+        public NumericList {
+            Objects.requireNonNull(name, "name");
+            if (min > max) {
+                throw new IllegalArgumentException(
+                        "min must be <= max, got min=" + min + " max=" + max);
+            }
+        }
+    }
+
 
     record NestedObject(String name, List<FeatureField> innerFields) implements FeatureField {
         public NestedObject {
@@ -204,6 +216,8 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                 }
                 case CategoricalList cl -> throw new IllegalArgumentException(
                         "Inner fields must be flat (Categorical/Numeric/Text), got: CategoricalList");
+                case NumericList nl -> throw new IllegalArgumentException(
+                        "Inner fields must be flat (Categorical/Numeric/Text), got: NumericList");
                 case NestedObject no -> throw new IllegalArgumentException(
                         "Inner fields must be flat (Categorical/Numeric/Text), got: NestedObject");
                 case ObjectList ol -> throw new IllegalArgumentException(
@@ -213,8 +227,7 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                 case DiscreteSequence ds -> throw new IllegalArgumentException(
                         "Inner fields must be flat (Categorical/Numeric/Text), got: DiscreteSequence");
             }
-        }
-    }
+        }}
 
     static FeatureField categorical(String name) {return new Categorical(name);}
 
@@ -233,6 +246,11 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
     static FeatureField semanticText(String name)    {return new Text(name, true);}
 
     static FeatureField categoricalList(String name) {return new CategoricalList(name);}
+
+    static FeatureField numericList(String name, double min, double max) {
+        return new NumericList(name, min, max);
+    }
+
 
     static FeatureField nestedObject(String name, FeatureField... innerFields) {
         return new NestedObject(name, List.of(innerFields));

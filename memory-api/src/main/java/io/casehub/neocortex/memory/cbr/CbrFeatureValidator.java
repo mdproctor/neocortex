@@ -10,80 +10,107 @@ public final class CbrFeatureValidator {
     public static void validateStoreFeatures(Map<String, Object> features, CbrFeatureSchema schema) {
         for (var entry : features.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
-            if (field == null) continue;
+            if (field == null) {continue;}
             Object value = entry.getValue();
             switch (field) {
                 case FeatureField.Categorical c -> requireType(entry.getKey(), value, String.class, "Categorical");
                 case FeatureField.Numeric n -> {
-                    if (!(value instanceof Number) && !(value instanceof NumericRange))
+                    if (!(value instanceof Number) && !(value instanceof NumericRange)) {
                         throw new IllegalArgumentException(
-                            "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
-                            + value.getClass().getSimpleName());
+                                "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
+                                + value.getClass().getSimpleName());
+                    }
                 }
                 case FeatureField.Text t -> requireType(entry.getKey(), value, String.class, "Text");
                 case FeatureField.CategoricalList cl -> {
-                    if (!(value instanceof List<?> list))
+                    if (!(value instanceof List<?> list)) {
                         throw new IllegalArgumentException(
-                            "CategoricalList field '" + entry.getKey() + "' requires List, got: "
-                            + value.getClass().getSimpleName());
+                                "CategoricalList field '" + entry.getKey() + "' requires List, got: "
+                                + value.getClass().getSimpleName());
+                    }
                     for (Object elem : list) {
-                        if (!(elem instanceof String))
+                        if (!(elem instanceof String)) {
                             throw new IllegalArgumentException(
-                                "CategoricalList field '" + entry.getKey() + "' requires List<String>, element is: "
-                                + elem.getClass().getSimpleName());
+                                    "CategoricalList field '" + entry.getKey() + "' requires List<String>, element is: "
+                                    + elem.getClass().getSimpleName());
+                        }
+                    }
+                }
+                case FeatureField.NumericList nl -> {
+                    if (!(value instanceof List<?> list)) {
+                        throw new IllegalArgumentException(
+                                "NumericList field '" + entry.getKey() + "' requires List, got: "
+                                + value.getClass().getSimpleName());
+                    }
+                    for (Object elem : list) {
+                        if (!(elem instanceof Number num)) {
+                            throw new IllegalArgumentException(
+                                    "NumericList field '" + entry.getKey() + "' requires List<Number>, element is: "
+                                    + elem.getClass().getSimpleName());
+                        }
+                        double d = num.doubleValue();
+                        if (d < nl.min() || d > nl.max()) {
+                            throw new IllegalArgumentException(
+                                    "NumericList field '" + entry.getKey() + "' element " + d
+                                    + " outside range [" + nl.min() + ", " + nl.max() + "]");
+                        }
                     }
                 }
                 case FeatureField.NestedObject no -> {
-                    if (!(value instanceof Map<?,?> map))
+                    if (!(value instanceof Map<?, ?> map)) {
                         throw new IllegalArgumentException(
-                            "NestedObject field '" + entry.getKey() + "' requires Map, got: "
-                            + value.getClass().getSimpleName());
+                                "NestedObject field '" + entry.getKey() + "' requires Map, got: "
+                                + value.getClass().getSimpleName());
+                    }
                     validateInnerValues(entry.getKey(), map, no.innerFields());
                 }
                 case FeatureField.ObjectList ol -> {
-                    if (!(value instanceof List<?> list))
+                    if (!(value instanceof List<?> list)) {
                         throw new IllegalArgumentException(
-                            "ObjectList field '" + entry.getKey() + "' requires List, got: "
-                            + value.getClass().getSimpleName());
+                                "ObjectList field '" + entry.getKey() + "' requires List, got: "
+                                + value.getClass().getSimpleName());
+                    }
                     for (Object elem : list) {
-                        if (!(elem instanceof Map<?,?> map))
+                        if (!(elem instanceof Map<?, ?> map)) {
                             throw new IllegalArgumentException(
-                                "ObjectList field '" + entry.getKey() + "' requires List<Map>, element is: "
-                                + elem.getClass().getSimpleName());
+                                    "ObjectList field '" + entry.getKey() + "' requires List<Map>, element is: "
+                                    + elem.getClass().getSimpleName());
+                        }
                         validateInnerValues(entry.getKey(), map, ol.innerFields());
                     }
                 }
                 case FeatureField.TimeSeries ts -> validateTimeSeries(entry.getKey(), value, ts);
                 case FeatureField.DiscreteSequence ds -> validateDiscreteSequence(entry.getKey(), value);
             }
-        }
-    }
+        }}
 
     public static void validateQueryFeatures(Map<String, Object> features, CbrFeatureSchema schema) {
         for (var entry : features.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
-            if (field == null) continue;
+            if (field == null) {continue;}
             Object value = entry.getValue();
             switch (field) {
                 case FeatureField.Categorical c -> requireType(entry.getKey(), value, String.class, "Categorical");
                 case FeatureField.Numeric n -> {
-                    if (!(value instanceof Number) && !(value instanceof NumericRange))
+                    if (!(value instanceof Number) && !(value instanceof NumericRange)) {
                         throw new IllegalArgumentException(
-                            "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
-                            + value.getClass().getSimpleName());
+                                "Numeric field '" + entry.getKey() + "' requires Number or NumericRange, got: "
+                                + value.getClass().getSimpleName());
+                    }
                 }
                 case FeatureField.Text t -> requireType(entry.getKey(), value, String.class, "Text");
                 case FeatureField.CategoricalList cl -> throw new IllegalArgumentException(
-                    "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
+                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
+                case FeatureField.NumericList nl -> throw new IllegalArgumentException(
+                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
                 case FeatureField.NestedObject no -> throw new IllegalArgumentException(
-                    "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
+                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
                 case FeatureField.ObjectList ol -> throw new IllegalArgumentException(
-                    "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
+                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
                 case FeatureField.TimeSeries ts -> validateTimeSeries(entry.getKey(), value, ts);
                 case FeatureField.DiscreteSequence ds -> validateDiscreteSequence(entry.getKey(), value);
             }
-        }
-    }
+        }}
 
     public static void validateFilters(Map<String, CbrFilter> filters, CbrFeatureSchema schema) {
         for (var entry : filters.entrySet()) {
@@ -98,6 +125,7 @@ public final class CbrFeatureValidator {
                 case CbrFilter.ContainsAny ca -> requireCategoricalList(name, field);
                 case CbrFilter.NotContains nc -> requireCategoricalList(name, field);
                 case CbrFilter.NotContainsAny nca -> requireCategoricalList(name, field);
+                case CbrFilter.ContainsRange cr -> requireNumericList(name, field);
                 case CbrFilter.HasMatch hm -> {
                     if (!(field instanceof FeatureField.NestedObject) && !(field instanceof FeatureField.ObjectList)) {
                         throw new IllegalArgumentException(
@@ -156,6 +184,19 @@ public final class CbrFeatureValidator {
                 "Contains/ContainsAll/ContainsAny filter on '" + name
                 + "' requires CategoricalList field, got: " + field.getClass().getSimpleName());
     }
+
+    private static void requireNumericList(String name, FeatureField field) {
+        if (field instanceof FeatureField.TimeSeries || field instanceof FeatureField.DiscreteSequence) {
+            throw new IllegalArgumentException(
+                    "Temporal field '" + name + "' does not support filters");
+        }
+        if (!(field instanceof FeatureField.NumericList)) {
+            throw new IllegalArgumentException(
+                    "ContainsRange filter on '" + name
+                    + "' requires NumericList field, got: " + field.getClass().getSimpleName());
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     private static void validateTimeSeries(String fieldName, Object value, FeatureField.TimeSeries ts) {

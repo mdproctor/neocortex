@@ -144,6 +144,9 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 case CbrFilter.ContainsAny ca -> storedValue instanceof List<?> list && ca.values().stream().anyMatch(list::contains);
                 case CbrFilter.NotContains nc -> storedValue instanceof List<?> list && !list.contains(nc.value());
                 case CbrFilter.NotContainsAny nca -> storedValue instanceof List<?> list && nca.values().stream().noneMatch(list::contains);
+                case CbrFilter.ContainsRange cr -> storedValue instanceof List<?> list && list.stream()
+                    .filter(Number.class::isInstance).map(Number.class::cast)
+                    .anyMatch(n -> n.doubleValue() >= cr.range().min() && n.doubleValue() <= cr.range().max());
                 case CbrFilter.HasMatch hm -> matchesHasMatch(storedValue, hm, field);
             };
             if (!matches) {return false;}

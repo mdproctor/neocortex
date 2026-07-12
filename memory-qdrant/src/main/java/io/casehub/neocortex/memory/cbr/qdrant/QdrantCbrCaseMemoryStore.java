@@ -549,6 +549,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 case FeatureField.Categorical c -> {}
                 case FeatureField.Numeric n -> {}
                 case FeatureField.CategoricalList cl -> {}
+                case FeatureField.NumericList nl -> {}
                 case FeatureField.NestedObject no -> {}
                 case FeatureField.ObjectList ol -> {}
                 case FeatureField.TimeSeries ts -> {}
