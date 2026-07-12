@@ -63,6 +63,17 @@ public sealed interface CbrFilter {
         }
     }
 
+    record AllOf(List<CbrFilter> filters) implements CbrFilter {
+        public AllOf {
+            Objects.requireNonNull(filters, "filters");
+            if (filters.size() < 2) {throw new IllegalArgumentException("AllOf requires at least 2 filters");}
+            for (CbrFilter f : filters) {
+                if (f instanceof AllOf) {throw new IllegalArgumentException("AllOf cannot contain nested AllOf");}
+            }
+            filters = List.copyOf(filters);
+        }
+    }
+
 
     static Contains contains(String value) { return new Contains(value); }
     static ContainsAll containsAll(List<String> values) { return new ContainsAll(values); }
@@ -74,6 +85,8 @@ public sealed interface CbrFilter {
     static NotContainsAny notContainsAny(List<String> values) {return new NotContainsAny(values);}
 
     static ContainsRange containsRange(NumericRange range)    {return new ContainsRange(range);}
+
+    static AllOf allOf(CbrFilter... filters)                  {return new AllOf(List.of(filters));}
 
 
 }

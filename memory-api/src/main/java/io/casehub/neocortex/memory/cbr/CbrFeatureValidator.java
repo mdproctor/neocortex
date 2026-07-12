@@ -119,25 +119,35 @@ public final class CbrFeatureValidator {
             FeatureField field  = findField(schema, name);
             if (field == null) {throw new IllegalArgumentException("Filter field '" + name + "' not found in schema");}
 
-            switch (filter) {
-                case CbrFilter.Contains c -> requireCategoricalList(name, field);
-                case CbrFilter.ContainsAll ca -> requireCategoricalList(name, field);
-                case CbrFilter.ContainsAny ca -> requireCategoricalList(name, field);
-                case CbrFilter.NotContains nc -> requireCategoricalList(name, field);
-                case CbrFilter.NotContainsAny nca -> requireCategoricalList(name, field);
-                case CbrFilter.ContainsRange cr -> requireNumericList(name, field);
-                case CbrFilter.HasMatch hm -> {
-                    if (!(field instanceof FeatureField.NestedObject) && !(field instanceof FeatureField.ObjectList)) {
-                        throw new IllegalArgumentException(
-                                "HasMatch filter on '" + name + "' requires NestedObject or ObjectList field, got: "
-                                + field.getClass().getSimpleName());
-                    }
-                    List<FeatureField> innerFields = field instanceof FeatureField.NestedObject no
-                                                     ? no.innerFields() : ((FeatureField.ObjectList) field).innerFields();
-                    validateHasMatchSubFields(name, hm, innerFields);
+            validateSingleFilter(name, filter, field);
+        }}
+
+    private static void validateSingleFilter(String name, CbrFilter filter, FeatureField field) {
+        switch (filter) {
+            case CbrFilter.Contains c -> requireCategoricalList(name, field);
+            case CbrFilter.ContainsAll ca -> requireCategoricalList(name, field);
+            case CbrFilter.ContainsAny ca -> requireCategoricalList(name, field);
+            case CbrFilter.NotContains nc -> requireCategoricalList(name, field);
+            case CbrFilter.NotContainsAny nca -> requireCategoricalList(name, field);
+            case CbrFilter.ContainsRange cr -> requireNumericList(name, field);
+            case CbrFilter.HasMatch hm -> {
+                if (!(field instanceof FeatureField.NestedObject) && !(field instanceof FeatureField.ObjectList)) {
+                    throw new IllegalArgumentException(
+                            "HasMatch filter on '" + name + "' requires NestedObject or ObjectList field, got: "
+                            + field.getClass().getSimpleName());
+                }
+                List<FeatureField> innerFields = field instanceof FeatureField.NestedObject no
+                                                 ? no.innerFields() : ((FeatureField.ObjectList) field).innerFields();
+                validateHasMatchSubFields(name, hm, innerFields);
+            }
+            case CbrFilter.AllOf allOf -> {
+                for (CbrFilter inner : allOf.filters()) {
+                    validateSingleFilter(name, inner, field);
                 }
             }
-        }}
+        }
+    }
+
 
     private static void validateHasMatchSubFields(String fieldName, CbrFilter.HasMatch hm,
                                                    List<FeatureField> innerFields) {

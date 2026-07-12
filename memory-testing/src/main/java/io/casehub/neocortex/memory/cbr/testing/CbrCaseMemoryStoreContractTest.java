@@ -1176,6 +1176,69 @@ public abstract class CbrCaseMemoryStoreContractTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void structuredFields_allOf_twoHasMatch_onObjectList() {
+        registerStructuredSchema();
+        storeGameCase("both-match", Map.of("posture", "X",
+                                           "moments", List.of(
+                        Map.of("type", "FIRST_CONTACT", "minute", 3.0),
+                        Map.of("type", "BATTLE_WON", "minute", 8.0))), "c1");
+        storeGameCase("only-one", Map.of("posture", "X",
+                                         "moments", List.of(
+                        Map.of("type", "FIRST_CONTACT", "minute", 3.0))), "c2");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("moments", CbrFilter.allOf(
+                                CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT")),
+                                CbrFilter.hasMatch(Map.of("type", "BATTLE_WON"))))
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("both-match");
+    }
+
+    @Test
+    void structuredFields_allOf_containsAndNotContains() {
+        registerStructuredSchema();
+        storeGameCase("has-rush-no-cheese", Map.of("posture", "X", "phases", List.of("RUSH", "MACRO")), "c1");
+        storeGameCase("has-both", Map.of("posture", "X", "phases", List.of("RUSH", "CHEESE")), "c2");
+        storeGameCase("has-neither", Map.of("posture", "X", "phases", List.of("MACRO", "LATE")), "c3");
+
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.allOf(
+                                CbrFilter.contains("RUSH"),
+                                CbrFilter.notContains("CHEESE")))
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).cbrCase().problem()).isEqualTo("has-rush-no-cheese");
+    }
+
+    @Test
+    void structuredFields_allOf_validation_requiresMinTwoFilters() {
+        assertThatThrownBy(() -> CbrFilter.allOf(CbrFilter.contains("A")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void structuredFields_allOf_validation_rejectsNestedAllOf() {
+        assertThatThrownBy(() -> CbrFilter.allOf(
+                CbrFilter.contains("A"),
+                CbrFilter.allOf(CbrFilter.contains("B"), CbrFilter.contains("C"))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void structuredFields_allOf_validation_innerFilterTypeMismatch() {
+        registerStructuredSchema();
+        var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
+                        .withFilter("phases", CbrFilter.allOf(
+                                CbrFilter.contains("A"),
+                                CbrFilter.hasMatch(Map.of("x", "y"))));
+        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
 
     // ========================= Temporal fields =========================
 

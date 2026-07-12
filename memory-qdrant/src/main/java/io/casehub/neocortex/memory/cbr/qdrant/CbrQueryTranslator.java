@@ -134,32 +134,43 @@ final class CbrQueryTranslator {
             CbrFilter    filter     = entry.getValue();
             FeatureField field      = CbrFeatureValidator.findField(schema, entry.getKey());
 
-            switch (filter) {
-                case CbrFilter.Contains c -> builder.addMust(ConditionFactory.matchKeyword(payloadKey, c.value()));
-                case CbrFilter.ContainsAll ca -> ca.values().forEach(v ->
-                                                                             builder.addMust(ConditionFactory.matchKeyword(payloadKey, v)));
-                case CbrFilter.ContainsAny ca -> builder.addMust(ConditionFactory.matchKeywords(payloadKey, ca.values()));
-                case CbrFilter.NotContains nc -> builder.addMustNot(ConditionFactory.matchKeyword(payloadKey, nc.value()));
-                case CbrFilter.NotContainsAny nca -> nca.values().forEach(v ->
-                                                                                  builder.addMustNot(ConditionFactory.matchKeyword(payloadKey, v)));
-                case CbrFilter.ContainsRange cr -> builder.addMust(ConditionFactory.range(payloadKey,
-                    Range.newBuilder().setGte(cr.range().min()).setLte(cr.range().max()).build()));
-                case CbrFilter.HasMatch hm -> {
-                    if (field instanceof FeatureField.ObjectList) {
-                        Filter.Builder inner = Filter.newBuilder();
-                        for (var sub : hm.subFields().entrySet()) {
-                            addSubFieldCondition(inner, sub.getKey(), sub.getValue());
-                        }
-                        builder.addMust(ConditionFactory.nested(payloadKey, inner.build()));
-                    } else {
-                        for (var sub : hm.subFields().entrySet()) {
-                            addSubFieldCondition(builder, payloadKey + "." + sub.getKey(), sub.getValue());
-                        }
+            applyFilter(builder, payloadKey, filter, field);
+        }
+        return builder.build();}
+
+    private static void applyFilter(Filter.Builder builder, String payloadKey,
+                                    CbrFilter filter, FeatureField field) {
+        switch (filter) {
+            case CbrFilter.Contains c -> builder.addMust(ConditionFactory.matchKeyword(payloadKey, c.value()));
+            case CbrFilter.ContainsAll ca -> ca.values().forEach(v ->
+                                                                         builder.addMust(ConditionFactory.matchKeyword(payloadKey, v)));
+            case CbrFilter.ContainsAny ca -> builder.addMust(ConditionFactory.matchKeywords(payloadKey, ca.values()));
+            case CbrFilter.NotContains nc -> builder.addMustNot(ConditionFactory.matchKeyword(payloadKey, nc.value()));
+            case CbrFilter.NotContainsAny nca -> nca.values().forEach(v ->
+                                                                              builder.addMustNot(ConditionFactory.matchKeyword(payloadKey, v)));
+            case CbrFilter.ContainsRange cr -> builder.addMust(ConditionFactory.range(payloadKey,
+                                                                                      Range.newBuilder().setGte(cr.range().min()).setLte(cr.range().max()).build()));
+            case CbrFilter.HasMatch hm -> {
+                if (field instanceof FeatureField.ObjectList) {
+                    Filter.Builder inner = Filter.newBuilder();
+                    for (var sub : hm.subFields().entrySet()) {
+                        addSubFieldCondition(inner, sub.getKey(), sub.getValue());
+                    }
+                    builder.addMust(ConditionFactory.nested(payloadKey, inner.build()));
+                } else {
+                    for (var sub : hm.subFields().entrySet()) {
+                        addSubFieldCondition(builder, payloadKey + "." + sub.getKey(), sub.getValue());
                     }
                 }
             }
+            case CbrFilter.AllOf allOf -> {
+                for (CbrFilter inner : allOf.filters()) {
+                    applyFilter(builder, payloadKey, inner, field);
+                }
+            }
         }
-        return builder.build();}
+    }
+
 
     private static void addSubFieldCondition(Filter.Builder builder, String key, Object value) {
         if (value instanceof String s) {

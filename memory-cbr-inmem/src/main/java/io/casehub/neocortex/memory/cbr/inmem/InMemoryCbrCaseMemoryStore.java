@@ -138,20 +138,30 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
             FeatureField field = CbrFeatureValidator.findField(schema, fieldName);
 
-            boolean matches = switch (filter) {
-                case CbrFilter.Contains c -> storedValue instanceof List<?> list && list.contains(c.value());
-                case CbrFilter.ContainsAll ca -> storedValue instanceof List<?> list && list.containsAll(ca.values());
-                case CbrFilter.ContainsAny ca -> storedValue instanceof List<?> list && ca.values().stream().anyMatch(list::contains);
-                case CbrFilter.NotContains nc -> storedValue instanceof List<?> list && !list.contains(nc.value());
-                case CbrFilter.NotContainsAny nca -> storedValue instanceof List<?> list && nca.values().stream().noneMatch(list::contains);
-                case CbrFilter.ContainsRange cr -> storedValue instanceof List<?> list && list.stream()
-                    .filter(Number.class::isInstance).map(Number.class::cast)
-                    .anyMatch(n -> n.doubleValue() >= cr.range().min() && n.doubleValue() <= cr.range().max());
-                case CbrFilter.HasMatch hm -> matchesHasMatch(storedValue, hm, field);
-            };
-            if (!matches) {return false;}
+            if (!matchesSingleFilter(storedValue, filter, field)) {return false;}
         }
         return true;}
+
+    private boolean matchesSingleFilter(Object storedValue, CbrFilter filter, FeatureField field) {
+        return switch (filter) {
+            case CbrFilter.Contains c -> storedValue instanceof List<?> list && list.contains(c.value());
+            case CbrFilter.ContainsAll ca -> storedValue instanceof List<?> list && list.containsAll(ca.values());
+            case CbrFilter.ContainsAny ca -> storedValue instanceof List<?> list && ca.values().stream().anyMatch(list::contains);
+            case CbrFilter.NotContains nc -> storedValue instanceof List<?> list && !list.contains(nc.value());
+            case CbrFilter.NotContainsAny nca -> storedValue instanceof List<?> list && nca.values().stream().noneMatch(list::contains);
+            case CbrFilter.ContainsRange cr -> storedValue instanceof List<?> list && list.stream()
+                                                                                          .filter(Number.class::isInstance).map(Number.class::cast)
+                                                                                          .anyMatch(n -> n.doubleValue() >= cr.range().min() && n.doubleValue() <= cr.range().max());
+            case CbrFilter.HasMatch hm -> matchesHasMatch(storedValue, hm, field);
+            case CbrFilter.AllOf allOf -> {
+                for (CbrFilter inner : allOf.filters()) {
+                    if (!matchesSingleFilter(storedValue, inner, field)) {yield false;}
+                }
+                yield true;
+            }
+        };
+    }
+
 
     private boolean matchesHasMatch(Object storedValue, CbrFilter.HasMatch hm, FeatureField field) {
         if (field instanceof FeatureField.ObjectList) {
