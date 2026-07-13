@@ -53,4 +53,10 @@ public class CbrCaseEntity {
 
     @Column(name = "stored_at", nullable = false)
     public Instant storedAt;
+    @Column(name = "outcome_detail", columnDefinition = "TEXT")
+    public String  outcomeDetail;
+
+    @Column(name = "last_outcome_at")
+    public Instant lastOutcomeAt;
+
 }

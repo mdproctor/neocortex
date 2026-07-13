@@ -10,6 +10,7 @@ import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrSimilarityScorer;
 import io.casehub.neocortex.memory.cbr.FeatureField;
@@ -41,9 +42,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
-    private static final Logger LOG = Logger.getLogger(JpaCbrCaseMemoryStore.class);
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final TypeReference<List<PlanTrace>> PLAN_TRACE_TYPE = new TypeReference<>() {};
+    private static final Logger                             LOG             = Logger.getLogger(JpaCbrCaseMemoryStore.class);
+    private static final TypeReference<Map<String, Object>> MAP_TYPE        = new TypeReference<>() {};
+    private static final TypeReference<List<PlanTrace>>     PLAN_TRACE_TYPE = new TypeReference<>() {};
 
     private final Map<String, CbrFeatureSchema> schemas = new ConcurrentHashMap<>();
 
@@ -68,19 +69,19 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         CbrCaseEntity entity = new CbrCaseEntity();
-        entity.id = UUID.randomUUID().toString();
-        entity.tenantId = tenantId;
-        entity.domain = domain.name();
-        entity.caseType = caseType;
-        entity.cbrType = cbrCase.cbrType();
-        entity.entityId = entityId;
-        entity.caseId = caseId;
-        entity.problem = cbrCase.problem();
-        entity.solution = cbrCase.solution();
-        entity.outcome = cbrCase.outcome();
+        entity.id         = UUID.randomUUID().toString();
+        entity.tenantId   = tenantId;
+        entity.domain     = domain.name();
+        entity.caseType   = caseType;
+        entity.cbrType    = cbrCase.cbrType();
+        entity.entityId   = entityId;
+        entity.caseId     = caseId;
+        entity.problem    = cbrCase.problem();
+        entity.solution   = cbrCase.solution();
+        entity.outcome    = cbrCase.outcome();
         entity.confidence = cbrCase.confidence();
-        entity.features = serializeJson(FeatureValue.toRawMap(cbrCase.features()));
-        entity.storedAt = Instant.now();
+        entity.features   = serializeJson(FeatureValue.toRawMap(cbrCase.features()));
+        entity.storedAt   = Instant.now();
 
         if (cbrCase instanceof PlanCbrCase plan && !plan.planTrace().isEmpty()) {
             entity.planTraces = serializeJson(plan.planTrace());
@@ -115,38 +116,38 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         String jpql = "SELECT e FROM CbrCaseEntity e WHERE e.tenantId = :t AND e.domain = :d AND e.caseType = :ct"
-                + (query.notBefore() != null ? " AND e.storedAt >= :nb" : "");
+                      + (query.notBefore() != null ? " AND e.storedAt >= :nb" : "");
 
         var jpaQuery = em.createQuery(jpql, CbrCaseEntity.class)
-                .setParameter("t", query.tenantId())
-                .setParameter("d", query.domain().name())
-                .setParameter("ct", query.caseType());
+                         .setParameter("t", query.tenantId())
+                         .setParameter("d", query.domain().name())
+                         .setParameter("ct", query.caseType());
         if (query.notBefore() != null) {
             jpaQuery.setParameter("nb", query.notBefore());
         }
 
-        List<CbrCaseEntity> entities = jpaQuery.getResultList();
+        List<CbrCaseEntity>    entities   = jpaQuery.getResultList();
         List<ScoredCbrCase<C>> candidates = new ArrayList<>();
 
         for (CbrCaseEntity entity : entities) {
             CbrCase reconstructed = reconstruct(entity);
-            if (!caseClass.isInstance(reconstructed)) continue;
+            if (!caseClass.isInstance(reconstructed)) {continue;}
 
-            if (!matchesFilters(reconstructed, query.filters(), schema)) continue;
+            if (!matchesFilters(reconstructed, query.filters(), schema)) {continue;}
 
             CbrSimilarityScorer.SimilarityBreakdown breakdown = CbrSimilarityScorer.scoreDetailed(
                     query.features(), reconstructed.features(), query.weights(), schema, Map.of());
 
             if (breakdown.score() >= query.minSimilarity()) {
                 candidates.add(new ScoredCbrCase<>((C) reconstructed, breakdown.score(), false,
-                        breakdown.featureSimilarities()));
+                                                   breakdown.featureSimilarities()));
             }
         }
 
         candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
         List<ScoredCbrCase<C>> results = candidates.size() <= query.topK()
-                ? candidates
-                : candidates.subList(0, query.topK());
+                                         ? candidates
+                                         : candidates.subList(0, query.topK());
         return Collections.unmodifiableList(new ArrayList<>(results));
     }
 
@@ -158,9 +159,9 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
             jpql += " AND e.caseId = :cid";
         }
         var q = em.createQuery(jpql)
-                .setParameter("eid", request.entityId())
-                .setParameter("d", request.domain().name())
-                .setParameter("t", request.tenantId());
+                  .setParameter("eid", request.entityId())
+                  .setParameter("d", request.domain().name())
+                  .setParameter("t", request.tenantId());
         if (request.caseId() != null) {
             q.setParameter("cid", request.caseId());
         }
@@ -171,10 +172,35 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
     @Transactional
     public Integer eraseEntity(String entityId, String tenantId) {
         return em.createQuery("DELETE FROM CbrCaseEntity e WHERE e.entityId = :eid AND e.tenantId = :t")
-                .setParameter("eid", entityId)
-                .setParameter("t", tenantId)
-                .executeUpdate();
+                 .setParameter("eid", entityId)
+                 .setParameter("t", tenantId)
+                 .executeUpdate();
     }
+
+    @Override
+    @Transactional
+    public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
+        var results = em.createQuery(
+                                "SELECT c FROM CbrCaseEntity c WHERE c.caseId = :caseId AND c.tenantId = :tenantId",
+                                CbrCaseEntity.class)
+                        .setParameter("caseId", caseId)
+                        .setParameter("tenantId", tenantId)
+                        .getResultList();
+        if (results.isEmpty()) {return;}
+        CbrCaseEntity entity = results.getFirst();
+        if (entity.lastOutcomeAt != null
+            && !outcome.observedAt().isAfter(entity.lastOutcomeAt)) {
+            return;
+        }
+        double newConfidence = CbrOutcome.adjustConfidence(
+                entity.confidence, outcome.successRate(), CbrOutcome.DEFAULT_LEARNING_RATE);
+        entity.outcome       = outcome.result().name();
+        entity.confidence    = newConfidence;
+        entity.outcomeDetail = outcome.detail();
+        entity.lastOutcomeAt = outcome.observedAt();
+        em.merge(entity);
+    }
+
 
     private CbrCase reconstruct(CbrCaseEntity entity) {
         Map<String, FeatureValue> features = FeatureValue.toFeatureMap(deserializeMap(entity.features));
@@ -264,7 +290,7 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     private Map<String, Object> deserializeMap(String json) {
-        if (json == null || json.isBlank()) return Map.of();
+        if (json == null || json.isBlank()) {return Map.of();}
         try {
             return objectMapper.readValue(json, MAP_TYPE);
         } catch (JsonProcessingException e) {
@@ -273,7 +299,7 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     private List<PlanTrace> deserializePlanTraces(String json) {
-        if (json == null || json.isBlank()) return List.of();
+        if (json == null || json.isBlank()) {return List.of();}
         try {
             return objectMapper.readValue(json, PLAN_TRACE_TYPE);
         } catch (JsonProcessingException e) {

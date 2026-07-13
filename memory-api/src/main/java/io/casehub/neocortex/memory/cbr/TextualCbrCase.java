@@ -14,4 +14,9 @@ public record TextualCbrCase(String problem, String solution,
         if (confidence != null && (confidence < 0.0 || confidence > 1.0))
             throw new IllegalArgumentException("confidence must be in [0,1], got: " + confidence);
     }
+
+    @Override
+    public CbrCase withOutcome(String outcome, Double confidence) {
+        return new TextualCbrCase(problem(), solution(), outcome, confidence);
+    }
 }

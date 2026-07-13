@@ -1,10 +1,16 @@
 package io.casehub.neocortex.memory.cbr.runtime;
 
-import io.casehub.neocortex.memory.cbr.*;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.List;
 
 @DefaultBean
@@ -34,4 +40,7 @@ public class NoOpCbrCaseMemoryStore implements CbrCaseMemoryStore {
     public Integer eraseEntity(String entityId, String tenantId) {
         return 0;
     }
+
+    @Override
+    public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {}
 }

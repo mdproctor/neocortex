@@ -10,4 +10,7 @@ public interface CbrCase {
     Double confidence();
 
     default Map<String, FeatureValue> features() { return Map.of(); }
+
+    CbrCase withOutcome(String outcome, Double confidence);
+
 }

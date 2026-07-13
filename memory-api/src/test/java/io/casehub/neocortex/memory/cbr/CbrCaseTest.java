@@ -1,10 +1,14 @@
 package io.casehub.neocortex.memory.cbr;
 
-import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
-
 import org.junit.jupiter.api.Test;
+
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static io.casehub.neocortex.memory.cbr.FeatureValue.number;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CbrCaseTest {
 
@@ -127,5 +131,38 @@ class CbrCaseTest {
         assertThatCode(() -> new ScoredCbrCase<>(c, -1.0)).doesNotThrowAnyException();
         assertThatCode(() -> new ScoredCbrCase<>(c, 0.0)).doesNotThrowAnyException();
         assertThatCode(() -> new ScoredCbrCase<>(c, 0.75)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void featureVectorCase_withOutcome_preservesFields() {
+        var original = new FeatureVectorCbrCase("prob", "sol", null, 0.8,
+                                                Map.of("race", string("Zerg")));
+        CbrCase updated = original.withOutcome("SUCCESS", 0.84);
+        assertThat(updated.outcome()).isEqualTo("SUCCESS");
+        assertThat(updated.confidence()).isEqualTo(0.84);
+        assertThat(updated.problem()).isEqualTo("prob");
+        assertThat(updated.solution()).isEqualTo("sol");
+        assertThat(updated.features()).isEqualTo(original.features());
+    }
+
+    @Test
+    void planCase_withOutcome_preservesPlanTrace() {
+        var trace = new PlanTrace("bind", "cap", "worker", "SUCCESS", 1, Map.of());
+        var original = new PlanCbrCase("prob", "sol", null, null,
+                                       Map.of(), java.util.List.of(trace));
+        CbrCase updated = original.withOutcome("FAILURE", 0.64);
+        assertThat(updated.outcome()).isEqualTo("FAILURE");
+        assertThat(updated.confidence()).isEqualTo(0.64);
+        assertThat(updated).isInstanceOf(PlanCbrCase.class);
+        assertThat(((PlanCbrCase) updated).planTrace()).containsExactly(trace);
+    }
+
+    @Test
+    void textualCase_withOutcome() {
+        var     original = new TextualCbrCase("prob", "sol", null, null);
+        CbrCase updated  = original.withOutcome("PARTIAL", 0.74);
+        assertThat(updated.outcome()).isEqualTo("PARTIAL");
+        assertThat(updated.confidence()).isEqualTo(0.74);
+        assertThat(updated.problem()).isEqualTo("prob");
     }
 }

@@ -99,6 +99,7 @@
     <download-maven-plugin.version>1.9.0</download-maven-plugin.version>
     <directory-watcher.version>0.19.1</directory-watcher.version>
     <casehub-platform-api.version>0.2-SNAPSHOT</casehub-platform-api.version>
+    <casehub-desiredstate-api.version>0.2-SNAPSHOT</casehub-desiredstate-api.version>
   </properties>
 
   <dependencyManagement>
@@ -118,6 +119,11 @@
         <groupId>io.casehub</groupId>
         <artifactId>casehub-platform-api</artifactId>
         <version>${casehub-platform-api.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-desiredstate-api</artifactId>
+        <version>${casehub-desiredstate-api.version}</version>
       </dependency>
 
       <!-- Memory backend dependencies (from platform migration) -->

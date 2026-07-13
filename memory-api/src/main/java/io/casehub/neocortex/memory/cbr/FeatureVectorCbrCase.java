@@ -22,4 +22,9 @@ public record FeatureVectorCbrCase(String problem, String solution,
         Objects.requireNonNull(features, "features required");
         features = Map.copyOf(features);
     }
+
+    @Override
+    public CbrCase withOutcome(String outcome, Double confidence) {
+        return new FeatureVectorCbrCase(problem(), solution(), outcome, confidence, features());
+    }
 }

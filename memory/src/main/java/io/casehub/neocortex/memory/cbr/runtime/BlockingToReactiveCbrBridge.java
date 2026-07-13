@@ -1,13 +1,20 @@
 package io.casehub.neocortex.memory.cbr.runtime;
 
-import io.casehub.neocortex.memory.cbr.*;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.quarkus.arc.DefaultBean;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
 import java.util.List;
 
 @DefaultBean
@@ -46,5 +53,12 @@ public class BlockingToReactiveCbrBridge implements ReactiveCbrCaseMemoryStore {
     public Uni<Integer> eraseEntity(String entityId, String tenantId) {
         return Uni.createFrom().item(() -> delegate.eraseEntity(entityId, tenantId))
             .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
+    @Override
+    public Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
+        return Uni.createFrom().voidItem()
+                  .invoke(() -> delegate.recordOutcome(caseId, tenantId, outcome))
+                  .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 }

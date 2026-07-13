@@ -26,4 +26,9 @@ public record PlanCbrCase(String problem, String solution,
         Objects.requireNonNull(planTrace, "planTrace required");
         planTrace = List.copyOf(planTrace);
     }
+
+    @Override
+    public CbrCase withOutcome(String outcome, Double confidence) {
+        return new PlanCbrCase(problem(), solution(), outcome, confidence, features(), planTrace());
+    }
 }

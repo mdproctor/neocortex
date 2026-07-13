@@ -1,7 +1,5 @@
 package io.casehub.neocortex.memory.cbr.testing;
 
-import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
-
 import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
@@ -9,6 +7,7 @@ import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
@@ -27,6 +26,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.number;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.numberList;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.range;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.stringList;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.struct;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.structList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,6 +42,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     protected static final MemoryDomain CBR    = new MemoryDomain("cbr");
     protected static final String       TENANT = "test-tenant";
     protected static final String       ENTITY = "test-entity";
+
+    private static org.assertj.core.data.Offset<Double> within(double tolerance) {
+        return org.assertj.core.data.Offset.offset(tolerance);
+    }
 
     protected abstract CbrCaseMemoryStore store();
 
@@ -140,6 +150,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(erased).isGreaterThanOrEqualTo(0);
     }
 
+    // --- PlanCbrCase tests ---
+
     @Test
     void eraseEntity_removesAllEntityCases() {
         store().store(new TextualCbrCase("p1", "s1", "WIN", null),
@@ -149,8 +161,6 @@ public abstract class CbrCaseMemoryStoreContractTest {
         int erased = store().eraseEntity(ENTITY, TENANT);
         assertThat(erased).isGreaterThanOrEqualTo(0);
     }
-
-    // --- PlanCbrCase tests ---
 
     @Test
     void planCbrCase_storeAndRetrieve() {
@@ -210,6 +220,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(retrieved.planTrace().get(1).parameters()).containsEntry("supply", 44);
     }
 
+    // --- notBefore tests ---
+
     @Test
     void planCbrCase_coexistsWithFeatureVector() {
         store().store(new FeatureVectorCbrCase("FV game", "strat", "WIN", null,
@@ -238,8 +250,6 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(allResults).hasSize(2);
     }
 
-    // --- notBefore tests ---
-
     @Test
     void retrieveSimilar_notBefore_filtersOlderCases() throws Exception {
         store().store(new FeatureVectorCbrCase("old game", "strat", "WIN", null,
@@ -262,6 +272,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("new game");
     }
 
+    // --- Numeric graded similarity tests ---
+
     @Test
     void retrieveSimilar_notBefore_null_returnsAll() {
         store().store(new FeatureVectorCbrCase("game 1", "strat", "WIN", null,
@@ -276,8 +288,6 @@ public abstract class CbrCaseMemoryStoreContractTest {
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(2);
     }
-
-    // --- Numeric graded similarity tests ---
 
     @Test
     void retrieveSimilar_numericSimilarityDecay() {
@@ -416,6 +426,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(results.get(0).cbrCase().problem()).isEqualTo("Zerg rush detected");
     }
 
+    // --- Weighted scoring tests (new for #82 + #87) ---
+
     @Test
     void retrieveSimilar_minSimilarity_zero_returnsAllMatches() {
         var fv1 = new FeatureVectorCbrCase("case one", "solution one", null, null,
@@ -433,8 +445,6 @@ public abstract class CbrCaseMemoryStoreContractTest {
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
     }
-
-    // --- Weighted scoring tests (new for #82 + #87) ---
 
     @Test
     void weightedScoringProducesExpectedRanking() {
@@ -581,10 +591,6 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
         assertThat(results.get(0).cbrCase().problem()).isEqualTo("match");
         assertThat(results.get(0).score()).isGreaterThan(results.get(1).score());
-    }
-
-    private static org.assertj.core.data.Offset<Double> within(double tolerance) {
-        return org.assertj.core.data.Offset.offset(tolerance);
     }
 
     // --- SimilaritySpec contract tests (#107, #108) ---
@@ -1704,5 +1710,147 @@ public abstract class CbrCaseMemoryStoreContractTest {
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).isNotEmpty();
         assertThat(results.get(0).score()).isGreaterThan(0.5);
+    }
+
+    @Test
+    void recordOutcome_updatesOutcomeAndConfidence() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, 0.8,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-1");
+        store().recordOutcome("case-ro-1", TENANT,
+                              CbrOutcome.of(1.0, "all nodes succeeded", Instant.now()));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().cbrCase().outcome()).isEqualTo("SUCCESS");
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.84, within(0.001));
+    }
+
+    @Test
+    void recordOutcome_partialResult() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, 0.8,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-2");
+        store().recordOutcome("case-ro-2", TENANT,
+                              CbrOutcome.of(0.5, "2 of 4", Instant.now()));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results.getFirst().cbrCase().outcome()).isEqualTo("PARTIAL");
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.74, within(0.001));
+    }
+
+    @Test
+    void recordOutcome_failure_decreasesConfidence() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, 0.8,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-3");
+        store().recordOutcome("case-ro-3", TENANT,
+                              CbrOutcome.of(0.0, "all failed", Instant.now()));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.64, within(0.001));
+    }
+
+    @Test
+    void recordOutcome_multipleOutcomes_emaConverges() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, 0.5,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-4");
+        Instant base = Instant.parse("2026-07-13T10:00:00Z");
+        for (int i = 0; i < 5; i++) {
+            store().recordOutcome("case-ro-4", TENANT,
+                                  CbrOutcome.of(1.0, null, base.plusSeconds(i + 1)));
+        }
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results.getFirst().cbrCase().confidence()).isGreaterThan(0.8);
+    }
+
+    @Test
+    void recordOutcome_nullInitialConfidence_treatsAsOne() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, null,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-5");
+        store().recordOutcome("case-ro-5", TENANT,
+                              CbrOutcome.of(0.0, null, Instant.now()));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.8, within(0.001));
+    }
+
+    @Test
+    void recordOutcome_unknownCaseId_silentlyIgnored() {
+        assertThatCode(() -> store().recordOutcome("nonexistent", TENANT,
+                                                   CbrOutcome.of(1.0, null, Instant.now())))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void recordOutcome_preservesOtherFields() {
+        Map<String, FeatureValue> features = Map.of("opponent_race", string("Zerg"),
+                                                    "army_size_ratio", number(0.7));
+        store().store(new FeatureVectorCbrCase("my problem", "my solution", null, 0.8,
+                                               features), "starcraft-game", ENTITY, CBR, TENANT, "case-ro-7");
+        store().recordOutcome("case-ro-7", TENANT,
+                              CbrOutcome.of(1.0, "ok", Instant.now()));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        var c = results.getFirst().cbrCase();
+        assertThat(c.problem()).isEqualTo("my problem");
+        assertThat(c.solution()).isEqualTo("my solution");
+        assertThat(c.features()).containsEntry("opponent_race", string("Zerg"));
+        assertThat(c.features()).containsEntry("army_size_ratio", number(0.7));
+    }
+
+    @Test
+    void recordOutcome_withDetail_doesNotCorruptCase() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, 0.8,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-8");
+        store().recordOutcome("case-ro-8", TENANT,
+                              CbrOutcome.of(0.75, "3/4 nodes succeeded, 1 FAILED: node-xyz", Instant.now()));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results.getFirst().cbrCase().outcome()).isEqualTo("PARTIAL");
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.79, within(0.001));
+    }
+
+    @Test
+    void recordOutcome_duplicateObservedAt_idempotent() {
+        store().store(new FeatureVectorCbrCase("prob", "sol", null, 0.8,
+                                               Map.of("opponent_race", string("Zerg"))),
+                      "starcraft-game", ENTITY, CBR, TENANT, "case-ro-9");
+        Instant observed = Instant.parse("2026-07-13T10:00:00Z");
+        store().recordOutcome("case-ro-9", TENANT,
+                              CbrOutcome.of(1.0, null, observed));
+        store().recordOutcome("case-ro-9", TENANT,
+                              CbrOutcome.of(1.0, null, observed));
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.84, within(0.001));
     }
 }

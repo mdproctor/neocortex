@@ -6,29 +6,55 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import io.casehub.neocortex.memory.cbr.*;
-import io.casehub.neocortex.memory.cbr.embedding.EmbeddingTextSimilarity;
-import io.casehub.neocortex.memory.CaseMemoryStore;
-import io.casehub.neocortex.memory.EraseRequest;
-import io.casehub.neocortex.memory.MemoryAttributeKeys;
-import io.casehub.neocortex.memory.MemoryDomain;
-import io.casehub.neocortex.memory.MemoryInput;
 import io.casehub.neocortex.fusion.CamelCaseExpander;
 import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.fusion.ScoreFusion;
 import io.casehub.neocortex.inference.splade.SparseEmbedder;
+import io.casehub.neocortex.memory.CaseMemoryStore;
+import io.casehub.neocortex.memory.EraseRequest;
+import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.neocortex.memory.MemoryInput;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.CbrSimilarityScorer;
+import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
+import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
+import io.casehub.neocortex.memory.cbr.LocalSimilarityFunction;
+import io.casehub.neocortex.memory.cbr.PlanCbrCase;
+import io.casehub.neocortex.memory.cbr.PlanTrace;
+import io.casehub.neocortex.memory.cbr.RetrievalMode;
+import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
+import io.casehub.neocortex.memory.cbr.TextualCbrCase;
+import io.casehub.neocortex.memory.cbr.embedding.EmbeddingTextSimilarity;
 import io.qdrant.client.ConditionFactory;
+import io.qdrant.client.PointIdFactory;
+import io.qdrant.client.ValueFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.grpc.Common.Filter;
 import io.qdrant.client.grpc.JsonWithInt.Value;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.Points.PointStruct;
+import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
 import io.qdrant.client.grpc.Points.SearchPoints;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.util.*;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
@@ -51,50 +77,62 @@ import java.util.logging.Logger;
 @ApplicationScoped
 public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
-    private static final Logger LOG = Logger.getLogger(QdrantCbrCaseMemoryStore.class.getName());
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final TypeReference<List<PlanTrace>> PLAN_TRACE_TYPE = new TypeReference<>() {};
-
-    private record ReconstructedCandidate<C extends CbrCase>(String pointId, C cbrCase, float vectorScore) {}
-
-    private final CbrCollectionManager collectionManager;
-    private final EmbeddingModel embeddingModel; // nullable
-    private final SparseEmbedder sparseEmbedder; // nullable — optional SPLADE embedder
-    private final QdrantCbrConfig config;
-    private final CaseMemoryStore delegate; // nullable — when present, delegate durable storage
+    private static final Logger                             LOG             = Logger.getLogger(QdrantCbrCaseMemoryStore.class.getName());
+    private static final ObjectMapper                       MAPPER          = new ObjectMapper();
+    private static final TypeReference<Map<String, Object>> MAP_TYPE        = new TypeReference<>() {};
+    private static final TypeReference<List<PlanTrace>>     PLAN_TRACE_TYPE = new TypeReference<>() {};
+    private final CbrCollectionManager          collectionManager;
+    private final EmbeddingModel                embeddingModel; // nullable
+    private final SparseEmbedder                sparseEmbedder; // nullable — optional SPLADE embedder
+    private final QdrantCbrConfig               config;
+    private final CaseMemoryStore               delegate; // nullable — when present, delegate durable storage
     private final Map<String, CbrFeatureSchema> schemas = new ConcurrentHashMap<>();
-
     @Inject
     QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
-                              Instance<EmbeddingModel> embeddingModelInstance,
-                              QdrantCbrConfig config,
-                              Instance<CaseMemoryStore> delegateInstance,
-                              Instance<SparseEmbedder> sparseEmbedderInstance) {
+                             Instance<EmbeddingModel> embeddingModelInstance,
+                             QdrantCbrConfig config,
+                             Instance<CaseMemoryStore> delegateInstance,
+                             Instance<SparseEmbedder> sparseEmbedderInstance) {
         this.collectionManager = collectionManager;
-        this.embeddingModel = embeddingModelInstance.isResolvable() ? embeddingModelInstance.get() : null;
-        this.config = config;
-        this.delegate = delegateInstance.isResolvable() ? delegateInstance.get() : null;
-        this.sparseEmbedder = sparseEmbedderInstance.isResolvable() ? sparseEmbedderInstance.get() : null;
+        this.embeddingModel    = embeddingModelInstance.isResolvable() ? embeddingModelInstance.get() : null;
+        this.config            = config;
+        this.delegate          = delegateInstance.isResolvable() ? delegateInstance.get() : null;
+        this.sparseEmbedder    = sparseEmbedderInstance.isResolvable() ? sparseEmbedderInstance.get() : null;
     }
 
     QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
-                              EmbeddingModel embeddingModel,
-                              QdrantCbrConfig config,
-                              CaseMemoryStore delegate) {
+                             EmbeddingModel embeddingModel,
+                             QdrantCbrConfig config,
+                             CaseMemoryStore delegate) {
         this(collectionManager, embeddingModel, config, delegate, null);
     }
 
     QdrantCbrCaseMemoryStore(CbrCollectionManager collectionManager,
-                              EmbeddingModel embeddingModel,
-                              QdrantCbrConfig config,
-                              CaseMemoryStore delegate,
-                              SparseEmbedder sparseEmbedder) {
+                             EmbeddingModel embeddingModel,
+                             QdrantCbrConfig config,
+                             CaseMemoryStore delegate,
+                             SparseEmbedder sparseEmbedder) {
         this.collectionManager = collectionManager;
-        this.embeddingModel = embeddingModel;
-        this.config = config;
-        this.delegate = delegate;
-        this.sparseEmbedder = sparseEmbedder;
+        this.embeddingModel    = embeddingModel;
+        this.config            = config;
+        this.delegate          = delegate;
+        this.sparseEmbedder    = sparseEmbedder;
+    }
+
+    private static String extractString(Map<String, Value> payload, String key) {
+        Value v = payload.get(key);
+        if (v != null && v.hasStringValue()) {
+            return v.getStringValue();
+        }
+        return null;
+    }
+
+    private static Double extractDouble(Map<String, Value> payload, String key) {
+        Value v = payload.get(key);
+        if (v != null && v.hasDoubleValue()) {
+            return v.getDoubleValue();
+        }
+        return null;
     }
 
     @Override
@@ -139,10 +177,10 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         PointStruct point = CbrPointBuilder.buildPoint(
-            cbrCase, caseType, entityId, domain.name(), tenantId, caseId,
-            embedding, config.denseVectorName(),
-            sparseEmbedding, config.spladeVectorName(),
-            bm25Text, config.bm25VectorName(), config.bm25Model());
+                cbrCase, caseType, entityId, domain.name(), tenantId, caseId,
+                embedding, config.denseVectorName(),
+                sparseEmbedding, config.spladeVectorName(),
+                bm25Text, config.bm25VectorName(), config.bm25Model());
 
         String collection = collectionManager.collectionName(caseType);
 
@@ -171,8 +209,8 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
      * Delegates to {@link CbrMemorySerializer}.
      */
     private MemoryInput serializeToMemoryInput(CbrCase cbrCase, String entityId,
-                                                MemoryDomain domain, String tenantId,
-                                                String caseId, String caseType) {
+                                               MemoryDomain domain, String tenantId,
+                                               String caseId, String caseType) {
         return CbrMemorySerializer.serialize(cbrCase, entityId, domain, tenantId, caseId, caseType);
     }
 
@@ -185,8 +223,8 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
         if (!query.filters().isEmpty() && schema == null) {
             throw new IllegalStateException(
-                "Cannot apply structural filters: no schema registered for caseType '"
-                + query.caseType() + "'");
+                    "Cannot apply structural filters: no schema registered for caseType '"
+                    + query.caseType() + "'");
         }
 
         String collection = collectionManager.collectionName(query.caseType());
@@ -223,7 +261,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             case SEMANTIC_ONLY -> {
                 if (embeddingModel == null || query.problem() == null) {
                     LOG.warning("SEMANTIC_ONLY unavailable — " +
-                        (embeddingModel == null ? "no EmbeddingModel" : "problem is null"));
+                                (embeddingModel == null ? "no EmbeddingModel" : "problem is null"));
                     yield null;
                 }
                 yield RetrievalMode.SEMANTIC_ONLY;
@@ -231,7 +269,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             case HYBRID -> {
                 if (embeddingModel == null || query.problem() == null) {
                     LOG.warning("HYBRID degraded to FEATURE_ONLY — " +
-                        (embeddingModel == null ? "no EmbeddingModel" : "problem is null"));
+                                (embeddingModel == null ? "no EmbeddingModel" : "problem is null"));
                     yield RetrievalMode.FEATURE_ONLY;
                 }
                 yield RetrievalMode.HYBRID;
@@ -245,12 +283,12 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             CbrQuery query, Class<C> caseClass, String collection, Filter filter,
             CbrFeatureSchema schema) {
         List<ScoredPoint> scoredPoints = executeFilterQuery(collection, filter,
-            Math.max(query.topK(), config.overFetchLimit()));
+                                                            Math.max(query.topK(), config.overFetchLimit()));
 
         EmbeddingTextSimilarity textSim = (schema != null && embeddingModel != null)
-            ? new EmbeddingTextSimilarity(embeddingModel) : null;
+                                          ? new EmbeddingTextSimilarity(embeddingModel) : null;
         Map<String, LocalSimilarityFunction> overrides = schema != null
-            ? buildTextOverrides(schema, textSim) : Map.of();
+                                                         ? buildTextOverrides(schema, textSim) : Map.of();
 
         List<ReconstructedCandidate<C>> reconstructed = reconstructAll(scoredPoints, caseClass);
 
@@ -261,7 +299,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         List<ScoredCbrCase<C>> candidates = new ArrayList<>(reconstructed.size());
         for (var rc : reconstructed) {
             double score = CbrSimilarityScorer.score(
-                query.features(), rc.cbrCase().features(), query.weights(), schema, overrides);
+                    query.features(), rc.cbrCase().features(), query.weights(), schema, overrides);
             if (score >= query.minSimilarity()) {
                 candidates.add(new ScoredCbrCase<>(rc.cbrCase(), score));
             }
@@ -424,16 +462,16 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     @SuppressWarnings("unchecked")
     private <C extends CbrCase> void mergePoints(List<ScoredPoint> points,
-            Map<String, ReconstructedCandidate<C>> map, Class<C> caseClass,
-            boolean useDenseScore) {
+                                                 Map<String, ReconstructedCandidate<C>> map, Class<C> caseClass,
+                                                 boolean useDenseScore) {
         for (ScoredPoint point : points) {
             String pointId = point.getId().getUuid();
-            if (map.containsKey(pointId)) continue;
+            if (map.containsKey(pointId)) {continue;}
             try {
                 C cbrCase = (C) reconstructCase(point.getPayloadMap(), caseClass);
                 if (cbrCase != null) {
                     map.put(pointId, new ReconstructedCandidate<>(pointId, cbrCase,
-                        useDenseScore ? point.getScore() : 0f));
+                                                                  useDenseScore ? point.getScore() : 0f));
                 }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Failed to reconstruct case from point", e);
@@ -450,7 +488,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 C cbrCase = (C) reconstructCase(point.getPayloadMap(), caseClass);
                 if (cbrCase != null) {
                     reconstructed.add(new ReconstructedCandidate<>(
-                        point.getId().getUuid(), cbrCase, point.getScore()));
+                            point.getId().getUuid(), cbrCase, point.getScore()));
                 }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Failed to reconstruct case from point", e);
@@ -462,7 +500,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     private <C extends CbrCase> List<ScoredCbrCase<C>> trimToTopK(
             List<ScoredCbrCase<C>> candidates, int topK) {
         List<ScoredCbrCase<C>> results = candidates.size() <= topK
-            ? candidates : candidates.subList(0, topK);
+                                         ? candidates : candidates.subList(0, topK);
         return Collections.unmodifiableList(new ArrayList<>(results));
     }
 
@@ -476,9 +514,9 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
         // Build filter matching the erase request
         Filter.Builder builder = Filter.newBuilder()
-            .addMust(ConditionFactory.matchKeyword("entityId", request.entityId()))
-            .addMust(ConditionFactory.matchKeyword("domain", request.domain().name()))
-            .addMust(ConditionFactory.matchKeyword("tenantId", request.tenantId()));
+                                       .addMust(ConditionFactory.matchKeyword("entityId", request.entityId()))
+                                       .addMust(ConditionFactory.matchKeyword("domain", request.domain().name()))
+                                       .addMust(ConditionFactory.matchKeyword("tenantId", request.tenantId()));
         if (request.caseId() != null) {
             builder.addMust(ConditionFactory.matchKeyword("caseId", request.caseId()));
         }
@@ -511,9 +549,9 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         Filter filter = Filter.newBuilder()
-            .addMust(ConditionFactory.matchKeyword("entityId", entityId))
-            .addMust(ConditionFactory.matchKeyword("tenantId", tenantId))
-            .build();
+                              .addMust(ConditionFactory.matchKeyword("entityId", entityId))
+                              .addMust(ConditionFactory.matchKeyword("tenantId", tenantId))
+                              .build();
 
         int totalErased = 0;
         for (String caseType : schemas.keySet()) {
@@ -533,18 +571,65 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         return delegate != null ? delegateCount : totalErased;
     }
 
+    @Override
+    public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
+        for (String caseType : schemas.keySet()) {
+            String collection = collectionManager.collectionName(caseType);
+            try {
+                if (!collectionManager.client().collectionExistsAsync(collection).get()) {
+                    continue;
+                }
+                UUID pointUuid = CbrPointBuilder.pointId(tenantId, caseType, caseId);
+                var  pointId   = PointIdFactory.id(pointUuid);
+
+                var points = collectionManager.client()
+                                              .retrieveAsync(collection, List.of(pointId), true, false, null).get();
+                if (points.isEmpty()) {continue;}
+
+                var payload = points.getFirst().getPayloadMap();
+
+                String existingLastOutcome = extractString(payload, "last_outcome_at");
+                if (existingLastOutcome != null) {
+                    Instant existingInstant = Instant.parse(existingLastOutcome);
+                    if (!outcome.observedAt().isAfter(existingInstant)) {return;}
+                }
+
+                Double oldConfidence = extractDouble(payload, "confidence");
+                double newConfidence = CbrOutcome.adjustConfidence(
+                        oldConfidence, outcome.successRate(), CbrOutcome.DEFAULT_LEARNING_RATE);
+
+                Map<String, Value> updates = new HashMap<>();
+                updates.put("outcome", ValueFactory.value(outcome.result().name()));
+                updates.put("confidence", ValueFactory.value(newConfidence));
+                updates.put("last_outcome_at", ValueFactory.value(outcome.observedAt().toString()));
+                if (outcome.detail() != null) {
+                    updates.put("outcome_detail", ValueFactory.value(outcome.detail()));
+                }
+
+                collectionManager.client()
+                                 .setPayloadAsync(collection, updates, (PointId) pointId, null, null, null).get();
+                return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted during recordOutcome", e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException("recordOutcome failed", e.getCause());
+            }
+        }
+    }
+
     private int vectorDimension() {
         return embeddingModel != null ? embeddingModel.dimension() : 0;
     }
 
     private Map<String, LocalSimilarityFunction> buildTextOverrides(
             CbrFeatureSchema schema, EmbeddingTextSimilarity textSim) {
-        if (textSim == null) return Map.of();
+        if (textSim == null) {return Map.of();}
         Map<String, LocalSimilarityFunction> overrides = new HashMap<>();
         for (FeatureField field : schema.fields()) {
             switch (field) {
                 case FeatureField.Text t -> {
-                    if (t.semantic()) overrides.put(field.name(), textSim);
+                    if (t.semantic()) {overrides.put(field.name(), textSim);}
                 }
                 case FeatureField.Categorical c -> {}
                 case FeatureField.Numeric n -> {}
@@ -563,9 +648,9 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             CbrQuery query, List<ReconstructedCandidate<C>> candidates, Set<String> fieldNames) {
         List<String> texts = new ArrayList<>();
         for (String fieldName : fieldNames) {
-            if (query.features().get(fieldName) instanceof FeatureValue.StringVal s) texts.add(s.value());
+            if (query.features().get(fieldName) instanceof FeatureValue.StringVal s) {texts.add(s.value());}
             for (var rc : candidates) {
-                if (rc.cbrCase().features().get(fieldName) instanceof FeatureValue.StringVal s) texts.add(s.value());
+                if (rc.cbrCase().features().get(fieldName) instanceof FeatureValue.StringVal s) {texts.add(s.value());}
             }
         }
         return texts;
@@ -575,12 +660,12 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         Embedding queryEmbedding = embeddingModel.embed(TextSegment.from(query.problem())).content();
 
         SearchPoints.Builder searchBuilder = SearchPoints.newBuilder()
-            .setCollectionName(collection)
-            .addAllVector(queryEmbedding.vectorAsList())
-            .setVectorName(config.denseVectorName())
-            .setFilter(filter)
-            .setLimit(query.topK() * config.oversampleFactor())
-            .setWithPayload(WithPayloadSelectorFactory.enable(true));
+                                                         .setCollectionName(collection)
+                                                         .addAllVector(queryEmbedding.vectorAsList())
+                                                         .setVectorName(config.denseVectorName())
+                                                         .setFilter(filter)
+                                                         .setLimit(query.topK() * config.oversampleFactor())
+                                                         .setWithPayload(WithPayloadSelectorFactory.enable(true));
 
         try {
             return collectionManager.client().searchAsync(searchBuilder.build()).get();
@@ -647,15 +732,14 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
     }
 
-
     private List<ScoredPoint> executeFilterQuery(String collection, Filter filter, int limit) {
         try {
             // Use scroll with filter for payload-filter-only retrieval
             var scrollBuilder = io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
-                .setCollectionName(collection)
-                .setFilter(filter)
-                .setLimit(limit)
-                .setWithPayload(WithPayloadSelectorFactory.enable(true));
+                                                                         .setCollectionName(collection)
+                                                                         .setFilter(filter)
+                                                                         .setLimit(limit)
+                                                                         .setWithPayload(WithPayloadSelectorFactory.enable(true));
 
             var response = collectionManager.client().scrollAsync(scrollBuilder.build()).get();
 
@@ -663,10 +747,10 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             List<ScoredPoint> results = new ArrayList<>(response.getResultCount());
             for (var retrieved : response.getResultList()) {
                 results.add(ScoredPoint.newBuilder()
-                    .setId(retrieved.getId())
-                    .putAllPayload(retrieved.getPayloadMap())
-                    .setScore(1.0f) // all matches equal in filter-only mode
-                    .build());
+                                       .setId(retrieved.getId())
+                                       .putAllPayload(retrieved.getPayloadMap())
+                                       .setScore(1.0f) // all matches equal in filter-only mode
+                                       .build());
             }
             return results;
         } catch (InterruptedException e) {
@@ -678,13 +762,13 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     private <C extends CbrCase> C reconstructCase(Map<String, Value> payload, Class<C> caseClass) {
-        String problem = extractString(payload, "problem");
+        String problem  = extractString(payload, "problem");
         String solution = extractString(payload, "solution");
-        if (problem == null || solution == null) return null;
+        if (problem == null || solution == null) {return null;}
 
-        String outcome = extractString(payload, "outcome");
+        String outcome    = extractString(payload, "outcome");
         Double confidence = extractDouble(payload, "confidence");
-        String cbrType = extractString(payload, "_cbr_type");
+        String cbrType    = extractString(payload, "_cbr_type");
 
         CbrCase reconstructed = switch (cbrType) {
             case FeatureVectorCbrCase.CBR_TYPE -> reconstructFeatureVector(payload, problem, solution, outcome, confidence);
@@ -694,15 +778,15 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             default -> throw new IllegalArgumentException("Unknown CBR type: " + cbrType);
         };
 
-        if (!caseClass.isInstance(reconstructed)) return null;
+        if (!caseClass.isInstance(reconstructed)) {return null;}
         return caseClass.cast(reconstructed);
     }
 
     private CbrCase reconstructPlanCase(Map<String, Value> payload,
-                                          String problem, String solution,
-                                          String outcome, Double confidence) {
-        Map<String, FeatureValue> features = Map.of();
-        String featuresJson = extractString(payload, "_features_json");
+                                        String problem, String solution,
+                                        String outcome, Double confidence) {
+        Map<String, FeatureValue> features     = Map.of();
+        String                    featuresJson = extractString(payload, "_features_json");
         if (featuresJson != null) {
             try {
                 features = CbrPointBuilder.fromRawMap(MAPPER.readValue(featuresJson, MAP_TYPE));
@@ -711,8 +795,8 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             }
         }
 
-        List<PlanTrace> planTrace = List.of();
-        String planTraceJson = extractString(payload, "_plan_trace_json");
+        List<PlanTrace> planTrace     = List.of();
+        String          planTraceJson = extractString(payload, "_plan_trace_json");
         if (planTraceJson != null) {
             try {
                 planTrace = MAPPER.readValue(planTraceJson, PLAN_TRACE_TYPE);
@@ -725,8 +809,8 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     private CbrCase reconstructFeatureVector(Map<String, Value> payload,
-                                              String problem, String solution,
-                                              String outcome, Double confidence) {
+                                             String problem, String solution,
+                                             String outcome, Double confidence) {
         String featuresJson = extractString(payload, "_features_json");
         if (featuresJson == null) {
             return new FeatureVectorCbrCase(problem, solution, outcome, confidence, Map.of());
@@ -739,19 +823,5 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
     }
 
-    private static String extractString(Map<String, Value> payload, String key) {
-        Value v = payload.get(key);
-        if (v != null && v.hasStringValue()) {
-            return v.getStringValue();
-        }
-        return null;
-    }
-
-    private static Double extractDouble(Map<String, Value> payload, String key) {
-        Value v = payload.get(key);
-        if (v != null && v.hasDoubleValue()) {
-            return v.getDoubleValue();
-        }
-        return null;
-    }
+    private record ReconstructedCandidate<C extends CbrCase>(String pointId, C cbrCase, float vectorScore) {}
 }

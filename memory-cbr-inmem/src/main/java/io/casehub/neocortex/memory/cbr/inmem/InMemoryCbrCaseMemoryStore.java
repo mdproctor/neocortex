@@ -4,6 +4,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
@@ -35,7 +36,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private final Map<String, CbrFeatureSchema> schemas = new ConcurrentHashMap<>();
-    private final List<StoredCase> cases = new CopyOnWriteArrayList<>();
+    private final List<StoredCase>              cases   = new CopyOnWriteArrayList<>();
 
     @Override
     public void registerSchema(CbrFeatureSchema schema) {
@@ -50,7 +51,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
             CbrFeatureValidator.validateStoreFeatures(cbrCase.features(), schema);
         }
         String id = UUID.randomUUID().toString();
-        cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, Instant.now()));
+        cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, Instant.now(), null));
         return id;
     }
 
@@ -80,22 +81,22 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
 
         List<FeatureField.TimeSeries> dtwBandFields = schema == null ? List.of()
-            : schema.fields().stream()
-                .filter(f -> f instanceof FeatureField.TimeSeries ts
-                    && ts.similaritySpec() instanceof SimilaritySpec.DtwSpec ds
-                    && ds.constraint() instanceof WarpingConstraint.SakoeChibaBand)
-                .map(f -> (FeatureField.TimeSeries) f)
-                .toList();
+                                                                     : schema.fields().stream()
+                                                                             .filter(f -> f instanceof FeatureField.TimeSeries ts
+                                                                                          && ts.similaritySpec() instanceof SimilaritySpec.DtwSpec ds
+                                                                                          && ds.constraint() instanceof WarpingConstraint.SakoeChibaBand)
+                                                                             .map(f -> (FeatureField.TimeSeries) f)
+                                                                             .toList();
 
         List<ScoredCbrCase<C>> candidates = new ArrayList<>();
         for (StoredCase stored : cases) {
-            if (!stored.tenantId().equals(query.tenantId())) continue;
-            if (!stored.domain().equals(query.domain())) continue;
-            if (!stored.caseType().equals(query.caseType())) continue;
-            if (query.notBefore() != null && stored.storedAt().isBefore(query.notBefore())) continue;
-            if (!caseClass.isInstance(stored.cbrCase())) continue;
+            if (!stored.tenantId().equals(query.tenantId())) {continue;}
+            if (!stored.domain().equals(query.domain())) {continue;}
+            if (!stored.caseType().equals(query.caseType())) {continue;}
+            if (query.notBefore() != null && stored.storedAt().isBefore(query.notBefore())) {continue;}
+            if (!caseClass.isInstance(stored.cbrCase())) {continue;}
 
-            if (!matchesFilters(stored.cbrCase(), query.filters(), schema)) continue;
+            if (!matchesFilters(stored.cbrCase(), query.filters(), schema)) {continue;}
 
             double abandonCost = Double.POSITIVE_INFINITY;
             if (!dtwBandFields.isEmpty() && candidates.size() >= query.topK()) {
@@ -103,9 +104,9 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 if (kthScore > 0) {
                     boolean pruned = false;
                     for (FeatureField.TimeSeries ts : dtwBandFields) {
-                        int windowSize = ((WarpingConstraint.SakoeChibaBand) ((SimilaritySpec.DtwSpec) ts.similaritySpec()).constraint()).windowSize();
-                        FeatureValue queryTs = query.features().get(ts.name());
-                        FeatureValue caseTs = stored.cbrCase().features().get(ts.name());
+                        int          windowSize = ((WarpingConstraint.SakoeChibaBand) ((SimilaritySpec.DtwSpec) ts.similaritySpec()).constraint()).windowSize();
+                        FeatureValue queryTs    = query.features().get(ts.name());
+                        FeatureValue caseTs     = stored.cbrCase().features().get(ts.name());
                         if (queryTs instanceof FeatureValue.StructListVal qObs
                             && caseTs instanceof FeatureValue.StructListVal cObs) {
                             int maxLen = Math.max(qObs.items().size(), cObs.items().size());
@@ -117,7 +118,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                             }
                         }
                     }
-                    if (pruned) continue;
+                    if (pruned) {continue;}
                 }
             }
 
@@ -156,6 +157,29 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                                sc.entityId().equals(entityId) && sc.tenantId().equals(tenantId));
         return before - cases.size();
     }
+
+    @Override
+    public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
+        for (int i = 0; i < cases.size(); i++) {
+            StoredCase stored = cases.get(i);
+            if (caseId.equals(stored.caseId()) && tenantId.equals(stored.tenantId())) {
+                if (stored.lastOutcomeAt() != null
+                    && !outcome.observedAt().isAfter(stored.lastOutcomeAt())) {
+                    return;
+                }
+                double newConfidence = CbrOutcome.adjustConfidence(
+                        stored.cbrCase().confidence(), outcome.successRate(),
+                        CbrOutcome.DEFAULT_LEARNING_RATE);
+                CbrCase updated = stored.cbrCase().withOutcome(
+                        outcome.result().name(), newConfidence);
+                cases.set(i, new StoredCase(stored.id(), updated, stored.caseType(),
+                                            stored.entityId(), stored.domain(), stored.tenantId(),
+                                            stored.caseId(), stored.storedAt(), outcome.observedAt()));
+                return;
+            }
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     private boolean matchesFilters(CbrCase storedCase, Map<String, CbrFilter> filters,
@@ -223,6 +247,6 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private record StoredCase(
             String id, CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
-            String tenantId, String caseId, Instant storedAt
+            String tenantId, String caseId, Instant storedAt, Instant lastOutcomeAt
     ) {}
 }

@@ -6,6 +6,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
@@ -93,6 +94,12 @@ public class ReactiveRerankingCbrCaseMemoryStore implements ReactiveCbrCaseMemor
     public Uni<Integer> eraseEntity(String entityId, String tenantId) {
         return delegate.eraseEntity(entityId, tenantId);
     }
+
+    @Override
+    public Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
+        return delegate.recordOutcome(caseId, tenantId, outcome);
+    }
+
 
     private <C extends CbrCase> List<ScoredCbrCase<C>> rerankBlocking(
             CbrQuery query, List<ScoredCbrCase<C>> candidates) {

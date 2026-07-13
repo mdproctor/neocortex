@@ -16,4 +16,7 @@ public interface CbrCaseMemoryStore {
     Integer erase(EraseRequest request);
 
     Integer eraseEntity(String entityId, String tenantId);
+
+    void recordOutcome(String caseId, String tenantId, CbrOutcome outcome);
+
 }

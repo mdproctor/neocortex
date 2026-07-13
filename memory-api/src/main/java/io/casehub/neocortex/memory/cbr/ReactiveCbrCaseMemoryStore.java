@@ -17,4 +17,7 @@ public interface ReactiveCbrCaseMemoryStore {
     Uni<Integer> erase(EraseRequest request);
 
     Uni<Integer> eraseEntity(String entityId, String tenantId);
+
+    Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome);
+
 }
