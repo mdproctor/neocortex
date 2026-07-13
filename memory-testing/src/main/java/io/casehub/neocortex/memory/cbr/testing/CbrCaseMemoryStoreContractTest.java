@@ -87,6 +87,21 @@ public abstract class CbrCaseMemoryStoreContractTest {
     }
 
     @Test
+    void retrieveSimilar_returnsCaseId() {
+        registerDefaultSchema();
+        store().store(
+                new FeatureVectorCbrCase("Zerg rush", "early pressure", "WIN", 0.9,
+                                         Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH"), "army_size_ratio", number(0.7))),
+                "starcraft-game", ENTITY, CBR, TENANT, "my-case-id");
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "starcraft-game",
+                            Map.of("opponent_race", string("Zerg")), 5), FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().caseId()).isEqualTo("my-case-id");
+    }
+
+
+    @Test
     void retrieveSimilar_filtersByCaseType() {
         var c = new FeatureVectorCbrCase("Zerg game", "rush", "WIN", null,
                                          Map.of("opponent_race", string("Zerg")));

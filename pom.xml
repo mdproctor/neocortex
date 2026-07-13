@@ -37,6 +37,7 @@
     <module>memory-cbr-inmem</module>
     <module>memory-cbr-embedding</module>
     <module>memory-cbr-crossencoder</module>
+    <module>memory-cbr-tracking</module>
     <module>memory-cbr-jpa</module>
     <module>memory-qdrant</module>
     <module>memory-inmem</module>

@@ -127,8 +127,8 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                     abandonCost);
 
             if (breakdown.score() >= query.minSimilarity()) {
-                candidates.add(new ScoredCbrCase<>((C) stored.cbrCase(), breakdown.score(), false,
-                                                   breakdown.featureSimilarities()));
+                candidates.add(new ScoredCbrCase<>((C) stored.cbrCase(), stored.caseId(),
+                                                   breakdown.score(), false, breakdown.featureSimilarities()));
                 candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
             }
         }

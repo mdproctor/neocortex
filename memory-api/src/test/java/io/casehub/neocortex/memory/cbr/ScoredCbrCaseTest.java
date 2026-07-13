@@ -1,10 +1,9 @@
 package io.casehub.neocortex.memory.cbr;
 
-import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ScoredCbrCaseTest {
 
@@ -134,4 +133,28 @@ class ScoredCbrCaseTest {
         var scored = new ScoredCbrCase<>(cbrCase, 0.9, false, null);
         assertThat(scored.featureSimilarities()).isEmpty();
     }
+
+    @Test
+    void caseId_present() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var scored  = new ScoredCbrCase<>(cbrCase, "case-1", 0.9);
+        assertThat(scored.caseId()).isEqualTo("case-1");
+    }
+
+    @Test
+    void caseId_null_allowed() {
+        var cbrCase = new TextualCbrCase("problem", "solution", null, null);
+        var scored  = new ScoredCbrCase<>(cbrCase, 0.9);
+        assertThat(scored.caseId()).isNull();
+    }
+
+    @Test
+    void withReranked_preservesCaseId() {
+        var cbrCase  = new TextualCbrCase("problem", "solution", null, null);
+        var original = new ScoredCbrCase<>(cbrCase, "case-1", 0.8);
+        var reranked = original.withReranked();
+        assertThat(reranked.caseId()).isEqualTo("case-1");
+        assertThat(reranked.reranked()).isTrue();
+    }
+
 }

@@ -115,7 +115,7 @@ public class ReactiveRerankingCbrCaseMemoryStore implements ReactiveCbrCaseMemor
             RankedResult r = ranked.get(i);
             ScoredCbrCase<C> original = candidates.get(r.originalIndex());
             double sigmoidScore = 1.0 / (1.0 + Math.exp(-r.score()));
-            results.add(new ScoredCbrCase<C>(original.cbrCase(), sigmoidScore).withReranked());
+            results.add(new ScoredCbrCase<C>(original.cbrCase(), original.caseId(), sigmoidScore).withReranked());
         }
         return Collections.unmodifiableList(results);
     }

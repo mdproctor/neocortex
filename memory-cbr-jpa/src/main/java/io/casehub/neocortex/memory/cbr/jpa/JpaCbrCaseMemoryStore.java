@@ -139,8 +139,8 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
                     query.features(), reconstructed.features(), query.weights(), schema, Map.of());
 
             if (breakdown.score() >= query.minSimilarity()) {
-                candidates.add(new ScoredCbrCase<>((C) reconstructed, breakdown.score(), false,
-                                                   breakdown.featureSimilarities()));
+                candidates.add(new ScoredCbrCase<>((C) reconstructed, entity.caseId,
+                                                   breakdown.score(), false, breakdown.featureSimilarities()));
             }
         }
 
