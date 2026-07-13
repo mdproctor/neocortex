@@ -4,6 +4,7 @@ import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrCaseMemoryStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("smoke")

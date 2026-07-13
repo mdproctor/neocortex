@@ -7,6 +7,7 @@ import dev.langchain4j.model.output.Response;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
 import static org.assertj.core.api.Assertions.*;
 
 class EmbeddingTextSimilarityTest {
@@ -41,13 +42,13 @@ class EmbeddingTextSimilarityTest {
     @Test
     void identicalTextsScoreOne() {
         var sim = new EmbeddingTextSimilarity(stubModel());
-        assertThat(sim.compute("hello", "hello")).isEqualTo(1.0);
+        assertThat(sim.compute(string("hello"), string("hello"))).isEqualTo(1.0);
     }
 
     @Test
     void similarTextsScoreHighButNotOne() {
         var sim = new EmbeddingTextSimilarity(stubModel());
-        double score = sim.compute("hello", "hi");
+        double score = sim.compute(string("hello"), string("hi"));
         // cos(hello, hi) = (0.9)/sqrt(1*0.82) ≈ 0.9938
         assertThat(score).isGreaterThan(0.9);
         assertThat(score).isLessThan(1.0);
@@ -56,7 +57,7 @@ class EmbeddingTextSimilarityTest {
     @Test
     void dissimilarTextsScoreLow() {
         var sim = new EmbeddingTextSimilarity(stubModel());
-        double score = sim.compute("hello", "goodbye");
+        double score = sim.compute(string("hello"), string("goodbye"));
         // cos([1,0,0], [0,1,0]) = 0.0
         assertThat(score).isCloseTo(0.0, offset(1e-6));
     }
@@ -80,7 +81,7 @@ class EmbeddingTextSimilarityTest {
             public int dimension() { return 2; }
         };
         var sim = new EmbeddingTextSimilarity(negModel);
-        assertThat(sim.compute("a", "b")).isEqualTo(0.0);
+        assertThat(sim.compute(string("a"), string("b"))).isEqualTo(0.0);
     }
 
     @Test
@@ -100,7 +101,7 @@ class EmbeddingTextSimilarityTest {
             public int dimension() { return 3; }
         };
         var sim = new EmbeddingTextSimilarity(failingModel);
-        assertThatThrownBy(() -> sim.compute("a", "b"))
+        assertThatThrownBy(() -> sim.compute(string("a"), string("b")))
             .isInstanceOf(RuntimeException.class);
     }
 
@@ -124,8 +125,8 @@ class EmbeddingTextSimilarityTest {
             public int dimension() { return 3; }
         };
         var sim = new EmbeddingTextSimilarity(countingModel);
-        sim.compute("query", "case1");
-        sim.compute("query", "case2");
+        sim.compute(string("query"), string("case1"));
+        sim.compute(string("query"), string("case2"));
         // "query" embedded once (cached), "case1" once, "case2" once = 3 total
         assertThat(callCount[0]).isEqualTo(3);
     }
@@ -154,7 +155,7 @@ class EmbeddingTextSimilarityTest {
         assertThat(embedAllCalls[0]).isEqualTo(1);
 
         // compute() should hit warm cache — no additional embed calls
-        sim.compute("a", "b");
+        sim.compute(string("a"), string("b"));
         assertThat(embedAllCalls[0]).isEqualTo(1);
     }
 

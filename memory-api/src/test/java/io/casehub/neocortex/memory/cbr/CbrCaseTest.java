@@ -1,5 +1,7 @@
 package io.casehub.neocortex.memory.cbr;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
+
 import org.junit.jupiter.api.Test;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
@@ -48,17 +50,17 @@ class CbrCaseTest {
 
     @Test
     void featureVectorCbrCase_valid() {
-        var features = Map.<String, Object>of("race", "Zerg", "ratio", 0.7);
+        var features = Map.<String, FeatureValue>of("race", string("Zerg"), "ratio", number(0.7));
         var c = new FeatureVectorCbrCase("problem", "solution", "WIN", 0.8, features);
-        assertThat(c.features()).containsEntry("race", "Zerg");
+        assertThat(c.features()).containsEntry("race", string("Zerg"));
     }
 
     @Test
     void featureVectorCbrCase_featuresDefensivelyCopied() {
-        var features = new java.util.HashMap<String, Object>();
-        features.put("race", "Zerg");
+        var features = new java.util.HashMap<String, FeatureValue>();
+        features.put("race", string("Zerg"));
         var c = new FeatureVectorCbrCase("p", "s", null, null, features);
-        features.put("extra", "value");
+        features.put("extra", string("value"));
         assertThat(c.features()).doesNotContainKey("extra");
     }
 
@@ -76,7 +78,7 @@ class CbrCaseTest {
 
     @Test
     void featureVectorCbrCase_cbrType_returns_feature_vector() {
-        var c = new FeatureVectorCbrCase("p", "s", null, null, Map.of("race", "Zerg"));
+        var c = new FeatureVectorCbrCase("p", "s", null, null, Map.of("race", string("Zerg")));
         assertThat(c.cbrType()).isEqualTo("feature-vector");
     }
 

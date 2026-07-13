@@ -1,5 +1,7 @@
 package io.casehub.neocortex.memory.cbr;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.*;

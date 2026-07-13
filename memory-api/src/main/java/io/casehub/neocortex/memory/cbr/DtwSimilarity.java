@@ -8,16 +8,24 @@ public final class DtwSimilarity {
 
     private DtwSimilarity() {}
 
-    public static DtwResult compute(List<Map<String, Object>> query,
-                                    List<Map<String, Object>> caseSeq,
+    public static DtwResult compute(List<Map<String, FeatureValue>> query,
+                                    List<Map<String, FeatureValue>> caseSeq,
                                     FeatureField.TimeSeries schema) {
         return compute(query, caseSeq, schema, new WarpingConstraint.Unconstrained());
     }
 
-    public static DtwResult compute(List<Map<String, Object>> query,
-                                    List<Map<String, Object>> caseSeq,
+    public static DtwResult compute(List<Map<String, FeatureValue>> query,
+                                    List<Map<String, FeatureValue>> caseSeq,
                                     FeatureField.TimeSeries schema,
                                     WarpingConstraint constraint) {
+        return compute(query, caseSeq, schema, constraint, Double.POSITIVE_INFINITY);
+    }
+
+    public static DtwResult compute(List<Map<String, FeatureValue>> query,
+                                    List<Map<String, FeatureValue>> caseSeq,
+                                    FeatureField.TimeSeries schema,
+                                    WarpingConstraint constraint,
+                                    double abandonCostThreshold) {
         int n = query.size();
         int m = caseSeq.size();
         if (n == 0 && m == 0) {return new DtwResult(1.0, List.of());}
@@ -37,10 +45,17 @@ public final class DtwSimilarity {
             int jStart = computeJStart(i, n, m, constraint);
             int jEnd   = computeJEnd(i, n, m, constraint);
             if (jStart > jEnd) {return new DtwResult(0.0, List.of());}
+
+            double rowMin = Double.MAX_VALUE;
             for (int j = jStart; j <= jEnd; j++) {
                 double dist = observationDistance(query.get(i - 1), caseSeq.get(j - 1), numericFields);
                 cost[i][j] = dist + Math.min(cost[i - 1][j],
                                              Math.min(cost[i][j - 1], cost[i - 1][j - 1]));
+                rowMin     = Math.min(rowMin, cost[i][j]);
+            }
+
+            if (rowMin > abandonCostThreshold) {
+                return new DtwResult(0.0, List.of());
             }
         }
 
@@ -51,6 +66,7 @@ public final class DtwSimilarity {
         List<AlignmentPair> path = backtrace(cost, n, m, constraint);
         return new DtwResult(score, path);
     }
+
 
     private static List<AlignmentPair> backtrace(double[][] cost, int n, int m,
                                                  WarpingConstraint constraint) {
@@ -122,17 +138,18 @@ public final class DtwSimilarity {
         return result;
     }
 
-    private static double observationDistance(Map<String, Object> a, Map<String, Object> b,
+    private static double observationDistance(Map<String, FeatureValue> a, Map<String, FeatureValue> b,
                                               List<FeatureField.Numeric> fields) {
         double sumSq = 0.0;
         for (FeatureField.Numeric f : fields) {
             double range = f.max() - f.min();
             if (range <= 0) {continue;}
-            Number aVal = (Number) a.get(f.name());
-            Number bVal = (Number) b.get(f.name());
-            if (aVal == null || bVal == null) {continue;}
-            double diff = (aVal.doubleValue() - bVal.doubleValue()) / range;
-            sumSq += diff * diff;
+            FeatureValue aVal = a.get(f.name());
+            FeatureValue bVal = b.get(f.name());
+            if (aVal instanceof FeatureValue.NumberVal aN && bVal instanceof FeatureValue.NumberVal bN) {
+                double diff = (aN.value() - bN.value()) / range;
+                sumSq += diff * diff;
+            }
         }
         return Math.sqrt(sumSq);
     }

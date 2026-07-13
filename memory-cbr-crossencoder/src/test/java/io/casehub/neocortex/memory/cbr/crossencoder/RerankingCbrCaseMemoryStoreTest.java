@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
 import static org.assertj.core.api.Assertions.*;
 
 class RerankingCbrCaseMemoryStoreTest {
@@ -46,13 +47,13 @@ class RerankingCbrCaseMemoryStoreTest {
     @Test
     void reranking_reordersResultsByCrossEncoderScore() {
         inner.store(new FeatureVectorCbrCase("low relevance", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
         inner.store(new FeatureVectorCbrCase("high relevance", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e2", CBR, "t1", "c2");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5)
             .withProblem("query text");
         var results = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
@@ -64,10 +65,10 @@ class RerankingCbrCaseMemoryStoreTest {
     @Test
     void featureOnly_skipsReranking() {
         inner.store(new FeatureVectorCbrCase("problem", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5)
             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
@@ -79,10 +80,10 @@ class RerankingCbrCaseMemoryStoreTest {
     @Test
     void nullProblem_skipsReranking() {
         inner.store(new FeatureVectorCbrCase("problem", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5);
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5);
         var results = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
         assertThat(crossEncoderCalls.get()).isZero();
@@ -97,10 +98,10 @@ class RerankingCbrCaseMemoryStoreTest {
             });
 
         inner.store(new FeatureVectorCbrCase("problem", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5)
             .withProblem("query");
         var results = passthrough.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
@@ -111,10 +112,10 @@ class RerankingCbrCaseMemoryStoreTest {
     @Test
     void alreadyReranked_skipsDoubleReranking() {
         inner.store(new FeatureVectorCbrCase("problem", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5)
             .withProblem("query");
 
         var firstPass = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -132,10 +133,10 @@ class RerankingCbrCaseMemoryStoreTest {
     @Test
     void sigmoidNormalization_scoresInZeroToOne() {
         inner.store(new FeatureVectorCbrCase("problem", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5)
             .withProblem("query");
         var results = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
@@ -148,10 +149,10 @@ class RerankingCbrCaseMemoryStoreTest {
     @Test
     void sigmoidNormalization_highRawScore() {
         inner.store(new FeatureVectorCbrCase("high relevance match", "solution",
-            "WIN", null, Map.of("race", "Zerg")),
+            "WIN", null, Map.of("race", string("Zerg"))),
             "game", "e1", CBR, "t1", "c1");
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 5)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 5)
             .withProblem("query");
         var results = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
@@ -163,11 +164,11 @@ class RerankingCbrCaseMemoryStoreTest {
     void overfetch_trimToTopK() {
         for (int i = 0; i < 5; i++) {
             inner.store(new FeatureVectorCbrCase("problem " + i, "solution",
-                "WIN", null, Map.of("race", "Zerg")),
+                "WIN", null, Map.of("race", string("Zerg"))),
                 "game", "e" + i, CBR, "t1", "c" + i);
         }
 
-        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", "Zerg"), 2)
+        var query = CbrQuery.of("t1", CBR, "game", Map.of("race", string("Zerg")), 2)
             .withProblem("query");
         var results = reranker.retrieveSimilar(query, FeatureVectorCbrCase.class);
 

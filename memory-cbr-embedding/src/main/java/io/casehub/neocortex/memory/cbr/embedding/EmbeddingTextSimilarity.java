@@ -34,10 +34,14 @@ public class EmbeddingTextSimilarity implements LocalSimilarityFunction {
     }
 
     @Override
-    public double compute(Object queryValue, Object caseValue) {
-        Embedding queryEmb = embed((String) queryValue);
-        Embedding caseEmb = embed((String) caseValue);
-        return Math.max(0.0, CosineSimilarity.between(queryEmb, caseEmb));
+    public double compute(io.casehub.neocortex.memory.cbr.FeatureValue queryValue, io.casehub.neocortex.memory.cbr.FeatureValue caseValue) {
+        if (queryValue instanceof io.casehub.neocortex.memory.cbr.FeatureValue.StringVal qs
+            && caseValue instanceof io.casehub.neocortex.memory.cbr.FeatureValue.StringVal cs) {
+            Embedding queryEmb = embed(qs.value());
+            Embedding caseEmb  = embed(cs.value());
+            return Math.max(0.0, CosineSimilarity.between(queryEmb, caseEmb));
+        }
+        return 0.0;
     }
 
     private Embedding embed(String text) {

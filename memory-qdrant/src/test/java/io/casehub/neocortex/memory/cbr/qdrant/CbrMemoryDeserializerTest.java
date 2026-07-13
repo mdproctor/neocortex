@@ -2,6 +2,7 @@ package io.casehub.neocortex.memory.cbr.qdrant;
 
 import io.casehub.neocortex.memory.*;
 import io.casehub.neocortex.memory.cbr.*;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
@@ -17,7 +18,7 @@ class CbrMemoryDeserializerTest {
     @Test
     void roundTrip_featureVectorCbrCase() {
         var original = new FeatureVectorCbrCase("Zerg rush detected", "wall-off and expand",
-            "WIN", 0.85, Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7));
+            "WIN", 0.85, Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.7)));
 
         var deserialized = roundTrip(original, "starcraft-game");
 
@@ -28,7 +29,7 @@ class CbrMemoryDeserializerTest {
         assertThat(fv.solution()).isEqualTo("wall-off and expand");
         assertThat(fv.outcome()).isEqualTo("WIN");
         assertThat(fv.confidence()).isEqualTo(0.85);
-        assertThat(fv.features()).containsEntry("opponent_race", "Zerg");
+        assertThat(fv.features()).containsEntry("opponent_race", string("Zerg"));
     }
 
     @Test
@@ -36,7 +37,7 @@ class CbrMemoryDeserializerTest {
         var trace = new PlanTrace("scout", "reconnaissance", "drone-scout", "SUCCESS", 1,
             Map.of("duration", 30));
         var original = new PlanCbrCase("Zerg rush", "early pressure", "WIN", 0.9,
-            Map.of("opponent_race", "Zerg"), List.of(trace));
+            Map.of("opponent_race", string("Zerg")), List.of(trace));
 
         var deserialized = roundTrip(original, "starcraft-game");
 

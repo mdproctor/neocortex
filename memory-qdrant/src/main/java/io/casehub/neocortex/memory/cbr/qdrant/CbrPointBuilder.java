@@ -68,7 +68,7 @@ final class CbrPointBuilder {
             payload.put("confidence", ValueFactory.value(cbrCase.confidence()));
         }
 
-        Map<String, Object> features = cbrCase.features();
+        Map<String, Object> features = toRawMap(cbrCase.features());
         try {
             payload.put("_features_json", ValueFactory.value(MAPPER.writeValueAsString(features)));
         } catch (JsonProcessingException e) {
@@ -138,6 +138,71 @@ final class CbrPointBuilder {
     static UUID pointId(String tenantId, String caseType, String caseId) {
         String idInput = tenantId + "#" + caseType + "#" + caseId;
         return UUID.nameUUIDFromBytes(idInput.getBytes(StandardCharsets.UTF_8));
+    }
+
+
+    static Map<String, Object> toRawMap(Map<String, io.casehub.neocortex.memory.cbr.FeatureValue> features) {
+        var raw = new java.util.HashMap<String, Object>();
+        for (var entry : features.entrySet()) {
+            raw.put(entry.getKey(), toRawValue(entry.getValue()));
+        }
+        return raw;
+    }
+
+    static Map<String, io.casehub.neocortex.memory.cbr.FeatureValue> fromRawMap(Map<String, Object> raw) {
+        if (raw == null || raw.isEmpty()) {return Map.of();}
+        var typed = new java.util.HashMap<String, io.casehub.neocortex.memory.cbr.FeatureValue>();
+        for (var entry : raw.entrySet()) {
+            typed.put(entry.getKey(), fromRawValue(entry.getValue()));
+        }
+        return Map.copyOf(typed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static io.casehub.neocortex.memory.cbr.FeatureValue fromRawValue(Object raw) {
+        if (raw instanceof String s) {return io.casehub.neocortex.memory.cbr.FeatureValue.string(s);}
+        if (raw instanceof Number n) {return io.casehub.neocortex.memory.cbr.FeatureValue.number(n.doubleValue());}
+        if (raw instanceof List<?> list) {
+            if (list.isEmpty()) {return io.casehub.neocortex.memory.cbr.FeatureValue.stringList();}
+            Object first = list.getFirst();
+            if (first instanceof String) {
+                return io.casehub.neocortex.memory.cbr.FeatureValue.stringList(list.stream().map(e -> (String) e).toList());
+            } else if (first instanceof Number) {
+                return io.casehub.neocortex.memory.cbr.FeatureValue.numberList(list.stream().map(e -> ((Number) e).doubleValue()).toList());
+            } else if (first instanceof Map<?, ?>) {
+                var items = list.stream().map(e -> fromRawMap((Map<String, Object>) e)).toList();
+                return io.casehub.neocortex.memory.cbr.FeatureValue.structList(items);
+            }
+            throw new IllegalArgumentException("Unsupported list element: " + first.getClass());
+        }
+        if (raw instanceof Map<?, ?> map) {
+            var fields = new java.util.HashMap<String, io.casehub.neocortex.memory.cbr.FeatureValue>();
+            map.forEach((k, v) -> fields.put(String.valueOf(k), fromRawValue(v)));
+            return io.casehub.neocortex.memory.cbr.FeatureValue.struct(fields);
+        }
+        throw new IllegalArgumentException("Unsupported raw value: " + raw.getClass());
+    }
+
+
+    private static Object toRawValue(io.casehub.neocortex.memory.cbr.FeatureValue fv) {
+        return switch (fv) {
+            case io.casehub.neocortex.memory.cbr.FeatureValue.StringVal s -> s.value();
+            case io.casehub.neocortex.memory.cbr.FeatureValue.NumberVal n -> n.value();
+            case io.casehub.neocortex.memory.cbr.FeatureValue.RangeVal r -> Map.of("min", r.min(), "max", r.max());
+            case io.casehub.neocortex.memory.cbr.FeatureValue.StringListVal sl -> sl.values();
+            case io.casehub.neocortex.memory.cbr.FeatureValue.NumberListVal nl -> nl.values();
+            case io.casehub.neocortex.memory.cbr.FeatureValue.StructVal sv -> {
+                var m = new java.util.HashMap<String, Object>();
+                sv.fields().forEach((k, v) -> m.put(k, toRawValue(v)));
+                yield m;
+            }
+            case io.casehub.neocortex.memory.cbr.FeatureValue.StructListVal sl -> sl.items().stream()
+                                                                                    .map(item -> {
+                                                                                        var m = new java.util.HashMap<String, Object>();
+                                                                                        item.forEach((k, v) -> m.put(k, toRawValue(v)));
+                                                                                        return (Object) m;
+                                                                                    }).toList();
+        };
     }
 
     private static Value toListValue(List<?> list) {

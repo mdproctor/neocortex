@@ -5,7 +5,9 @@ import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import io.casehub.neocortex.memory.cbr.PlanTrace;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrCaseMemoryStore;
@@ -28,7 +30,7 @@ public final class QuarkmindBattleDemo {
         FeatureField.numeric("resource_advantage", -5000, 5000));
 
     record SeedCase(String problem, String solution, String outcome,
-                    double confidence, Map<String, Object> features,
+                    double confidence, Map<String, FeatureValue> features,
                     List<PlanTrace> planTrace) {}
 
     public record Result(ScoredCbrCase<PlanCbrCase> scored) {}
@@ -39,8 +41,8 @@ public final class QuarkmindBattleDemo {
             "Zerg opponent detected Roach Rush at 5:30, army ratio 0.75, resources -150",
             "Scout early → bunker wall → counter-push with marine/medivac → victory",
             "WIN", 0.92,
-            Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH",
-                   "army_size_ratio", 0.75, "resource_advantage", -150),
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH"),
+                   "army_size_ratio", number(0.75), "resource_advantage", number(-150)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "overlord-scout", "SUCCESS", 1, Map.of()),
                 new PlanTrace("assess-threat", "threat-analysis", "zerg-analyzer", "SUCCESS", 2, Map.of()),
@@ -53,8 +55,8 @@ public final class QuarkmindBattleDemo {
             "Zerg opponent detected Roach Rush at 5:00, army ratio 0.85, resources -300",
             "Scout with reaper → bunker → hellion harass → expand → bio counter → victory",
             "WIN", 0.88,
-            Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH",
-                   "army_size_ratio", 0.85, "resource_advantage", -300),
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH"),
+                   "army_size_ratio", number(0.85), "resource_advantage", number(-300)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "reaper-scout", "SUCCESS", 1, Map.of()),
                 new PlanTrace("bunker-up", "static-defence", "bunker-wall", "SUCCESS", 2, Map.of()),
@@ -68,8 +70,8 @@ public final class QuarkmindBattleDemo {
             "Zerg opponent detected Roach Rush at 6:00, army ratio 0.70, resources -100",
             "Scout with scan → bunker defence → siege tank push → victory",
             "WIN", 0.90,
-            Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH",
-                   "army_size_ratio", 0.70, "resource_advantage", -100),
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH"),
+                   "army_size_ratio", number(0.70), "resource_advantage", number(-100)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "scan-sweep", "SUCCESS", 1, Map.of()),
                 new PlanTrace("bunker-up", "static-defence", "bunker-wall", "SUCCESS", 2, Map.of()),
@@ -81,8 +83,8 @@ public final class QuarkmindBattleDemo {
             "Zerg opponent detected Roach Rush at 5:45, army ratio 0.90, resources +100",
             "Scout → assess threat → failed marine pressure → bunker recovery → bio push → victory",
             "WIN", 0.85,
-            Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH",
-                   "army_size_ratio", 0.90, "resource_advantage", 100),
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH"),
+                   "army_size_ratio", number(0.90), "resource_advantage", number(100)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "overlord-scout", "SUCCESS", 1, Map.of()),
                 new PlanTrace("assess-threat", "threat-analysis", "zerg-analyzer", "SUCCESS", 2, Map.of()),
@@ -96,8 +98,8 @@ public final class QuarkmindBattleDemo {
             "Zerg opponent detected Roach Rush at 6:30 (late), army ratio 0.65, resources -500",
             "Expanded early without scouting → macro-up → failed counter-push → defeat",
             "LOSS", 0.45,
-            Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH",
-                   "army_size_ratio", 0.65, "resource_advantage", -500),
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH"),
+                   "army_size_ratio", number(0.65), "resource_advantage", number(-500)),
             List.of(
                 new PlanTrace("expand", "economy", "natural-expand", "SUCCESS", 1, Map.of()),
                 new PlanTrace("macro-up", "economy", "double-refinery", "SUCCESS", 2, Map.of()),
@@ -109,8 +111,8 @@ public final class QuarkmindBattleDemo {
             "Protoss opponent detected Zealot Rush at 4:30, army ratio 0.80, resources -200",
             "Early bunker → wall-off → marauder defence → victory",
             "WIN", 0.89,
-            Map.of("opponent_race", "PROTOSS", "detected_build", "ZEALOT_RUSH",
-                   "army_size_ratio", 0.80, "resource_advantage", -200),
+            Map.of("opponent_race", string("PROTOSS"), "detected_build", string("ZEALOT_RUSH"),
+                   "army_size_ratio", number(0.80), "resource_advantage", number(-200)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "marine-scout", "SUCCESS", 1, Map.of()),
                 new PlanTrace("bunker-up", "static-defence", "wall-bunker", "SUCCESS", 2, Map.of()),
@@ -122,8 +124,8 @@ public final class QuarkmindBattleDemo {
             "Terran opponent detected Marine Push at 5:15, army ratio 0.95, resources 50",
             "Siege tank defence → counter with bio → victory",
             "WIN", 0.87,
-            Map.of("opponent_race", "TERRAN", "detected_build", "MARINE_PUSH",
-                   "army_size_ratio", 0.95, "resource_advantage", 50),
+            Map.of("opponent_race", string("TERRAN"), "detected_build", string("MARINE_PUSH"),
+                   "army_size_ratio", number(0.95), "resource_advantage", number(50)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "reaper-scout", "SUCCESS", 1, Map.of()),
                 new PlanTrace("bunker-up", "static-defence", "siege-line", "SUCCESS", 2, Map.of()),
@@ -136,8 +138,8 @@ public final class QuarkmindBattleDemo {
             "Zerg opponent detected Macro play at 7:00, army ratio 1.10, resources 400",
             "Match opponent macro → expand → multi-pronged attacks → victory",
             "WIN", 0.91,
-            Map.of("opponent_race", "ZERG", "detected_build", "MACRO",
-                   "army_size_ratio", 1.10, "resource_advantage", 400),
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("MACRO"),
+                   "army_size_ratio", number(1.10), "resource_advantage", number(400)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "overlord-scout", "SUCCESS", 1, Map.of()),
                 new PlanTrace("expand", "economy", "fast-expand", "SUCCESS", 2, Map.of()),
@@ -150,8 +152,8 @@ public final class QuarkmindBattleDemo {
             "Protoss opponent build unknown, army ratio 0.60, resources -600",
             "Failed to scout → blind defence → overwhelmed → defeat",
             "LOSS", 0.40,
-            Map.of("opponent_race", "PROTOSS", "detected_build", "UNKNOWN",
-                   "army_size_ratio", 0.60, "resource_advantage", -600),
+            Map.of("opponent_race", string("PROTOSS"), "detected_build", string("UNKNOWN"),
+                   "army_size_ratio", number(0.60), "resource_advantage", number(-600)),
             List.of(
                 new PlanTrace("bunker-up", "static-defence", "blind-wall", "SUCCESS", 1, Map.of()),
                 new PlanTrace("macro-up", "economy", "greedy-expand", "FAILURE", 2, Map.of()),
@@ -163,8 +165,8 @@ public final class QuarkmindBattleDemo {
             "Terran opponent detected Macro play at 8:00, army ratio 1.05, resources 300",
             "Scout → match macro → superior positioning → victory",
             "WIN", 0.88,
-            Map.of("opponent_race", "TERRAN", "detected_build", "MACRO",
-                   "army_size_ratio", 1.05, "resource_advantage", 300),
+            Map.of("opponent_race", string("TERRAN"), "detected_build", string("MACRO"),
+                   "army_size_ratio", number(1.05), "resource_advantage", number(300)),
             List.of(
                 new PlanTrace("scout", "reconnaissance", "scan-sweep", "SUCCESS", 1, Map.of()),
                 new PlanTrace("expand", "economy", "dual-expand", "SUCCESS", 2, Map.of()),
@@ -186,7 +188,7 @@ public final class QuarkmindBattleDemo {
         }
 
         var query = CbrQuery.of(TENANT, DOMAIN, CASE_TYPE,
-            Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH"), 10);
+            Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH")), 10);
 
         return store.retrieveSimilar(query, PlanCbrCase.class).stream()
             .map(Result::new)
@@ -208,7 +210,7 @@ public final class QuarkmindBattleDemo {
                 i + 1, results.get(i).scored().score(), c.outcome(),
                 features.get("opponent_race"), features.get("detected_build"),
                 features.get("army_size_ratio"),
-                ((Number) features.get("resource_advantage")).intValue());
+                ((int) ((FeatureValue.NumberVal) features.get("resource_advantage")).value()));
             System.out.println("     Plan trace:");
             for (var trace : c.planTrace()) {
                 System.out.printf("       %d. %-15s → %-17s → %-17s → %s (pri %d)%n",

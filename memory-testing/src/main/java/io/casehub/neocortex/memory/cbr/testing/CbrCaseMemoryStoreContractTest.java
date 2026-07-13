@@ -1,5 +1,7 @@
 package io.casehub.neocortex.memory.cbr.testing;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
+
 import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
@@ -9,6 +11,7 @@ import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
 import io.casehub.neocortex.memory.cbr.NumericRange;
 import io.casehub.neocortex.memory.cbr.PlanCbrCase;
@@ -54,7 +57,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
 
     @Test
     void retrieveSimilar_emptyWhenNoCases() {
-        var q       = CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 5);
+        var q       = CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, CbrCase.class);
         assertThat(results).isEmpty();
     }
@@ -62,21 +65,21 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_findsStoredCase() {
         var c = new FeatureVectorCbrCase("Zerg roach rush", "early pressure", "WIN", 0.9,
-                                         Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH", "army_size_ratio", 0.7));
+                                         Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH"), "army_size_ratio", number(0.7)));
         store().store(c, "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5);
+                            Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("Zerg roach rush");
-        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", "Zerg");
+        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", string("Zerg"));
     }
 
     @Test
     void retrieveSimilar_filtersByCaseType() {
         var c = new FeatureVectorCbrCase("Zerg game", "rush", "WIN", null,
-                                         Map.of("opponent_race", "Zerg"));
+                                         Map.of("opponent_race", string("Zerg")));
         store().store(c, "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         var q       = CbrQuery.of(TENANT, CBR, "aml-investigation", Map.of(), 5);
@@ -87,11 +90,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_filtersByTenant() {
         var c = new FeatureVectorCbrCase("problem", "solution", "WIN", null,
-                                         Map.of("opponent_race", "Zerg"));
+                                         Map.of("opponent_race", string("Zerg")));
         store().store(c, "starcraft-game", ENTITY, CBR, "other-tenant", "case-1");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5);
+                            Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).isEmpty();
     }
@@ -99,19 +102,19 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_categoricalExactMatch() {
         store().store(new FeatureVectorCbrCase("Zerg game", "rush", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH")),
+                                               Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
         store().store(new FeatureVectorCbrCase("Protoss game", "expand", "LOSS", null,
-                                               Map.of("opponent_race", "Protoss", "detected_build", "ZEALOT_RUSH")),
+                                               Map.of("opponent_race", string("Protoss"), "detected_build", string("ZEALOT_RUSH"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-2");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5);
+                            Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         // Graded scoring: Zerg match scores 1.0, Protoss mismatch scores 0.0
         // Both returned with minSimilarity=0.0, but Zerg ranks first
         assertThat(results).hasSizeGreaterThanOrEqualTo(1);
-        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", "Zerg");
+        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", string("Zerg"));
         assertThat(results.getFirst().score()).isEqualTo(1.0);
     }
 
@@ -119,12 +122,12 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void retrieveSimilar_respectsTopK() {
         for (int i = 0; i < 10; i++) {
             store().store(new FeatureVectorCbrCase("game " + i, "strat", "WIN", null,
-                                                   Map.of("opponent_race", "Zerg")),
+                                                   Map.of("opponent_race", string("Zerg"))),
                           "starcraft-game", ENTITY, CBR, TENANT, "case-" + i);
         }
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 3);
+                            Map.of("opponent_race", string("Zerg")), 3);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeLessThanOrEqualTo(3);
     }
@@ -153,12 +156,12 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void planCbrCase_storeAndRetrieve() {
         var trace = new PlanTrace("scout", "reconnaissance", "drone-scout", "SUCCESS", 1, Map.of());
         var c = new PlanCbrCase("Zerg roach rush", "early pressure", "WIN", 0.85,
-                                Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH"),
+                                Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH")),
                                 List.of(trace));
         store().store(c, "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5);
+                            Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, PlanCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("Zerg roach rush");
@@ -169,18 +172,18 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void planCbrCase_featureMatchRanking() {
         var trace = new PlanTrace("b", "c", "w", "OK", 1, Map.of());
         store().store(new PlanCbrCase("Zerg game", "rush", "WIN", null,
-                                      Map.of("opponent_race", "Zerg"), List.of(trace)),
+                                      Map.of("opponent_race", string("Zerg")), List.of(trace)),
                       "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
         store().store(new PlanCbrCase("Protoss game", "expand", "LOSS", null,
-                                      Map.of("opponent_race", "Protoss"), List.of(trace)),
+                                      Map.of("opponent_race", string("Protoss")), List.of(trace)),
                       "starcraft-game", ENTITY, CBR, TENANT, "plan-2");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5);
+                            Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, PlanCbrCase.class);
         // Both returned (minSimilarity=0.0), Zerg match ranks first with score 1.0
         assertThat(results).hasSizeGreaterThanOrEqualTo(1);
-        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", "Zerg");
+        assertThat(results.getFirst().cbrCase().features()).containsEntry("opponent_race", string("Zerg"));
         assertThat(results.getFirst().score()).isEqualTo(1.0);
     }
 
@@ -191,12 +194,12 @@ public abstract class CbrCaseMemoryStoreContractTest {
         var trace2 = new PlanTrace("attack", "aggression", "roach-push", "SUCCESS", 2,
                                    Map.of("supply", 44));
         var c = new PlanCbrCase("Zerg game", "rush", "WIN", 0.9,
-                                Map.of("opponent_race", "Zerg"),
+                                Map.of("opponent_race", string("Zerg")),
                                 List.of(trace1, trace2));
         store().store(c, "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
 
         var results = store().retrieveSimilar(
-                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 5),
+                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", string("Zerg")), 5),
                 PlanCbrCase.class);
         assertThat(results).hasSize(1);
         var retrieved = results.getFirst().cbrCase();
@@ -210,27 +213,27 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void planCbrCase_coexistsWithFeatureVector() {
         store().store(new FeatureVectorCbrCase("FV game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "fv-1");
         store().store(new PlanCbrCase("Plan game", "strat", "WIN", null,
-                                      Map.of("opponent_race", "Zerg"),
+                                      Map.of("opponent_race", string("Zerg")),
                                       List.of(new PlanTrace("b", "c", "w", "OK", 1, Map.of()))),
                       "starcraft-game", ENTITY, CBR, TENANT, "plan-1");
 
         var fvResults = store().retrieveSimilar(
-                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
+                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", string("Zerg")), 10),
                 FeatureVectorCbrCase.class);
         assertThat(fvResults).hasSize(1);
         assertThat(fvResults.getFirst().cbrCase().problem()).isEqualTo("FV game");
 
         var planResults = store().retrieveSimilar(
-                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
+                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", string("Zerg")), 10),
                 PlanCbrCase.class);
         assertThat(planResults).hasSize(1);
         assertThat(planResults.getFirst().cbrCase().problem()).isEqualTo("Plan game");
 
         var allResults = store().retrieveSimilar(
-                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", "Zerg"), 10),
+                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", string("Zerg")), 10),
                 CbrCase.class);
         assertThat(allResults).hasSize(2);
     }
@@ -240,7 +243,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_notBefore_filtersOlderCases() throws Exception {
         store().store(new FeatureVectorCbrCase("old game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-old");
 
         Thread.sleep(50);
@@ -248,11 +251,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
         Thread.sleep(50);
 
         store().store(new FeatureVectorCbrCase("new game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-new");
 
         var q = new CbrQuery(TENANT, CBR, "starcraft-game",
-                             Map.of("opponent_race", "Zerg"), Map.of(), Map.of(), 10, 0.0, boundary, null, 0.5,
+                             Map.of("opponent_race", string("Zerg")), Map.of(), Map.of(), 10, 0.0, boundary, null, 0.5,
                              RetrievalMode.HYBRID, FusionStrategy.RRF);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -262,14 +265,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_notBefore_null_returnsAll() {
         store().store(new FeatureVectorCbrCase("game 1", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
         store().store(new FeatureVectorCbrCase("game 2", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-2");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 10);
+                            Map.of("opponent_race", string("Zerg")), 10);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(2);
     }
@@ -279,16 +282,16 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_numericSimilarityDecay() {
         store().store(new FeatureVectorCbrCase("close game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "army_size_ratio", 0.65)),
+                                               Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.65))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-close");
         store().store(new FeatureVectorCbrCase("far game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "army_size_ratio", 2.0)),
+                                               Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(2.0))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-far");
 
         // Query for army_size_ratio ~0.7 with range tolerance
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg",
-                                   "army_size_ratio", NumericRange.within(0.7, 0.15)), 5);
+                            Map.of("opponent_race", string("Zerg"),
+                                   "army_size_ratio", range(0.595, 0.805)), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         // Both returned (minSimilarity=0.0), close game ranks higher
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
@@ -299,15 +302,15 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_numericRange_exact_matchesExactValue() {
         store().store(new FeatureVectorCbrCase("exact game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7)),
+                                               Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.7))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-exact");
         store().store(new FeatureVectorCbrCase("other game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "army_size_ratio", 1.5)),
+                                               Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(1.5))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-other");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg",
-                                   "army_size_ratio", NumericRange.exact(0.7)), 5);
+                            Map.of("opponent_race", string("Zerg"),
+                                   "army_size_ratio", range(0.7, 0.7)), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         // Both returned, exact match ranks first
         assertThat(results).hasSizeGreaterThanOrEqualTo(1);
@@ -318,14 +321,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_numericExactMatch_closerValueScoresHigher() {
         store().store(new FeatureVectorCbrCase("match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7)),
+                                               Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.7))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-match");
         store().store(new FeatureVectorCbrCase("no match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "army_size_ratio", 1.5)),
+                                               Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(1.5))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-no-match");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7), 5);
+                            Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.7)), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         // Both returned, exact value match ranks first
         assertThat(results).hasSizeGreaterThanOrEqualTo(1);
@@ -336,11 +339,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void schemaValidation_numericFieldAcceptsNumericRange() {
         store().store(new FeatureVectorCbrCase("p", "s", null, null,
-                                               Map.of("army_size_ratio", 0.7)),
+                                               Map.of("army_size_ratio", number(0.7))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("army_size_ratio", NumericRange.within(0.7, 0.1)), 5);
+                            Map.of("army_size_ratio", range(0.63, 0.77)), 5);
         assertThatCode(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .doesNotThrowAnyException();
     }
@@ -348,11 +351,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void schemaValidation_categoricalFieldRequiresString() {
         store().store(new FeatureVectorCbrCase("p", "s", null, null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         assertThatThrownBy(() -> store().retrieveSimilar(
-                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", 42), 5),
+                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("opponent_race", number(42)), 5),
                 FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -360,11 +363,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void schemaValidation_numericFieldRequiresNumber() {
         store().store(new FeatureVectorCbrCase("p", "s", null, null,
-                                               Map.of("army_size_ratio", 0.7)),
+                                               Map.of("army_size_ratio", number(0.7))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         assertThatThrownBy(() -> store().retrieveSimilar(
-                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("army_size_ratio", "high"), 5),
+                CbrQuery.of(TENANT, CBR, "starcraft-game", Map.of("army_size_ratio", string("high")), 5),
                 FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -372,11 +375,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void schemaValidation_unknownFieldsIgnored() {
         store().store(new FeatureVectorCbrCase("p", "s", null, null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg", "unknown_field", "value"), 5);
+                            Map.of("opponent_race", string("Zerg"), "unknown_field", string("value")), 5);
         assertThatCode(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .doesNotThrowAnyException();
     }
@@ -384,11 +387,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_withProblem_null_returnsFilteredResults() {
         var fv = new FeatureVectorCbrCase("Zerg rush detected", "wall-off", null, null,
-                                          Map.of("opponent_race", "Zerg"));
+                                          Map.of("opponent_race", string("Zerg")));
         store().store(fv, "starcraft-game", ENTITY, CBR, TENANT, "case-null-problem");
 
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5);
+                                Map.of("opponent_race", string("Zerg")), 5);
         // problem is null by default via of()
         assertThat(query.problem()).isNull();
 
@@ -401,11 +404,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_withProblem_nonNull_returnsFilteredResults() {
         var fv = new FeatureVectorCbrCase("Zerg rush detected", "wall-off", null, null,
-                                          Map.of("opponent_race", "Zerg"));
+                                          Map.of("opponent_race", string("Zerg")));
         store().store(fv, "starcraft-game", ENTITY, CBR, TENANT, "case-with-problem");
 
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5)
+                                Map.of("opponent_race", string("Zerg")), 5)
                             .withProblem("Zerg attack incoming");
 
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -416,14 +419,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_minSimilarity_zero_returnsAllMatches() {
         var fv1 = new FeatureVectorCbrCase("case one", "solution one", null, null,
-                                           Map.of("opponent_race", "Zerg"));
+                                           Map.of("opponent_race", string("Zerg")));
         var fv2 = new FeatureVectorCbrCase("case two", "solution two", null, null,
-                                           Map.of("opponent_race", "Zerg"));
+                                           Map.of("opponent_race", string("Zerg")));
         store().store(fv1, "starcraft-game", ENTITY, CBR, TENANT, "case-ms-1");
         store().store(fv2, "starcraft-game", ENTITY, CBR, TENANT, "case-ms-2");
 
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 10);
+                                Map.of("opponent_race", string("Zerg")), 10);
         // minSimilarity is 0.0 by default
         assertThat(query.minSimilarity()).isEqualTo(0.0);
 
@@ -437,14 +440,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void weightedScoringProducesExpectedRanking() {
         // Two cases: one matches color (weight=3), other matches build (weight=1)
         store().store(new FeatureVectorCbrCase("color match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "detected_build", "MARINE_PUSH")),
+                                               Map.of("opponent_race", string("Zerg"), "detected_build", string("MARINE_PUSH"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-color");
         store().store(new FeatureVectorCbrCase("build match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Protoss", "detected_build", "ROACH_RUSH")),
+                                               Map.of("opponent_race", string("Protoss"), "detected_build", string("ROACH_RUSH"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-build");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH"), 5)
+                            Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH")), 5)
                         .withWeights(Map.of("opponent_race", 3.0, "detected_build", 1.0));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         // color match: (3*1.0 + 1*0.0) / 4 = 0.75
@@ -458,14 +461,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void defaultWeightsAreUniform() {
         store().store(new FeatureVectorCbrCase("both match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH")),
+                                               Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-both");
         store().store(new FeatureVectorCbrCase("one match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "detected_build", "MARINE_PUSH")),
+                                               Map.of("opponent_race", string("Zerg"), "detected_build", string("MARINE_PUSH"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-one");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg", "detected_build", "ROACH_RUSH"), 5);
+                            Map.of("opponent_race", string("Zerg"), "detected_build", string("ROACH_RUSH")), 5);
         // No weights → uniform (all default to 1.0)
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
@@ -480,14 +483,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void numericSimilarityDecay_closerValueScoresHigher() {
         // army_size_ratio range is [0, 3]
         store().store(new FeatureVectorCbrCase("close", "strat", "WIN", null,
-                                               Map.of("army_size_ratio", 1.0)),
+                                               Map.of("army_size_ratio", number(1.0))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-close");
         store().store(new FeatureVectorCbrCase("far", "strat", "WIN", null,
-                                               Map.of("army_size_ratio", 2.5)),
+                                               Map.of("army_size_ratio", number(2.5))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-far");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("army_size_ratio", 1.0), 5);
+                            Map.of("army_size_ratio", number(1.0)), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
         assertThat(results.get(0).cbrCase().problem()).isEqualTo("close");
@@ -500,14 +503,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void minSimilarityThresholdOnCompositeScore() {
         store().store(new FeatureVectorCbrCase("match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-match");
         store().store(new FeatureVectorCbrCase("no match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Protoss")),
+                                               Map.of("opponent_race", string("Protoss"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-no-match");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5)
+                            Map.of("opponent_race", string("Zerg")), 5)
                         .withMinSimilarity(0.5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         // Only the Zerg match (score=1.0) passes the 0.5 threshold
@@ -523,11 +526,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
                                                Map.of()),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-empty");
         store().store(new FeatureVectorCbrCase("has feature", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-feat");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg"), 5);
+                            Map.of("opponent_race", string("Zerg")), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
         // Case with feature scores 1.0, case without scores 0.0
@@ -540,7 +543,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void emptyFeaturesScoresOne() {
         store().store(new FeatureVectorCbrCase("any case", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg")),
+                                               Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         // No features queried → vacuous truth → score = 1.0
@@ -553,11 +556,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void textExactMatch_identicalStrings() {
         store().store(new FeatureVectorCbrCase("game", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "notes", "early pool")),
+                                               Map.of("opponent_race", string("Zerg"), "notes", string("early pool"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("notes", "early pool"), 5);
+                            Map.of("notes", string("early pool")), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().score()).isEqualTo(1.0);
@@ -566,14 +569,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void textExactMatch_differentStrings() {
         store().store(new FeatureVectorCbrCase("match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "notes", "early pool")),
+                                               Map.of("opponent_race", string("Zerg"), "notes", string("early pool"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-1");
         store().store(new FeatureVectorCbrCase("no match", "strat", "WIN", null,
-                                               Map.of("opponent_race", "Zerg", "notes", "late game macro")),
+                                               Map.of("opponent_race", string("Zerg"), "notes", string("late game macro"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-2");
 
         var q = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("notes", "early pool"), 5);
+                            Map.of("notes", string("early pool")), 5);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
         assertThat(results.get(0).cbrCase().problem()).isEqualTo("match");
@@ -598,19 +601,19 @@ public abstract class CbrCaseMemoryStoreContractTest {
         store().registerSchema(schema);
 
         store().store(new FeatureVectorCbrCase("migraine case", "treatment A", "SUCCESS", null,
-                                               Map.of("condition", "migraine", "severity", 5.0)),
+                                               Map.of("condition", string("migraine"), "severity", number(5.0))),
                       "medical", ENTITY, CBR, TENANT, "case-migraine");
         store().store(new FeatureVectorCbrCase("fracture case", "treatment B", "SUCCESS", null,
-                                               Map.of("condition", "fracture", "severity", 5.0)),
+                                               Map.of("condition", string("fracture"), "severity", number(5.0))),
                       "medical", ENTITY, CBR, TENANT, "case-fracture");
 
         var results = store().retrieveSimilar(
                 CbrQuery.of(TENANT, CBR, "medical",
-                            Map.of("condition", "headache", "severity", 5.0), 10),
+                            Map.of("condition", string("headache"), "severity", number(5.0)), 10),
                 FeatureVectorCbrCase.class);
 
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
-        assertThat(results.get(0).cbrCase().features().get("condition")).isEqualTo("migraine");
+        assertThat(results.get(0).cbrCase().features().get("condition")).isEqualTo(string("migraine"));
         assertThat(results.get(0).score()).isGreaterThan(results.get(1).score());
     }
 
@@ -622,19 +625,19 @@ public abstract class CbrCaseMemoryStoreContractTest {
         store().registerSchema(schema);
 
         store().store(new FeatureVectorCbrCase("close value", "sol", "OK", null,
-                                               Map.of("cat", "a", "val", 50.0)),
+                                               Map.of("cat", string("a"), "val", number(50.0))),
                       "gauss", ENTITY, CBR, TENANT, "case-close");
         store().store(new FeatureVectorCbrCase("far value", "sol", "OK", null,
-                                               Map.of("cat", "a", "val", 90.0)),
+                                               Map.of("cat", string("a"), "val", number(90.0))),
                       "gauss", ENTITY, CBR, TENANT, "case-far");
 
         var results = store().retrieveSimilar(
                 CbrQuery.of(TENANT, CBR, "gauss",
-                            Map.of("cat", "a", "val", 55.0), 10),
+                            Map.of("cat", string("a"), "val", number(55.0)), 10),
                 FeatureVectorCbrCase.class);
 
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
-        assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(50.0);
+        assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(number(50.0));
         assertThat(results.get(0).score()).isGreaterThan(results.get(1).score());
     }
 
@@ -642,7 +645,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void noSpec_backwardCompatible_linearDecay() {
         var results = store().retrieveSimilar(
                 CbrQuery.of(TENANT, CBR, "starcraft-game",
-                            Map.of("opponent_race", "Zerg", "army_size_ratio", 1.5), 10),
+                            Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(1.5)), 10),
                 FeatureVectorCbrCase.class);
         // Existing tests use the default schema with no SimilaritySpec — must still work
         assertThat(results).isNotNull();
@@ -655,19 +658,19 @@ public abstract class CbrCaseMemoryStoreContractTest {
         store().registerSchema(schema);
 
         store().store(new FeatureVectorCbrCase("close", "sol", "OK", null,
-                                               Map.of("val", 55.0)),
+                                               Map.of("val", number(55.0))),
                       "step", ENTITY, CBR, TENANT, "case-close");
         store().store(new FeatureVectorCbrCase("far", "sol", "OK", null,
-                                               Map.of("val", 80.0)),
+                                               Map.of("val", number(80.0))),
                       "step", ENTITY, CBR, TENANT, "case-far");
 
         var results = store().retrieveSimilar(
                 CbrQuery.of(TENANT, CBR, "step",
-                            Map.of("val", 50.0), 10).withMinSimilarity(0.5),
+                            Map.of("val", number(50.0)), 10).withMinSimilarity(0.5),
                 FeatureVectorCbrCase.class);
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(55.0);
+        assertThat(results.get(0).cbrCase().features().get("val")).isEqualTo(number(55.0));
     }
 
     // --- Retrieval mode tests ---
@@ -676,10 +679,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void retrieveSimilar_featureOnly_ignoresProblem() {
         registerDefaultSchema();
         store().store(new FeatureVectorCbrCase("problem text", "solution",
-                                               "WIN", null, Map.of("opponent_race", "Zerg")),
+                                               "WIN", null, Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-mode-1");
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5)
+                                Map.of("opponent_race", string("Zerg")), 5)
                             .withProblem("some problem")
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -689,14 +692,14 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void retrieveSimilar_defaultRetrievalMode_isHybrid() {
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5);
+                                Map.of("opponent_race", string("Zerg")), 5);
         assertThat(query.retrievalMode()).isEqualTo(RetrievalMode.HYBRID);
     }
 
     @Test
     void retrieveSimilar_defaultFusionStrategy_isRrf() {
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5);
+                                Map.of("opponent_race", string("Zerg")), 5);
         assertThat(query.fusionStrategy()).isEqualTo(FusionStrategy.RRF);
     }
 
@@ -704,10 +707,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void retrieveSimilar_hybrid_withoutEmbeddingModel_degradesToFeatureOnly() {
         registerDefaultSchema();
         store().store(new FeatureVectorCbrCase("problem text", "solution",
-                                               "WIN", null, Map.of("opponent_race", "Zerg")),
+                                               "WIN", null, Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-mode-2");
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5)
+                                Map.of("opponent_race", string("Zerg")), 5)
                             .withProblem("problem")
                             .withRetrievalMode(RetrievalMode.HYBRID);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -718,10 +721,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void retrieveSimilar_semanticOnly_withoutEmbeddingModel_returnsEmpty() {
         registerDefaultSchema();
         store().store(new FeatureVectorCbrCase("problem text", "solution",
-                                               "WIN", null, Map.of("opponent_race", "Zerg")),
+                                               "WIN", null, Map.of("opponent_race", string("Zerg"))),
                       "starcraft-game", ENTITY, CBR, TENANT, "case-mode-3");
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                                Map.of("opponent_race", "Zerg"), 5)
+                                Map.of("opponent_race", string("Zerg")), 5)
                             .withProblem("problem")
                             .withRetrievalMode(RetrievalMode.SEMANTIC_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -745,7 +748,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
                                                                            FeatureField.numeric("minute", 0, 90))));
     }
 
-    private String storeGameCase(String problem, Map<String, Object> features, String caseId) {
+    private String storeGameCase(String problem, Map<String, FeatureValue> features, String caseId) {
         return store().store(
                 new FeatureVectorCbrCase(problem, "solution", "WIN", null, features),
                 "game", ENTITY, CBR, TENANT, caseId);
@@ -754,10 +757,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_categoricalList_containsFilter() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "ALL_IN",
-                                      "phases", List.of("EARLY_AGGRESSION", "MID_SKIRMISH", "LATE_PUSH")), "g1");
-        storeGameCase("game2", Map.of("posture", "DEFENSIVE",
-                                      "phases", List.of("TURTLE", "LATE_PUSH")), "g2");
+        storeGameCase("game1", Map.of("posture", string("ALL_IN"),
+                                      "phases", stringList("EARLY_AGGRESSION", "MID_SKIRMISH", "LATE_PUSH")), "g1");
+        storeGameCase("game2", Map.of("posture", string("DEFENSIVE"),
+                                      "phases", stringList("TURTLE", "LATE_PUSH")), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.contains("EARLY_AGGRESSION"));
@@ -769,10 +772,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_categoricalList_noFilter_returnsAll() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "ALL_IN",
-                                      "phases", List.of("EARLY", "MID")), "g1");
-        storeGameCase("game2", Map.of("posture", "DEFENSIVE",
-                                      "phases", List.of("TURTLE")), "g2");
+        storeGameCase("game1", Map.of("posture", string("ALL_IN"),
+                                      "phases", stringList("EARLY", "MID")), "g1");
+        storeGameCase("game2", Map.of("posture", string("DEFENSIVE"),
+                                      "phases", stringList("TURTLE")), "g2");
 
         var q       = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
@@ -782,10 +785,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_containsAll_matchesSubset() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of("A", "B", "C")), "g1");
-        storeGameCase("game2", Map.of("posture", "Y",
-                                      "phases", List.of("A", "D")), "g2");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList("A", "B", "C")), "g1");
+        storeGameCase("game2", Map.of("posture", string("Y"),
+                                      "phases", stringList("A", "D")), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.containsAll(List.of("A", "B")));
@@ -797,8 +800,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_containsAll_rejectsMissingElement() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of("A", "B")), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList("A", "B")), "g1");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.containsAll(List.of("A", "C")));
@@ -809,10 +812,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_containsAny_matchesAnyPresent() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of("A", "B")), "g1");
-        storeGameCase("game2", Map.of("posture", "Y",
-                                      "phases", List.of("C", "D")), "g2");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList("A", "B")), "g1");
+        storeGameCase("game2", Map.of("posture", string("Y"),
+                                      "phases", stringList("C", "D")), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.containsAny(List.of("X", "A")));
@@ -824,8 +827,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_containsAny_rejectsAllAbsent() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of("A", "B")), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList("A", "B")), "g1");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.containsAny(List.of("X", "Y")));
@@ -836,13 +839,13 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_nestedObject_hasMatch_categoricalSubField() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "economy", Map.of("minute_3", 45, "tier", "gold")), "g1");
-        storeGameCase("game2", Map.of("posture", "Y",
-                                      "economy", Map.of("minute_3", 30, "tier", "silver")), "g2");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "economy", struct(Map.of("minute_3", number(45), "tier", string("gold")))), "g1");
+        storeGameCase("game2", Map.of("posture", string("Y"),
+                                      "economy", struct(Map.of("minute_3", number(30), "tier", string("silver")))), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("economy", CbrFilter.hasMatch(Map.of("tier", "gold")));
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("tier", string("gold"))));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
@@ -851,13 +854,13 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_nestedObject_hasMatch_numericRange() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "economy", Map.of("minute_3", 45, "tier", "gold")), "g1");
-        storeGameCase("game2", Map.of("posture", "Y",
-                                      "economy", Map.of("minute_3", 80, "tier", "gold")), "g2");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "economy", struct(Map.of("minute_3", number(45), "tier", string("gold")))), "g1");
+        storeGameCase("game2", Map.of("posture", string("Y"),
+                                      "economy", struct(Map.of("minute_3", number(80), "tier", string("gold")))), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("economy", CbrFilter.hasMatch(Map.of("minute_3", NumericRange.of(40, 50))));
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("minute_3", FeatureValue.range(40, 50))));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
@@ -866,11 +869,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_nestedObject_hasMatch_exactNumeric() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "economy", Map.of("minute_3", 45, "tier", "gold")), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "economy", struct(Map.of("minute_3", number(45), "tier", string("gold")))), "g1");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("economy", CbrFilter.hasMatch(Map.of("minute_3", 45)));
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("minute_3", number(45))));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
     }
@@ -878,16 +881,16 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_objectList_hasMatch_anyElementMatching() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "moments", List.of(
-                        Map.of("type", "FIRST_CONTACT", "minute", 3.2),
-                        Map.of("type", "BATTLE_WON", "minute", 5.1))), "g1");
-        storeGameCase("game2", Map.of("posture", "Y",
-                                      "moments", List.of(
-                        Map.of("type", "RETREAT", "minute", 8.0))), "g2");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "moments", structList(
+                        Map.of("type", string("FIRST_CONTACT"), "minute", number(3.2)),
+                        Map.of("type", string("BATTLE_WON"), "minute", number(5.1)))), "g1");
+        storeGameCase("game2", Map.of("posture", string("Y"),
+                                      "moments", structList(
+                        Map.of("type", string("RETREAT"), "minute", number(8.0)))), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT")));
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("type", string("FIRST_CONTACT"))));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
@@ -896,41 +899,41 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_objectList_hasMatch_multipleSubFields_sameElement() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "moments", List.of(
-                        Map.of("type", "FIRST_CONTACT", "minute", 3.2),
-                        Map.of("type", "BATTLE_WON", "minute", 5.1))), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "moments", structList(
+                        Map.of("type", string("FIRST_CONTACT"), "minute", number(3.2)),
+                        Map.of("type", string("BATTLE_WON"), "minute", number(5.1)))), "g1");
 
         var qMatch = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                             .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT", "minute", 3.2)));
+                             .withFilter("moments", CbrFilter.hasMatch(Map.of("type", string("FIRST_CONTACT"), "minute", number(3.2))));
         assertThat(store().retrieveSimilar(qMatch, FeatureVectorCbrCase.class)).hasSize(1);
 
         var qCross = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                             .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT", "minute", 5.1)));
+                             .withFilter("moments", CbrFilter.hasMatch(Map.of("type", string("FIRST_CONTACT"), "minute", number(5.1))));
         assertThat(store().retrieveSimilar(qCross, FeatureVectorCbrCase.class)).isEmpty();
     }
 
     @Test
     void structuredFields_objectList_hasMatch_noMatchingElement() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "moments", List.of(Map.of("type", "RETREAT", "minute", 8.0))), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "moments", structList(Map.of("type", string("RETREAT"), "minute", number(8.0)))), "g1");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("moments", CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT")));
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("type", string("FIRST_CONTACT"))));
         assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).isEmpty();
     }
 
     @Test
     void structuredFields_mixedFlatAndStructured() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "ALL_IN", "score", 85,
-                                      "phases", List.of("EARLY", "MID")), "g1");
-        storeGameCase("game2", Map.of("posture", "DEFENSIVE", "score", 30,
-                                      "phases", List.of("EARLY", "LATE")), "g2");
+        storeGameCase("game1", Map.of("posture", string("ALL_IN"), "score", number(85),
+                                      "phases", stringList("EARLY", "MID")), "g1");
+        storeGameCase("game2", Map.of("posture", string("DEFENSIVE"), "score", number(30),
+                                      "phases", stringList("EARLY", "LATE")), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game",
-                            Map.of("posture", "ALL_IN", "score", 80), 10)
+                            Map.of("posture", string("ALL_IN"), "score", number(80)), 10)
                         .withFilter("phases", CbrFilter.contains("MID"));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -940,16 +943,16 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_multipleFiltersAndSemantics() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of("EARLY", "MID"),
-                                      "economy", Map.of("minute_3", 50, "tier", "gold")), "g1");
-        storeGameCase("game2", Map.of("posture", "Y",
-                                      "phases", List.of("EARLY", "MID"),
-                                      "economy", Map.of("minute_3", 50, "tier", "silver")), "g2");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList("EARLY", "MID"),
+                                      "economy", struct(Map.of("minute_3", number(50), "tier", string("gold")))), "g1");
+        storeGameCase("game2", Map.of("posture", string("Y"),
+                                      "phases", stringList("EARLY", "MID"),
+                                      "economy", struct(Map.of("minute_3", number(50), "tier", string("silver")))), "g2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.contains("EARLY"))
-                        .withFilter("economy", CbrFilter.hasMatch(Map.of("tier", "gold")));
+                        .withFilter("economy", CbrFilter.hasMatch(Map.of("tier", string("gold"))));
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
@@ -958,7 +961,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_filterOnMissingFieldReturnsEmpty() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X"), "g1");
+        storeGameCase("game1", Map.of("posture", string("X")), "g1");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.contains("A"));
@@ -968,8 +971,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_emptyCategoricalListFiltered() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of()), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList()), "g1");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.contains("A"));
@@ -988,17 +991,17 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_validation_storeTimeMismatch() {
         registerStructuredSchema();
-        assertThatThrownBy(() -> storeGameCase("bad", Map.of("phases", "not_a_list"), "bad"))
+        assertThatThrownBy(() -> storeGameCase("bad", Map.of("phases", string("not_a_list")), "bad"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void structuredFields_validation_structuredFieldInFeatures() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "phases", List.of("A")), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "phases", stringList("A")), "g1");
         var q = CbrQuery.of(TENANT, CBR, "game",
-                            Map.of("phases", List.of("A")), 10);
+                            Map.of("phases", stringList("A")), 10);
         assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must be queried via filters");
@@ -1043,10 +1046,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_validation_hasMatchNonexistentSubField() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "moments", List.of(Map.of("type", "X", "minute", 1.0))), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "moments", structList(Map.of("type", string("X"), "minute", number(1.0)))), "g1");
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("moments", CbrFilter.hasMatch(Map.of("nonexistent", "val")));
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("nonexistent", string("val"))));
         assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not found in inner schema");
@@ -1055,20 +1058,20 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_validation_hasMatchWrongSubFieldType() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", "X",
-                                      "moments", List.of(Map.of("type", "X", "minute", 1.0))), "g1");
+        storeGameCase("game1", Map.of("posture", string("X"),
+                                      "moments", structList(Map.of("type", string("X"), "minute", number(1.0)))), "g1");
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
-                        .withFilter("moments", CbrFilter.hasMatch(Map.of("minute", "not_a_number")));
+                        .withFilter("moments", CbrFilter.hasMatch(Map.of("minute", string("not_a_number"))));
         assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("requires Number or NumericRange");
+                .hasMessageContaining("requires NumberVal or RangeVal");
     }
 
     @Test
     void structuredFields_notContains_excludesCasesWithValue() {
         registerStructuredSchema();
-        storeGameCase("has-rush", Map.of("posture", "X", "phases", List.of("EARLY", "RUSH", "LATE")), "c1");
-        storeGameCase("no-rush", Map.of("posture", "X", "phases", List.of("EARLY", "MACRO", "LATE")), "c2");
+        storeGameCase("has-rush", Map.of("posture", string("X"), "phases", stringList("EARLY", "RUSH", "LATE")), "c1");
+        storeGameCase("no-rush", Map.of("posture", string("X"), "phases", stringList("EARLY", "MACRO", "LATE")), "c2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.notContains("RUSH"))
@@ -1081,9 +1084,9 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_notContainsAny_excludesCasesWithAnyValue() {
         registerStructuredSchema();
-        storeGameCase("has-rush", Map.of("posture", "X", "phases", List.of("EARLY", "RUSH")), "c1");
-        storeGameCase("has-cheese", Map.of("posture", "X", "phases", List.of("EARLY", "CHEESE")), "c2");
-        storeGameCase("clean", Map.of("posture", "X", "phases", List.of("EARLY", "MACRO")), "c3");
+        storeGameCase("has-rush", Map.of("posture", string("X"), "phases", stringList("EARLY", "RUSH")), "c1");
+        storeGameCase("has-cheese", Map.of("posture", string("X"), "phases", stringList("EARLY", "CHEESE")), "c2");
+        storeGameCase("clean", Map.of("posture", string("X"), "phases", stringList("EARLY", "MACRO")), "c3");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.notContainsAny(List.of("RUSH", "CHEESE")))
@@ -1108,7 +1111,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
                                                    FeatureField.numericList("scores", 0, 100)));
     }
 
-    private String storeNumericListCase(String problem, Map<String, Object> features, String caseId) {
+    private String storeNumericListCase(String problem, Map<String, FeatureValue> features, String caseId) {
         return store().store(
                 new FeatureVectorCbrCase(problem, "solution", null, null, features),
                 "player-stats", ENTITY, CBR, TENANT, caseId);
@@ -1117,8 +1120,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void numericList_storeAndRetrieve() {
         registerNumericListSchema();
-        storeNumericListCase("high scorer", Map.of("region", "NA", "scores", List.of(85, 92, 78)), "c1");
-        var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of("region", "NA"), 10)
+        storeNumericListCase("high scorer", Map.of("region", string("NA"), "scores", numberList(85.0, 92.0, 78.0)), "c1");
+        var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of("region", string("NA")), 10)
                         .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1127,8 +1130,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void numericList_containsRange_matchesElementInRange() {
         registerNumericListSchema();
-        storeNumericListCase("has-90s", Map.of("region", "NA", "scores", List.of(85, 92, 78)), "c1");
-        storeNumericListCase("no-90s", Map.of("region", "NA", "scores", List.of(50, 60, 70)), "c2");
+        storeNumericListCase("has-90s", Map.of("region", string("NA"), "scores", numberList(85.0, 92.0, 78.0)), "c1");
+        storeNumericListCase("no-90s", Map.of("region", string("NA"), "scores", numberList(50.0, 60.0, 70.0)), "c2");
 
         var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of(), 10)
                         .withFilter("scores", CbrFilter.containsRange(new NumericRange(90, 100)))
@@ -1141,7 +1144,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void numericList_containsRange_noMatch() {
         registerNumericListSchema();
-        storeNumericListCase("low", Map.of("region", "NA", "scores", List.of(10, 20, 30)), "c1");
+        storeNumericListCase("low", Map.of("region", string("NA"), "scores", numberList(10.0, 20.0, 30.0)), "c1");
 
         var q = CbrQuery.of(TENANT, CBR, "player-stats", Map.of(), 10)
                         .withFilter("scores", CbrFilter.containsRange(new NumericRange(90, 100)))
@@ -1155,7 +1158,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
         registerNumericListSchema();
         assertThatThrownBy(() -> {
             var q = CbrQuery.of(TENANT, CBR, "player-stats",
-                                Map.of("scores", List.of(50, 60)), 10);
+                                Map.of("scores", numberList(50.0, 60.0)), 10);
             store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         }).isInstanceOf(IllegalArgumentException.class);
     }
@@ -1163,7 +1166,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void numericList_validation_storeNonNumberRejected() {
         registerNumericListSchema();
-        assertThatThrownBy(() -> storeNumericListCase("bad", Map.of("scores", List.of("not-a-number")), "bad"))
+        assertThatThrownBy(() -> storeNumericListCase("bad", Map.of("scores", stringList("not-a-number")), "bad"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -1179,18 +1182,18 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_allOf_twoHasMatch_onObjectList() {
         registerStructuredSchema();
-        storeGameCase("both-match", Map.of("posture", "X",
-                                           "moments", List.of(
-                        Map.of("type", "FIRST_CONTACT", "minute", 3.0),
-                        Map.of("type", "BATTLE_WON", "minute", 8.0))), "c1");
-        storeGameCase("only-one", Map.of("posture", "X",
-                                         "moments", List.of(
-                        Map.of("type", "FIRST_CONTACT", "minute", 3.0))), "c2");
+        storeGameCase("both-match", Map.of("posture", string("X"),
+                                           "moments", structList(
+                        Map.of("type", string("FIRST_CONTACT"), "minute", number(3.0)),
+                        Map.of("type", string("BATTLE_WON"), "minute", number(8.0)))), "c1");
+        storeGameCase("only-one", Map.of("posture", string("X"),
+                                         "moments", structList(
+                        Map.of("type", string("FIRST_CONTACT"), "minute", number(3.0)))), "c2");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("moments", CbrFilter.allOf(
-                                CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT")),
-                                CbrFilter.hasMatch(Map.of("type", "BATTLE_WON"))))
+                                CbrFilter.hasMatch(Map.of("type", string("FIRST_CONTACT"))),
+                                CbrFilter.hasMatch(Map.of("type", string("BATTLE_WON")))))
                         .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1200,9 +1203,9 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void structuredFields_allOf_containsAndNotContains() {
         registerStructuredSchema();
-        storeGameCase("has-rush-no-cheese", Map.of("posture", "X", "phases", List.of("RUSH", "MACRO")), "c1");
-        storeGameCase("has-both", Map.of("posture", "X", "phases", List.of("RUSH", "CHEESE")), "c2");
-        storeGameCase("has-neither", Map.of("posture", "X", "phases", List.of("MACRO", "LATE")), "c3");
+        storeGameCase("has-rush-no-cheese", Map.of("posture", string("X"), "phases", stringList("RUSH", "MACRO")), "c1");
+        storeGameCase("has-both", Map.of("posture", string("X"), "phases", stringList("RUSH", "CHEESE")), "c2");
+        storeGameCase("has-neither", Map.of("posture", string("X"), "phases", stringList("MACRO", "LATE")), "c3");
 
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.allOf(
@@ -1234,7 +1237,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
         var q = CbrQuery.of(TENANT, CBR, "game", Map.of(), 10)
                         .withFilter("phases", CbrFilter.allOf(
                                 CbrFilter.contains("A"),
-                                CbrFilter.hasMatch(Map.of("x", "y"))));
+                                CbrFilter.hasMatch(Map.of("x", string("y")))));
         assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -1254,7 +1257,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
                                                    FeatureField.discreteSequence("phaseProgression")));
     }
 
-    private String storeTemporalCase(String problem, Map<String, Object> features, String caseId) {
+    private String storeTemporalCase(String problem, Map<String, FeatureValue> features, String caseId) {
         return store().store(
                 new FeatureVectorCbrCase(problem, "solution", null, null, features),
                 "temporal-game", ENTITY, CBR, TENANT, caseId);
@@ -1269,10 +1272,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_validation_storeAscendingTimestamps() {
         registerTemporalSchema();
         storeTemporalCase("test", Map.of(
-                                  "race", "Terran",
-                                  "economyCurve", List.of(
-                                          Map.of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                                          Map.of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))),
+                                  "race", string("Terran"),
+                                  "economyCurve", structList(
+                                          Map.of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                                          Map.of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")))),
                           "valid");
     }
 
@@ -1280,10 +1283,10 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_validation_storeNonAscending_rejected() {
         registerTemporalSchema();
         assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
-                                                           "race", "Terran",
-                                                           "economyCurve", List.of(
-                                                                   Map.of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"),
-                                                                   Map.of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))),
+                                                           "race", string("Terran"),
+                                                           "economyCurve", structList(
+                                                                   Map.of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")),
+                                                                   Map.of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))),
                                                    "invalid"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -1292,8 +1295,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_validation_missingTimestampField_rejected() {
         registerTemporalSchema();
         assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
-                                                           "race", "Terran",
-                                                           "economyCurve", List.of(Map.of("economy", 30, "army", 0, "posture", "MACRO"))),
+                                                           "race", string("Terran"),
+                                                           "economyCurve", structList(Map.of("economy", number(30), "army", number(0), "posture", string("MACRO")))),
                                                    "invalid"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -1302,8 +1305,8 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_validation_innerFieldTypes() {
         registerTemporalSchema();
         assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
-                                                           "race", "Terran",
-                                                           "economyCurve", List.of(Map.of("minute", 1, "economy", "not-a-number", "army", 0, "posture", "MACRO"))),
+                                                           "race", string("Terran"),
+                                                           "economyCurve", structList(Map.of("minute", number(1), "economy", string("not-a-number"), "army", number(0), "posture", string("MACRO")))),
                                                    "invalid"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -1311,30 +1314,30 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_timeSeries_validation_emptyList_accepted() {
         registerTemporalSchema();
-        storeTemporalCase("test", Map.of("race", "Terran", "economyCurve", List.of()), "empty");
+        storeTemporalCase("test", Map.of("race", string("Terran"), "economyCurve", structList()), "empty");
     }
 
     @Test
     void temporal_discreteSequence_validation_storeListOfStrings() {
         registerTemporalSchema();
         storeTemporalCase("test", Map.of(
-                "race", "Terran",
-                "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "valid-seq");
+                "race", string("Terran"),
+                "phaseProgression", stringList("MACRO", "AGGRESSIVE", "ALL_IN")), "valid-seq");
     }
 
     @Test
     void temporal_discreteSequence_validation_storeWrongType_rejected() {
         registerTemporalSchema();
         assertThatThrownBy(() -> storeTemporalCase("test", Map.of(
-                "race", "Terran",
-                "phaseProgression", "not-a-list"), "invalid"))
+                "race", string("Terran"),
+                "phaseProgression", string("not-a-list")), "invalid"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void temporal_filter_onTemporalField_rejected() {
         registerTemporalSchema();
-        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", "Terran"), 10)
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", string("Terran")), 10)
                             .withFilter("economyCurve", CbrFilter.contains("X"));
         assertThatThrownBy(() -> store().retrieveSimilar(query, FeatureVectorCbrCase.class))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -1344,12 +1347,12 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_identicalSequences_scorePerfect() {
         registerTemporalSchema();
         var curve = List.of(
-                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"));
-        storeTemporalCase("game", Map.of("race", "Terran", "economyCurve", curve), "c1");
+                Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")));
+        storeTemporalCase("game", Map.of("race", string("Terran"), "economyCurve", structList(curve)), "c1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("economyCurve", curve), 10)
+                                Map.of("economyCurve", structList(curve)), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1359,20 +1362,20 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_timeSeries_differentSequences_scoredByDtw() {
         registerTemporalSchema();
-        storeTemporalCase("close", Map.of("race", "Terran",
-                                          "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 32, "army", 1, "posture", "MACRO"),
-                        Map.<String, Object>of("minute", 3, "economy", 47, "army", 6, "posture", "MACRO"))), "close");
-        storeTemporalCase("far", Map.of("race", "Terran",
-                                        "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 200, "army", 100, "posture", "AGGRESSIVE"),
-                        Map.<String, Object>of("minute", 3, "economy", 400, "army", 150, "posture", "ALL_IN"))), "far");
+        storeTemporalCase("close", Map.of("race", string("Terran"),
+                                          "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(32), "army", number(1), "posture", string("MACRO")),
+                        Map.<String, FeatureValue>of("minute", number(3), "economy", number(47), "army", number(6), "posture", string("MACRO")))), "close");
+        storeTemporalCase("far", Map.of("race", string("Terran"),
+                                        "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(200), "army", number(100), "posture", string("AGGRESSIVE")),
+                        Map.<String, FeatureValue>of("minute", number(3), "economy", number(400), "army", number(150), "posture", string("ALL_IN")))), "far");
 
         var queryCurve = List.of(
-                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"));
+                Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")));
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("economyCurve", queryCurve), 10)
+                                Map.of("economyCurve", structList(queryCurve)), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
@@ -1382,19 +1385,19 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_timeSeries_variableLength_handledByDtw() {
         registerTemporalSchema();
-        storeTemporalCase("short", Map.of("race", "Terran",
-                                          "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "short");
-        storeTemporalCase("long", Map.of("race", "Terran",
-                                         "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                        Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"),
-                        Map.<String, Object>of("minute", 5, "economy", 60, "army", 10, "posture", "AGGRESSIVE"))), "long");
+        storeTemporalCase("short", Map.of("race", string("Terran"),
+                                          "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), "short");
+        storeTemporalCase("long", Map.of("race", string("Terran"),
+                                         "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                        Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")),
+                        Map.<String, FeatureValue>of("minute", number(5), "economy", number(60), "army", number(10), "posture", string("AGGRESSIVE")))), "long");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("economyCurve", List.of(
-                                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                                        Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))), 10)
+                                Map.of("economyCurve", structList(
+                                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                                        Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")))), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(2);
@@ -1403,13 +1406,13 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_timeSeries_dtwExcludesTimestampField() {
         registerTemporalSchema();
-        storeTemporalCase("game", Map.of("race", "Terran",
-                                         "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 29, "economy", 50, "army", 10, "posture", "MACRO"))), "c1");
+        storeTemporalCase("game", Map.of("race", string("Terran"),
+                                         "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(29), "economy", number(50), "army", number(10), "posture", string("MACRO")))), "c1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("economyCurve", List.of(
-                                        Map.<String, Object>of("minute", 1, "economy", 50, "army", 10, "posture", "MACRO"))), 10)
+                                Map.of("economyCurve", structList(
+                                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(50), "army", number(10), "posture", string("MACRO")))), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1419,11 +1422,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_discreteSequence_identicalSequences_scorePerfect() {
         registerTemporalSchema();
-        storeTemporalCase("game", Map.of("race", "Terran",
-                                         "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "c1");
+        storeTemporalCase("game", Map.of("race", string("Terran"),
+                                         "phaseProgression", stringList("MACRO", "AGGRESSIVE", "ALL_IN")), "c1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), 10)
+                                Map.of("phaseProgression", stringList("MACRO", "AGGRESSIVE", "ALL_IN")), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1433,11 +1436,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_discreteSequence_oneSubstitution_scoreLessThanPerfect() {
         registerTemporalSchema();
-        storeTemporalCase("game", Map.of("race", "Terran",
-                                         "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "c1");
+        storeTemporalCase("game", Map.of("race", string("Terran"),
+                                         "phaseProgression", stringList("MACRO", "AGGRESSIVE", "ALL_IN")), "c1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("phaseProgression", List.of("MACRO", "DEFENSIVE", "ALL_IN")), 10)
+                                Map.of("phaseProgression", stringList("MACRO", "DEFENSIVE", "ALL_IN")), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1447,11 +1450,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_discreteSequence_completelyDifferent_scoreNearZero() {
         registerTemporalSchema();
-        storeTemporalCase("game", Map.of("race", "Terran",
-                                         "phaseProgression", List.of("A", "B", "C")), "c1");
+        storeTemporalCase("game", Map.of("race", string("Terran"),
+                                         "phaseProgression", stringList("A", "B", "C")), "c1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("phaseProgression", List.of("X", "Y", "Z")), 10)
+                                Map.of("phaseProgression", stringList("X", "Y", "Z")), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1461,11 +1464,11 @@ public abstract class CbrCaseMemoryStoreContractTest {
     @Test
     void temporal_discreteSequence_bothEmpty_scorePerfect() {
         registerTemporalSchema();
-        storeTemporalCase("game", Map.of("race", "Terran",
-                                         "phaseProgression", List.of()), "c1");
+        storeTemporalCase("game", Map.of("race", string("Terran"),
+                                         "phaseProgression", stringList()), "c1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("phaseProgression", List.of()), 10)
+                                Map.of("phaseProgression", stringList()), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1476,17 +1479,17 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_mixedFlatAndTemporal_weightedScoring() {
         registerTemporalSchema();
         storeTemporalCase("sameRaceDiffCurve", Map.of(
-                "race", "Terran", "mmr", 4500,
-                "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 200, "army", 100, "posture", "AGGRESSIVE"))), "c1");
+                "race", string("Terran"), "mmr", number(4500),
+                "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(200), "army", number(100), "posture", string("AGGRESSIVE")))), "c1");
         storeTemporalCase("diffRaceSameCurve", Map.of(
-                "race", "Zerg", "mmr", 4500,
-                "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "c2");
+                "race", string("Zerg"), "mmr", number(4500),
+                "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), "c2");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("race", "Terran", "economyCurve", List.of(
-                                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), 10)
+                                Map.of("race", string("Terran"), "economyCurve", structList(
+                                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(2);
@@ -1496,17 +1499,17 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_weightOverride_temporalFieldDominates() {
         registerTemporalSchema();
         storeTemporalCase("sameRaceDiffCurve", Map.of(
-                "race", "Terran",
-                "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 200, "army", 100, "posture", "AGGRESSIVE"))), "c1");
+                "race", string("Terran"),
+                "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(200), "army", number(100), "posture", string("AGGRESSIVE")))), "c1");
         storeTemporalCase("diffRaceSameCurve", Map.of(
-                "race", "Zerg",
-                "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "c2");
+                "race", string("Zerg"),
+                "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), "c2");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("race", "Terran", "economyCurve", List.of(
-                                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), 10)
+                                Map.of("race", string("Terran"), "economyCurve", structList(
+                                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), 10)
                             .withWeight("economyCurve", 10.0).withWeight("race", 0.1)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -1518,31 +1521,29 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_storeAndRetrieve_roundTrip() {
         registerTemporalSchema();
         var curve = List.of(
-                Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"));
-        storeTemporalCase("game", Map.of("race", "Terran", "economyCurve", curve), "rt1");
+                Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")));
+        storeTemporalCase("game", Map.of("race", string("Terran"), "economyCurve", structList(curve)), "rt1");
 
-        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", "Terran"), 10)
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", string("Terran")), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        @SuppressWarnings("unchecked")
-        var retrieved = (List<Map<String, Object>>) results.get(0).cbrCase().features().get("economyCurve");
+        var retrieved = ((FeatureValue.StructListVal) results.get(0).cbrCase().features().get("economyCurve")).items();
         assertThat(retrieved).hasSize(2);
     }
 
     @Test
     void temporal_discreteSequence_storeAndRetrieve_roundTrip() {
         registerTemporalSchema();
-        storeTemporalCase("game", Map.of("race", "Terran",
-                                         "phaseProgression", List.of("MACRO", "AGGRESSIVE", "ALL_IN")), "rt2");
+        storeTemporalCase("game", Map.of("race", string("Terran"),
+                                         "phaseProgression", stringList("MACRO", "AGGRESSIVE", "ALL_IN")), "rt2");
 
-        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", "Terran"), 10)
+        var query = CbrQuery.of(TENANT, CBR, "temporal-game", Map.of("race", string("Terran")), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
-        @SuppressWarnings("unchecked")
-        var retrieved = (List<String>) results.get(0).cbrCase().features().get("phaseProgression");
+        var retrieved = ((FeatureValue.StringListVal) results.get(0).cbrCase().features().get("phaseProgression")).values();
         assertThat(retrieved).containsExactly("MACRO", "AGGRESSIVE", "ALL_IN");
     }
 
@@ -1558,13 +1559,13 @@ public abstract class CbrCaseMemoryStoreContractTest {
 
         store().store(
                 new FeatureVectorCbrCase("problem", "solution", null, null, Map.of(
-                        "race", "Terran",
-                        "tags", List.of("aggro", "fast"),
-                        "trajectory", List.of(Map.<String, Object>of("t", 1, "v", 50)),
-                        "phases", List.of("A", "B"))),
+                        "race", string("Terran"),
+                        "tags", stringList("aggro", "fast"),
+                        "trajectory", structList(Map.<String, FeatureValue>of("t", number(1), "v", number(50))),
+                        "phases", stringList("A", "B"))),
                 "mixed", ENTITY, CBR, TENANT, "mixed-1");
 
-        var query = CbrQuery.of(TENANT, CBR, "mixed", Map.of("race", "Terran"), 10)
+        var query = CbrQuery.of(TENANT, CBR, "mixed", Map.of("race", string("Terran")), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
@@ -1574,17 +1575,17 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_flatFeatureFilter_reducesCandidatesBeforeDtw() {
         registerTemporalSchema();
         storeTemporalCase("terran-game", Map.of(
-                "race", "Terran",
-                "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "t1");
+                "race", string("Terran"),
+                "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), "t1");
         storeTemporalCase("zerg-game", Map.of(
-                "race", "Zerg",
-                "economyCurve", List.of(
-                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), "z1");
+                "race", string("Zerg"),
+                "economyCurve", structList(
+                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), "z1");
 
         var query = CbrQuery.of(TENANT, CBR, "temporal-game",
-                                Map.of("race", "Terran", "economyCurve", List.of(
-                                        Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"))), 10)
+                                Map.of("race", string("Terran"), "economyCurve", structList(
+                                        Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")))), 10)
                             .withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(2);
@@ -1609,7 +1610,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
                                                                                          "DEFENSIVE", Map.of("AGGRESSIVE", 0.1))))));
     }
 
-    private String storeTemporalSpecCase(String problem, Map<String, Object> features, String caseId) {
+    private String storeTemporalSpecCase(String problem, Map<String, FeatureValue> features, String caseId) {
         return store().store(
                 new FeatureVectorCbrCase(problem, "solution", null, null, features),
                 "temporal-game-specs", ENTITY, CBR, TENANT, caseId);
@@ -1646,21 +1647,21 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_dtwSpec_affectsRetrieval() {
         registerTemporalSchemaWithSpecs();
         storeTemporalSpecCase("close match", Map.of(
-                                      "race", "Terran",
-                                      "economyCurve", List.of(
-                                              Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                                              Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))),
+                                      "race", string("Terran"),
+                                      "economyCurve", structList(
+                                              Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                                              Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")))),
                               "close");
         storeTemporalSpecCase("far match", Map.of(
-                                      "race", "Terran",
-                                      "economyCurve", List.of(
-                                              Map.<String, Object>of("minute", 1, "economy", 400, "army", 150, "posture", "AGGRESSIVE"),
-                                              Map.<String, Object>of("minute", 3, "economy", 100, "army", 50, "posture", "DEFENSIVE"))),
+                                      "race", string("Terran"),
+                                      "economyCurve", structList(
+                                              Map.<String, FeatureValue>of("minute", number(1), "economy", number(400), "army", number(150), "posture", string("AGGRESSIVE")),
+                                              Map.<String, FeatureValue>of("minute", number(3), "economy", number(100), "army", number(50), "posture", string("DEFENSIVE")))),
                               "far");
         var query = CbrQuery.of(TENANT, CBR, "temporal-game-specs", Map.of(
-                                        "economyCurve", List.of(
-                                                Map.<String, Object>of("minute", 1, "economy", 32, "army", 2, "posture", "MACRO"),
-                                                Map.<String, Object>of("minute", 3, "economy", 47, "army", 7, "posture", "MACRO"))),
+                                        "economyCurve", structList(
+                                                Map.<String, FeatureValue>of("minute", number(1), "economy", number(32), "army", number(2), "posture", string("MACRO")),
+                                                Map.<String, FeatureValue>of("minute", number(3), "economy", number(47), "army", number(7), "posture", string("MACRO")))),
                                 10).withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
@@ -1671,15 +1672,15 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_discreteSequence_editDistanceSpec_affectsRetrieval() {
         registerTemporalSchemaWithSpecs();
         storeTemporalSpecCase("defensive", Map.of(
-                                      "race", "Terran",
-                                      "phaseProgression", List.of("MACRO", "DEFENSIVE")),
+                                      "race", string("Terran"),
+                                      "phaseProgression", stringList("MACRO", "DEFENSIVE")),
                               "def");
         storeTemporalSpecCase("aggressive", Map.of(
-                                      "race", "Terran",
-                                      "phaseProgression", List.of("MACRO", "AGGRESSIVE")),
+                                      "race", string("Terran"),
+                                      "phaseProgression", stringList("MACRO", "AGGRESSIVE")),
                               "agg");
         var query = CbrQuery.of(TENANT, CBR, "temporal-game-specs", Map.of(
-                                        "phaseProgression", List.of("MACRO", "MACRO")),
+                                        "phaseProgression", stringList("MACRO", "MACRO")),
                                 10).withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).hasSizeGreaterThanOrEqualTo(2);
@@ -1690,15 +1691,15 @@ public abstract class CbrCaseMemoryStoreContractTest {
     void temporal_timeSeries_windowedDtw_similarResult() {
         registerTemporalSchemaWithSpecs();
         storeTemporalSpecCase("windowed test", Map.of(
-                                      "race", "Terran",
-                                      "economyCurve", List.of(
-                                              Map.<String, Object>of("minute", 1, "economy", 30, "army", 0, "posture", "MACRO"),
-                                              Map.<String, Object>of("minute", 3, "economy", 45, "army", 5, "posture", "MACRO"))),
+                                      "race", string("Terran"),
+                                      "economyCurve", structList(
+                                              Map.<String, FeatureValue>of("minute", number(1), "economy", number(30), "army", number(0), "posture", string("MACRO")),
+                                              Map.<String, FeatureValue>of("minute", number(3), "economy", number(45), "army", number(5), "posture", string("MACRO")))),
                               "w1");
         var query = CbrQuery.of(TENANT, CBR, "temporal-game-specs", Map.of(
-                                        "economyCurve", List.of(
-                                                Map.<String, Object>of("minute", 1, "economy", 32, "army", 2, "posture", "MACRO"),
-                                                Map.<String, Object>of("minute", 3, "economy", 43, "army", 3, "posture", "MACRO"))),
+                                        "economyCurve", structList(
+                                                Map.<String, FeatureValue>of("minute", number(1), "economy", number(32), "army", number(2), "posture", string("MACRO")),
+                                                Map.<String, FeatureValue>of("minute", number(3), "economy", number(43), "army", number(3), "posture", string("MACRO")))),
                                 10).withRetrievalMode(RetrievalMode.FEATURE_ONLY);
         var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
         assertThat(results).isNotEmpty();

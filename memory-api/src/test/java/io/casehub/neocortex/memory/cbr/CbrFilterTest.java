@@ -1,9 +1,15 @@
 package io.casehub.neocortex.memory.cbr;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static io.casehub.neocortex.memory.cbr.FeatureValue.number;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.stringList;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CbrFilterTest {
 
@@ -55,7 +61,7 @@ class CbrFilterTest {
 
     @Test
     void hasMatch_validSubFields() {
-        var f = CbrFilter.hasMatch(Map.of("type", "FIRST_CONTACT", "minute", 3.2));
+        var f = CbrFilter.hasMatch(Map.of("type", string("FIRST_CONTACT"), "minute", number(3.2)));
         assertThat(f.subFields()).hasSize(2);
     }
 
@@ -68,23 +74,21 @@ class CbrFilterTest {
 
     @Test
     void hasMatch_invalidSubFieldValueTypeRejected() {
-        assertThatThrownBy(() -> CbrFilter.hasMatch(Map.of("bad", List.of("x"))))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("must be String, Number, or NumericRange");
-    }
+        assertThatThrownBy(() -> CbrFilter.hasMatch(Map.of("bad", stringList("x"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must be StringVal, NumberVal, or RangeVal");}
 
     @Test
     void hasMatch_acceptsNumericRange() {
-        var f = CbrFilter.hasMatch(Map.of("score", NumericRange.of(80, 90)));
-        assertThat(f.subFields().get("score")).isInstanceOf(NumericRange.class);
-    }
+        var f = CbrFilter.hasMatch(Map.of("score", FeatureValue.range(80, 90)));
+        assertThat(f.subFields().get("score")).isInstanceOf(FeatureValue.RangeVal.class);}
 
     @Test
     void hasMatch_defensivelyCopied() {
-        var map = new java.util.HashMap<String, Object>();
-        map.put("type", "X");
+        var map = new java.util.HashMap<String, FeatureValue>();
+        map.put("type", string("X"));
         var f = CbrFilter.hasMatch(map);
-        map.put("extra", "Y");
+        map.put("extra", string("Y"));
         assertThat(f.subFields()).hasSize(1);
     }
 }

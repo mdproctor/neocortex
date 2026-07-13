@@ -52,13 +52,14 @@ final class CbrMemoryDeserializer {
 
             CbrCase result = switch (cbrType) {
                 case FeatureVectorCbrCase.CBR_TYPE -> {
-                    Map<String, Object> features = parseFeatures(attrs);
-                    if (features == null) yield null;
-                    yield new FeatureVectorCbrCase(problem, solution, outcome, confidence, features);
+                    var rawFeatures = parseFeatures(attrs);
+                    if (rawFeatures == null) yield null;
+                    yield new FeatureVectorCbrCase(problem, solution, outcome, confidence, CbrPointBuilder.fromRawMap(rawFeatures));
                 }
                 case PlanCbrCase.CBR_TYPE -> {
-                    Map<String, Object> features = parseFeatures(attrs);
-                    if (features == null) yield null;
+                    var rawFeatures = parseFeatures(attrs);
+                    if (rawFeatures == null) yield null;
+                    var features = CbrPointBuilder.fromRawMap(rawFeatures);
                     List<PlanTrace> planTrace = parsePlanTrace(attrs);
                     if (planTrace == null) yield null;
                     yield new PlanCbrCase(problem, solution, outcome, confidence, features, planTrace);

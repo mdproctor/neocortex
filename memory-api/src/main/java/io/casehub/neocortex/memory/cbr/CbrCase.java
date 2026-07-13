@@ -8,5 +8,6 @@ public interface CbrCase {
     String solution();
     String outcome();
     Double confidence();
-    default Map<String, Object> features() { return Map.of(); }
+
+    default Map<String, FeatureValue> features() { return Map.of(); }
 }

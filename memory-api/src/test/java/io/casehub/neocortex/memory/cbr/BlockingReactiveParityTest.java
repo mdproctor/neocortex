@@ -1,5 +1,7 @@
 package io.casehub.neocortex.memory.cbr;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
+
 import io.smallrye.mutiny.Uni;
 import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;

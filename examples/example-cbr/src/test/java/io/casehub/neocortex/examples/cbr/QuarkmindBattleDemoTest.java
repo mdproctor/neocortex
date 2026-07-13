@@ -5,6 +5,7 @@ import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrCaseMemoryStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("smoke")
@@ -23,8 +24,8 @@ class QuarkmindBattleDemoTest {
             assertThat(r.scored().score()).isEqualTo(1.0);
             assertThat(r.scored().cbrCase()).isInstanceOf(PlanCbrCase.class);
             var c = r.scored().cbrCase();
-            assertThat(c.features().get("opponent_race")).isEqualTo("ZERG");
-            assertThat(c.features().get("detected_build")).isEqualTo("ROACH_RUSH");
+            assertThat(c.features().get("opponent_race")).isEqualTo(string("ZERG"));
+            assertThat(c.features().get("detected_build")).isEqualTo(string("ROACH_RUSH"));
         });
     }
 

@@ -34,7 +34,7 @@ final class CbrMemorySerializer {
         }
 
         attributes.put(CbrAttributeKeys.CBR_TYPE, cbrCase.cbrType());
-        Map<String, Object> features = cbrCase.features();
+        Map<String, Object> features = CbrPointBuilder.toRawMap(cbrCase.features());
         if (!features.isEmpty()) {
             try {
                 attributes.put(CbrAttributeKeys.CBR_FEATURES, MAPPER.writeValueAsString(features));

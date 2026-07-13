@@ -10,9 +10,12 @@ import io.casehub.neocortex.memory.cbr.CbrFilter;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrSimilarityScorer;
 import io.casehub.neocortex.memory.cbr.FeatureField;
-import io.casehub.neocortex.memory.cbr.NumericRange;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
+import io.casehub.neocortex.memory.cbr.LbKeogh;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
+import io.casehub.neocortex.memory.cbr.SimilaritySpec;
+import io.casehub.neocortex.memory.cbr.WarpingConstraint;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
@@ -32,12 +35,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     private final Map<String, CbrFeatureSchema> schemas = new ConcurrentHashMap<>();
-
-    private record StoredCase(
-        String id, CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
-        String tenantId, String caseId, Instant storedAt
-    ) {}
-
     private final List<StoredCase> cases = new CopyOnWriteArrayList<>();
 
     @Override
@@ -65,7 +62,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
         if (query.retrievalMode() == RetrievalMode.HYBRID && query.problem() != null) {
             java.util.logging.Logger.getLogger(getClass().getName())
-                .warning("HYBRID mode degraded to FEATURE_ONLY — no EmbeddingModel available");
+                                    .warning("HYBRID mode degraded to FEATURE_ONLY — no EmbeddingModel available");
         }
 
         CbrFeatureSchema schema = schemas.get(query.caseType());
@@ -76,11 +73,19 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         if (!query.filters().isEmpty()) {
             if (schema == null) {
                 throw new IllegalStateException(
-                    "Cannot apply structural filters: no schema registered for caseType '"
-                    + query.caseType() + "'");
+                        "Cannot apply structural filters: no schema registered for caseType '"
+                        + query.caseType() + "'");
             }
             CbrFeatureValidator.validateFilters(query.filters(), schema);
         }
+
+        List<FeatureField.TimeSeries> dtwBandFields = schema == null ? List.of()
+            : schema.fields().stream()
+                .filter(f -> f instanceof FeatureField.TimeSeries ts
+                    && ts.similaritySpec() instanceof SimilaritySpec.DtwSpec ds
+                    && ds.constraint() instanceof WarpingConstraint.SakoeChibaBand)
+                .map(f -> (FeatureField.TimeSeries) f)
+                .toList();
 
         List<ScoredCbrCase<C>> candidates = new ArrayList<>();
         for (StoredCase stored : cases) {
@@ -92,19 +97,44 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
             if (!matchesFilters(stored.cbrCase(), query.filters(), schema)) continue;
 
+            double abandonCost = Double.POSITIVE_INFINITY;
+            if (!dtwBandFields.isEmpty() && candidates.size() >= query.topK()) {
+                double kthScore = candidates.get(query.topK() - 1).score();
+                if (kthScore > 0) {
+                    boolean pruned = false;
+                    for (FeatureField.TimeSeries ts : dtwBandFields) {
+                        int windowSize = ((WarpingConstraint.SakoeChibaBand) ((SimilaritySpec.DtwSpec) ts.similaritySpec()).constraint()).windowSize();
+                        FeatureValue queryTs = query.features().get(ts.name());
+                        FeatureValue caseTs = stored.cbrCase().features().get(ts.name());
+                        if (queryTs instanceof FeatureValue.StructListVal qObs
+                            && caseTs instanceof FeatureValue.StructListVal cObs) {
+                            int maxLen = Math.max(qObs.items().size(), cObs.items().size());
+                            abandonCost = (1.0 / kthScore - 1.0) * maxLen;
+                            LbKeogh.Envelope env = LbKeogh.computeEnvelope(cObs.items(), ts, windowSize);
+                            if (LbKeogh.lowerBound(qObs.items(), env, ts) > abandonCost) {
+                                pruned = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (pruned) continue;
+                }
+            }
+
             CbrSimilarityScorer.SimilarityBreakdown breakdown = CbrSimilarityScorer.scoreDetailed(
-                query.features(), stored.cbrCase().features(), query.weights(), schema, Map.of());
+                    query.features(), stored.cbrCase().features(), query.weights(), schema, Map.of(),
+                    abandonCost);
 
             if (breakdown.score() >= query.minSimilarity()) {
                 candidates.add(new ScoredCbrCase<>((C) stored.cbrCase(), breakdown.score(), false,
-                    breakdown.featureSimilarities()));
+                                                   breakdown.featureSimilarities()));
+                candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
             }
         }
 
-        candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
         List<ScoredCbrCase<C>> results = candidates.size() <= query.topK()
-            ? candidates
-            : candidates.subList(0, query.topK());
+                                         ? candidates
+                                         : candidates.subList(0, query.topK());
         return Collections.unmodifiableList(new ArrayList<>(results));
     }
 
@@ -112,10 +142,10 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     public Integer erase(EraseRequest request) {
         int before = cases.size();
         cases.removeIf(sc ->
-            sc.entityId().equals(request.entityId())
-            && sc.domain().equals(request.domain())
-            && sc.tenantId().equals(request.tenantId())
-            && (request.caseId() == null || sc.caseId().equals(request.caseId())));
+                               sc.entityId().equals(request.entityId())
+                               && sc.domain().equals(request.domain())
+                               && sc.tenantId().equals(request.tenantId())
+                               && (request.caseId() == null || sc.caseId().equals(request.caseId())));
         return before - cases.size();
     }
 
@@ -123,36 +153,36 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     public Integer eraseEntity(String entityId, String tenantId) {
         int before = cases.size();
         cases.removeIf(sc ->
-            sc.entityId().equals(entityId) && sc.tenantId().equals(tenantId));
+                               sc.entityId().equals(entityId) && sc.tenantId().equals(tenantId));
         return before - cases.size();
     }
 
     @SuppressWarnings("unchecked")
     private boolean matchesFilters(CbrCase storedCase, Map<String, CbrFilter> filters,
-                                    CbrFeatureSchema schema) {
+                                   CbrFeatureSchema schema) {
         if (filters.isEmpty()) {return true;}
         for (var entry : filters.entrySet()) {
-            String    fieldName   = entry.getKey();
-            CbrFilter filter      = entry.getValue();
-            Object    storedValue = storedCase.features().get(fieldName);
+            String       fieldName   = entry.getKey();
+            CbrFilter    filter      = entry.getValue();
+            FeatureValue storedValue = storedCase.features().get(fieldName);
             if (storedValue == null) {return false;}
 
             FeatureField field = CbrFeatureValidator.findField(schema, fieldName);
 
             if (!matchesSingleFilter(storedValue, filter, field)) {return false;}
         }
-        return true;}
+        return true;
+    }
 
-    private boolean matchesSingleFilter(Object storedValue, CbrFilter filter, FeatureField field) {
+    private boolean matchesSingleFilter(FeatureValue storedValue, CbrFilter filter, FeatureField field) {
         return switch (filter) {
-            case CbrFilter.Contains c -> storedValue instanceof List<?> list && list.contains(c.value());
-            case CbrFilter.ContainsAll ca -> storedValue instanceof List<?> list && list.containsAll(ca.values());
-            case CbrFilter.ContainsAny ca -> storedValue instanceof List<?> list && ca.values().stream().anyMatch(list::contains);
-            case CbrFilter.NotContains nc -> storedValue instanceof List<?> list && !list.contains(nc.value());
-            case CbrFilter.NotContainsAny nca -> storedValue instanceof List<?> list && nca.values().stream().noneMatch(list::contains);
-            case CbrFilter.ContainsRange cr -> storedValue instanceof List<?> list && list.stream()
-                                                                                          .filter(Number.class::isInstance).map(Number.class::cast)
-                                                                                          .anyMatch(n -> n.doubleValue() >= cr.range().min() && n.doubleValue() <= cr.range().max());
+            case CbrFilter.Contains c -> storedValue instanceof FeatureValue.StringListVal sl && sl.values().contains(c.value());
+            case CbrFilter.ContainsAll ca -> storedValue instanceof FeatureValue.StringListVal sl && sl.values().containsAll(ca.values());
+            case CbrFilter.ContainsAny ca -> storedValue instanceof FeatureValue.StringListVal sl && ca.values().stream().anyMatch(sl.values()::contains);
+            case CbrFilter.NotContains nc -> storedValue instanceof FeatureValue.StringListVal sl && !sl.values().contains(nc.value());
+            case CbrFilter.NotContainsAny nca -> storedValue instanceof FeatureValue.StringListVal sl && nca.values().stream().noneMatch(sl.values()::contains);
+            case CbrFilter.ContainsRange cr -> storedValue instanceof FeatureValue.NumberListVal nl && nl.values().stream()
+                                                                                                         .anyMatch(n -> n >= cr.range().min() && n <= cr.range().max());
             case CbrFilter.HasMatch hm -> matchesHasMatch(storedValue, hm, field);
             case CbrFilter.AllOf allOf -> {
                 for (CbrFilter inner : allOf.filters()) {
@@ -163,34 +193,36 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         };
     }
 
-
-    private boolean matchesHasMatch(Object storedValue, CbrFilter.HasMatch hm, FeatureField field) {
+    private boolean matchesHasMatch(FeatureValue storedValue, CbrFilter.HasMatch hm, FeatureField field) {
         if (field instanceof FeatureField.ObjectList) {
-            if (!(storedValue instanceof List<?> list)) return false;
-            return list.stream().anyMatch(elem ->
-                elem instanceof Map<?,?> map && allSubFieldsMatch(map, hm.subFields()));
+            if (!(storedValue instanceof FeatureValue.StructListVal sl)) {return false;}
+            return sl.items().stream().anyMatch(item -> allSubFieldsMatch(item, hm.subFields()));
         } else {
-            if (!(storedValue instanceof Map<?,?> map)) return false;
-            return allSubFieldsMatch(map, hm.subFields());
+            if (!(storedValue instanceof FeatureValue.StructVal sv)) {return false;}
+            return allSubFieldsMatch(sv.fields(), hm.subFields());
         }
     }
 
-    private boolean allSubFieldsMatch(Map<?,?> stored, Map<String, Object> subFields) {
+    private boolean allSubFieldsMatch(Map<String, FeatureValue> stored, Map<String, FeatureValue> subFields) {
         for (var sub : subFields.entrySet()) {
-            Object storedVal = stored.get(sub.getKey());
-            if (storedVal == null) return false;
-            Object queryVal = sub.getValue();
-            if (queryVal instanceof NumericRange range) {
-                if (!(storedVal instanceof Number num)) return false;
-                double d = num.doubleValue();
-                if (d < range.min() || d > range.max()) return false;
-            } else if (queryVal instanceof Number qn) {
-                if (!(storedVal instanceof Number sn)) return false;
-                if (Double.compare(qn.doubleValue(), sn.doubleValue()) != 0) return false;
+            FeatureValue storedVal = stored.get(sub.getKey());
+            if (storedVal == null) {return false;}
+            FeatureValue queryVal = sub.getValue();
+            if (queryVal instanceof FeatureValue.RangeVal range) {
+                if (!(storedVal instanceof FeatureValue.NumberVal sn)) {return false;}
+                if (sn.value() < range.min() || sn.value() > range.max()) {return false;}
+            } else if (queryVal instanceof FeatureValue.NumberVal qn) {
+                if (!(storedVal instanceof FeatureValue.NumberVal sn)) {return false;}
+                if (Double.compare(qn.value(), sn.value()) != 0) {return false;}
             } else {
-                if (!queryVal.equals(storedVal)) return false;
+                if (!queryVal.equals(storedVal)) {return false;}
             }
         }
         return true;
     }
+
+    private record StoredCase(
+            String id, CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
+            String tenantId, String caseId, Instant storedAt
+    ) {}
 }

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Map;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -40,7 +41,7 @@ class CbrQueryTranslatorTest {
     @Test
     void toFilter_categoricalFeatureAddsKeywordMatch() {
         var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg"), 5);
+            Map.of("opponent_race", string("Zerg")), 5);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         // 3 base + 1 feature = 4
@@ -51,7 +52,7 @@ class CbrQueryTranslatorTest {
     @Test
     void toFilter_unknownFieldsIgnored() {
         var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
-            Map.of("unknown_field", "value"), 5);
+            Map.of("unknown_field", string("value")), 5);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         // Only base conditions
@@ -61,7 +62,7 @@ class CbrQueryTranslatorTest {
     @Test
     void toFilter_numericFeatureAddsRangeMatch() {
         var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
-            Map.of("army_size_ratio", 0.7), 5);
+            Map.of("army_size_ratio", number(0.7)), 5);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         assertThat(filter.getMustCount()).isEqualTo(4);
@@ -72,7 +73,7 @@ class CbrQueryTranslatorTest {
     @Test
     void validateQueryFeatures_categoricalRequiresString() {
         assertThatThrownBy(() -> CbrQueryTranslator.validateQueryFeatures(
-            Map.of("opponent_race", 42), schema))
+            Map.of("opponent_race", number(42)), schema))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Categorical")
             .hasMessageContaining("String");
@@ -81,7 +82,7 @@ class CbrQueryTranslatorTest {
     @Test
     void validateQueryFeatures_numericRequiresNumber() {
         assertThatThrownBy(() -> CbrQueryTranslator.validateQueryFeatures(
-            Map.of("army_size_ratio", "high"), schema))
+            Map.of("army_size_ratio", string("high")), schema))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Numeric")
             .hasMessageContaining("Number");
@@ -90,7 +91,7 @@ class CbrQueryTranslatorTest {
     @Test
     void validateQueryFeatures_textRequiresString() {
         assertThatThrownBy(() -> CbrQueryTranslator.validateQueryFeatures(
-            Map.of("notes", 123), schema))
+            Map.of("notes", number(123)), schema))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Text")
             .hasMessageContaining("String");
@@ -100,7 +101,7 @@ class CbrQueryTranslatorTest {
     void validateQueryFeatures_unknownFieldsDoNotThrow() {
         // Should not throw
         CbrQueryTranslator.validateQueryFeatures(
-            Map.of("totally_unknown", "anything"), schema);
+            Map.of("totally_unknown", string("anything")), schema);
     }
 
     @Test
@@ -119,7 +120,7 @@ class CbrQueryTranslatorTest {
     @Test
     void toFilter_numericRange_addsRangeCondition() {
         var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
-            Map.of("army_size_ratio", NumericRange.within(0.7, 0.1)), 5);
+            Map.of("army_size_ratio", range(0.63, 0.77)), 5);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         assertThat(filter.getMustCount()).isEqualTo(4);
@@ -130,13 +131,13 @@ class CbrQueryTranslatorTest {
     @Test
     void validateQueryFeatures_numericAcceptsNumericRange() {
         CbrQueryTranslator.validateQueryFeatures(
-            Map.of("army_size_ratio", NumericRange.of(0.5, 1.0)), schema);
+            Map.of("army_size_ratio", range(0.5, 1.0)), schema);
     }
 
     @Test
     void toFilter_multipleFeatures() {
         var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.5), 5);
+            Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.5)), 5);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         // 3 base + 2 features = 5
@@ -146,7 +147,7 @@ class CbrQueryTranslatorTest {
     @Test
     void toIdentityFilter_excludesFeatures() {
         var query = CbrQuery.of("tenant-1", CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7), 5);
+            Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.7)), 5);
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
 
         // Only 3 identity conditions — no feature filters
@@ -160,7 +161,7 @@ class CbrQueryTranslatorTest {
     void toIdentityFilter_includesNotBefore() {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
-            Map.of("opponent_race", "Zerg"), Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
+            Map.of("opponent_race", string("Zerg")), Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
             RetrievalMode.HYBRID, FusionStrategy.RRF);
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
 

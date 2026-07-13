@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CbrPointBuilderTest {
@@ -55,7 +56,7 @@ class CbrPointBuilderTest {
     @Test
     void buildPoint_featureVectorCase_withFeatures() {
         var cbrCase = new FeatureVectorCbrCase("Zerg rush", "early attack", null, null,
-            Map.of("opponent_race", "Zerg", "army_size_ratio", 0.7));
+            Map.of("opponent_race", string("Zerg"), "army_size_ratio", number(0.7)));
         PointStruct point = CbrPointBuilder.buildPoint(cbrCase, "game",
             "entity-1", "cbr", "tenant-1", "case-2", null, "dense");
 
@@ -98,7 +99,7 @@ class CbrPointBuilderTest {
         assertThat(point.getPayloadMap().get("_cbr_type").getStringValue()).isEqualTo("textual");
         assertThat(point.getPayloadMap()).doesNotContainKey("_case_class");
 
-        var fv = new FeatureVectorCbrCase("p", "s", null, null, Map.of("race", "Zerg"));
+        var fv = new FeatureVectorCbrCase("p", "s", null, null, Map.of("race", string("Zerg")));
         PointStruct fvPoint = CbrPointBuilder.buildPoint(fv, "game",
             "e1", "cbr", "t1", "c2", null, "dense");
         assertThat(fvPoint.getPayloadMap().get("_cbr_type").getStringValue()).isEqualTo("feature-vector");

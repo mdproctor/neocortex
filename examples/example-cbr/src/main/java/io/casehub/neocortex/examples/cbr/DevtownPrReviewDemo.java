@@ -5,7 +5,9 @@ import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrCaseMemoryStore;
 
@@ -27,7 +29,7 @@ public final class DevtownPrReviewDemo {
         FeatureField.text("pr_description"));
 
     record SeedCase(String problem, String solution, String outcome,
-                    double confidence, Map<String, Object> features) {}
+                    double confidence, Map<String, FeatureValue> features) {}
 
     public record Result(ScoredCbrCase<FeatureVectorCbrCase> scored) {}
 
@@ -36,72 +38,72 @@ public final class DevtownPrReviewDemo {
             "Extract persistence layer from service classes",
             "Reviewers: 3. Review duration: 3 days. Finding: missing transaction boundaries at new layer edge. Reviewer comments: 'Need @Transactional on new DAO methods'.",
             "CHANGES_REQUESTED", 0.82,
-            Map.of("language", "JAVA", "change_type", "REFACTOR",
-                   "files_changed", 52, "lines_changed", 3100,
-                   "pr_description", "Extract persistence layer from service classes")),
+            Map.of("language", string("JAVA"), "change_type", string("REFACTOR"),
+                   "files_changed", number(52), "lines_changed", number(3100),
+                   "pr_description", string("Extract persistence layer from service classes"))),
         new SeedCase(
             "Separate domain model from REST DTOs",
             "Reviewers: 2. Review duration: 1.5 days. Finding: clean separation, minor naming issues. Reviewer comments: 'Consider renaming UserDto to UserResponse'.",
             "APPROVED", 0.91,
-            Map.of("language", "JAVA", "change_type", "REFACTOR",
-                   "files_changed", 38, "lines_changed", 2200,
-                   "pr_description", "Separate domain model from REST DTOs")),
+            Map.of("language", string("JAVA"), "change_type", string("REFACTOR"),
+                   "files_changed", number(38), "lines_changed", number(2200),
+                   "pr_description", string("Separate domain model from REST DTOs"))),
         new SeedCase(
             "Extract auth middleware into dedicated module",
             "Reviewers: 2. Review duration: 2.5 days. Finding: circular dependency introduced between modules. Reviewer comments: 'AuthModule depends on UserModule which depends on AuthModule'.",
             "CHANGES_REQUESTED", 0.79,
-            Map.of("language", "JAVA", "change_type", "REFACTOR",
-                   "files_changed", 41, "lines_changed", 2900,
-                   "pr_description", "Extract auth middleware into dedicated module")),
+            Map.of("language", string("JAVA"), "change_type", string("REFACTOR"),
+                   "files_changed", number(41), "lines_changed", number(2900),
+                   "pr_description", string("Extract auth middleware into dedicated module"))),
         new SeedCase(
             "Consolidate 3 payment services into unified payment gateway",
             "Reviewers: 3. Review duration: 4 days. Finding: integration test coverage gaps. Reviewer comments: 'Missing tests for refund flow'.",
             "APPROVED", 0.87,
-            Map.of("language", "JAVA", "change_type", "REFACTOR",
-                   "files_changed", 60, "lines_changed", 4100,
-                   "pr_description", "Consolidate 3 payment services into unified payment gateway")),
+            Map.of("language", string("JAVA"), "change_type", string("REFACTOR"),
+                   "files_changed", number(60), "lines_changed", number(4100),
+                   "pr_description", string("Consolidate 3 payment services into unified payment gateway"))),
         new SeedCase(
             "Migrate repository layer to coroutines",
             "Reviewers: 2. Review duration: 2 days. Finding: blocking calls remaining in suspend functions. Reviewer comments: 'UserRepository.findById still uses blocking JDBC'.",
             "CHANGES_REQUESTED", 0.76,
-            Map.of("language", "KOTLIN", "change_type", "REFACTOR",
-                   "files_changed", 35, "lines_changed", 1800,
-                   "pr_description", "Migrate repository layer to coroutines")),
+            Map.of("language", string("KOTLIN"), "change_type", string("REFACTOR"),
+                   "files_changed", number(35), "lines_changed", number(1800),
+                   "pr_description", string("Migrate repository layer to coroutines"))),
         new SeedCase(
             "Add user profile management API — create, read, update endpoints with validation",
             "Reviewers: 2. Review duration: 2 days. Finding: comprehensive tests, good validation. Reviewer comments: 'Nice coverage of edge cases'.",
             "APPROVED", 0.93,
-            Map.of("language", "TYPESCRIPT", "change_type", "FEATURE",
-                   "files_changed", 12, "lines_changed", 850,
-                   "pr_description", "Add user profile management API")),
+            Map.of("language", string("TYPESCRIPT"), "change_type", string("FEATURE"),
+                   "files_changed", number(12), "lines_changed", number(850),
+                   "pr_description", string("Add user profile management API"))),
         new SeedCase(
             "Fix race condition in session token refresh logic",
             "Reviewers: 1. Review duration: 1 day. Finding: correct fix, added test. Reviewer comments: 'Good catch, test verifies the fix'.",
             "APPROVED", 0.88,
-            Map.of("language", "TYPESCRIPT", "change_type", "BUGFIX",
-                   "files_changed", 3, "lines_changed", 45,
-                   "pr_description", "Fix race condition in session token refresh")),
+            Map.of("language", string("TYPESCRIPT"), "change_type", string("BUGFIX"),
+                   "files_changed", number(3), "lines_changed", number(45),
+                   "pr_description", string("Fix race condition in session token refresh"))),
         new SeedCase(
             "Fix null pointer in payment processing when user has no default card",
             "Reviewers: 1. Review duration: 1.5 days. Finding: fix works but needs defensive check earlier. Reviewer comments: 'Should validate card existence before entering payment flow'.",
             "CHANGES_REQUESTED", 0.71,
-            Map.of("language", "JAVA", "change_type", "BUGFIX",
-                   "files_changed", 2, "lines_changed", 30,
-                   "pr_description", "Fix null pointer when user has no default card")),
+            Map.of("language", string("JAVA"), "change_type", string("BUGFIX"),
+                   "files_changed", number(2), "lines_changed", number(30),
+                   "pr_description", string("Fix null pointer when user has no default card"))),
         new SeedCase(
             "Add integration tests for notification service — email, SMS, push",
             "Reviewers: 1. Review duration: 1 day. Finding: good coverage, uses test doubles correctly. Reviewer comments: 'Appreciated the use of WireMock'.",
             "APPROVED", 0.90,
-            Map.of("language", "PYTHON", "change_type", "TEST",
-                   "files_changed", 8, "lines_changed", 620,
-                   "pr_description", "Add integration tests for notification service")),
+            Map.of("language", string("PYTHON"), "change_type", string("TEST"),
+                   "files_changed", number(8), "lines_changed", number(620),
+                   "pr_description", string("Add integration tests for notification service"))),
         new SeedCase(
             "Update API documentation — OpenAPI specs for payment and user endpoints",
             "Reviewers: 1. Review duration: 0.5 days. Finding: clear and accurate. Reviewer comments: 'Matches implementation'.",
             "APPROVED", 0.85,
-            Map.of("language", "TYPESCRIPT", "change_type", "DOCS",
-                   "files_changed", 5, "lines_changed", 310,
-                   "pr_description", "Update API documentation for payment and user endpoints"))
+            Map.of("language", string("TYPESCRIPT"), "change_type", string("DOCS"),
+                   "files_changed", number(5), "lines_changed", number(310),
+                   "pr_description", string("Update API documentation for payment and user endpoints")))
     );
 
     public static List<Result> run(CbrCaseMemoryStore store) {
@@ -114,7 +116,7 @@ public final class DevtownPrReviewDemo {
         }
 
         var query = CbrQuery.of(TENANT, DOMAIN, CASE_TYPE,
-            Map.of("change_type", "REFACTOR"), 10);
+            Map.of("change_type", string("REFACTOR")), 10);
 
         return store.retrieveSimilar(query, FeatureVectorCbrCase.class).stream()
             .map(Result::new)

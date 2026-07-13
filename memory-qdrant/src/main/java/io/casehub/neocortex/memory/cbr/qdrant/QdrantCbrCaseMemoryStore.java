@@ -563,9 +563,9 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             CbrQuery query, List<ReconstructedCandidate<C>> candidates, Set<String> fieldNames) {
         List<String> texts = new ArrayList<>();
         for (String fieldName : fieldNames) {
-            if (query.features().get(fieldName) instanceof String s) texts.add(s);
+            if (query.features().get(fieldName) instanceof FeatureValue.StringVal s) texts.add(s.value());
             for (var rc : candidates) {
-                if (rc.cbrCase().features().get(fieldName) instanceof String s) texts.add(s);
+                if (rc.cbrCase().features().get(fieldName) instanceof FeatureValue.StringVal s) texts.add(s.value());
             }
         }
         return texts;
@@ -701,11 +701,11 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     private CbrCase reconstructPlanCase(Map<String, Value> payload,
                                           String problem, String solution,
                                           String outcome, Double confidence) {
-        Map<String, Object> features = Map.of();
+        Map<String, FeatureValue> features = Map.of();
         String featuresJson = extractString(payload, "_features_json");
         if (featuresJson != null) {
             try {
-                features = MAPPER.readValue(featuresJson, MAP_TYPE);
+                features = CbrPointBuilder.fromRawMap(MAPPER.readValue(featuresJson, MAP_TYPE));
             } catch (JsonProcessingException e) {
                 throw new RuntimeException("Corrupted _features_json in CBR point", e);
             }
@@ -732,7 +732,7 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             return new FeatureVectorCbrCase(problem, solution, outcome, confidence, Map.of());
         }
         try {
-            Map<String, Object> features = MAPPER.readValue(featuresJson, MAP_TYPE);
+            var features = CbrPointBuilder.fromRawMap(MAPPER.readValue(featuresJson, MAP_TYPE));
             return new FeatureVectorCbrCase(problem, solution, outcome, confidence, features);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Corrupted _features_json in CBR point", e);

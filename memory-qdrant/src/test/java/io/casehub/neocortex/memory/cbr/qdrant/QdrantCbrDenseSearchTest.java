@@ -6,6 +6,7 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.*;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import org.junit.jupiter.api.BeforeEach;
@@ -126,23 +127,23 @@ class QdrantCbrDenseSearchTest {
     @Test
     void denseSearch_withPayloadFilters_combinesVectorAndFeatureScoring() {
         store.store(new FeatureVectorCbrCase("alpha", "sol-a", null, null,
-                Map.of("opponent_race", "Zerg")),
+                Map.of("opponent_race", string("Zerg"))),
             "starcraft-game", ENTITY, CBR, TENANT, "case-combo-zerg");
         store.store(new FeatureVectorCbrCase("alpha", "sol-b", null, null,
-                Map.of("opponent_race", "Protoss")),
+                Map.of("opponent_race", string("Protoss"))),
             "starcraft-game", ENTITY, CBR, TENANT, "case-combo-protoss");
 
         // Dense search for "alpha" + graded scoring for Zerg
         // Zerg match: featureScore=1.0, vectorScore=1.0 → composite=1.0
         // Protoss mismatch: featureScore=0.0, vectorScore=1.0 → composite=0.5
         var query = CbrQuery.of(TENANT, CBR, "starcraft-game",
-                Map.of("opponent_race", "Zerg"), 10)
+                Map.of("opponent_race", string("Zerg")), 10)
             .withProblem("alpha");
 
         var results = store.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
         assertThat(results).hasSize(2);
-        assertThat(results.get(0).cbrCase().features().get("opponent_race")).isEqualTo("Zerg");
+        assertThat(results.get(0).cbrCase().features().get("opponent_race")).isEqualTo(string("Zerg"));
         assertThat(results.get(0).score()).isGreaterThanOrEqualTo(results.get(1).score());
     }
 

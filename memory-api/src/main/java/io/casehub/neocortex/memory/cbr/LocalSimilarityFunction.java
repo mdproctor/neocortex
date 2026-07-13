@@ -14,17 +14,7 @@ package io.casehub.neocortex.memory.cbr;
 @FunctionalInterface
 public interface LocalSimilarityFunction {
 
-    /**
-     * Compute similarity between query value and case value.
-     *
-     * @param queryValue the query's feature value
-     * @param caseValue  the stored case's feature value
-     * @return similarity in [0, 1]
-     */
-    double compute(Object queryValue, Object caseValue);
+    double compute(FeatureValue queryValue, FeatureValue caseValue);
 
-    /**
-     * Exact match similarity function: 1.0 if equal, 0.0 otherwise.
-     */
     LocalSimilarityFunction EXACT_MATCH = (q, c) -> q.equals(c) ? 1.0 : 0.0;
 }

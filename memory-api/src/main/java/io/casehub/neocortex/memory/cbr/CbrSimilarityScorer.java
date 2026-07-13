@@ -34,55 +34,35 @@ public final class CbrSimilarityScorer {
         }
     }
 
-    /**
-     * Compute weighted similarity between query features and case features.
-     *
-     * @param queryFeatures the query's feature values
-     * @param caseFeatures  the stored case's feature values
-     * @param weights       per-field weights (default 1.0 for unspecified fields)
-     * @param schema        the feature schema (null → return 1.0 for backward compat)
-     * @return similarity in [0, 1]
-     */
-    public static double score(Map<String, Object> queryFeatures,
-                                Map<String, Object> caseFeatures,
-                                Map<String, Double> weights,
-                                CbrFeatureSchema schema) {
+    public static double score(Map<String, FeatureValue> queryFeatures,
+                               Map<String, FeatureValue> caseFeatures,
+                               Map<String, Double> weights,
+                               CbrFeatureSchema schema) {
         return score(queryFeatures, caseFeatures, weights, schema, Map.of());
     }
 
-    /**
-     * Compute weighted similarity between query features and case features with custom
-     * local similarity functions for specific fields.
-     *
-     * @param queryFeatures the query's feature values
-     * @param caseFeatures  the stored case's feature values
-     * @param weights       per-field weights (default 1.0 for unspecified fields)
-     * @param schema        the feature schema (null → return 1.0 for backward compat)
-     * @param overrides     per-field custom similarity functions (empty → use default)
-     * @return similarity in [0, 1]
-     */
-    public static double score(Map<String, Object> queryFeatures,
-                                Map<String, Object> caseFeatures,
-                                Map<String, Double> weights,
-                                CbrFeatureSchema schema,
-                                Map<String, LocalSimilarityFunction> overrides) {
+    public static double score(Map<String, FeatureValue> queryFeatures,
+                               Map<String, FeatureValue> caseFeatures,
+                               Map<String, Double> weights,
+                               CbrFeatureSchema schema,
+                               Map<String, LocalSimilarityFunction> overrides) {
         return scoreDetailed(queryFeatures, caseFeatures, weights, schema, overrides).score();
     }
 
-    public static SimilarityBreakdown scoreDetailed(Map<String, Object> queryFeatures,
-                                                     Map<String, Object> caseFeatures,
-                                                     Map<String, Double> weights,
-                                                     CbrFeatureSchema schema,
-                                                     Map<String, LocalSimilarityFunction> overrides) {
+    public static SimilarityBreakdown scoreDetailed(Map<String, FeatureValue> queryFeatures,
+                                                    Map<String, FeatureValue> caseFeatures,
+                                                    Map<String, Double> weights,
+                                                    CbrFeatureSchema schema,
+                                                    Map<String, LocalSimilarityFunction> overrides) {
         Objects.requireNonNull(overrides, "overrides");
         if (queryFeatures.isEmpty()) {return new SimilarityBreakdown(1.0, Map.of());}
         if (schema == null) {return new SimilarityBreakdown(1.0, Map.of());}
 
-        double weightedSum = 0.0;
-        double totalWeight = 0.0;
+        double              weightedSum      = 0.0;
+        double              totalWeight      = 0.0;
         Map<String, Double> rawContributions = new java.util.LinkedHashMap<>();
 
-        for (Map.Entry<String, Object> entry : queryFeatures.entrySet()) {
+        for (Map.Entry<String, FeatureValue> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
             if (field == null) {continue;}
             if (field instanceof FeatureField.CategoricalList
@@ -90,8 +70,8 @@ public final class CbrSimilarityScorer {
                 || field instanceof FeatureField.NestedObject
                 || field instanceof FeatureField.ObjectList) {continue;}
 
-            double weight    = weights.getOrDefault(entry.getKey(), 1.0);
-            Object caseValue = caseFeatures.get(entry.getKey());
+            double       weight    = weights.getOrDefault(entry.getKey(), 1.0);
+            FeatureValue caseValue = caseFeatures.get(entry.getKey());
             double localSim = caseValue == null ? 0.0
                                                 : localSimilarity(field, entry.getValue(), caseValue, overrides);
 
@@ -101,17 +81,68 @@ public final class CbrSimilarityScorer {
             rawContributions.put(entry.getKey(), contribution);
         }
 
-        double score = totalWeight > 0 ? weightedSum / totalWeight : 1.0;
+        double              score       = totalWeight > 0 ? weightedSum / totalWeight : 1.0;
         Map<String, Double> featureSims = new java.util.LinkedHashMap<>();
         if (totalWeight > 0) {
             for (var e : rawContributions.entrySet()) {
                 featureSims.put(e.getKey(), e.getValue() / totalWeight);
             }
         }
-        return new SimilarityBreakdown(score, featureSims);}
+        return new SimilarityBreakdown(score, featureSims);
+    }
 
-    private static double localSimilarity(FeatureField field, Object queryVal, Object caseVal,
+    public static SimilarityBreakdown scoreDetailed(Map<String, FeatureValue> queryFeatures,
+                                                    Map<String, FeatureValue> caseFeatures,
+                                                    Map<String, Double> weights,
+                                                    CbrFeatureSchema schema,
+                                                    Map<String, LocalSimilarityFunction> overrides,
+                                                    double dtwAbandonCostThreshold) {
+        Objects.requireNonNull(overrides, "overrides");
+        if (queryFeatures.isEmpty()) {return new SimilarityBreakdown(1.0, Map.of());}
+        if (schema == null) {return new SimilarityBreakdown(1.0, Map.of());}
+
+        double              weightedSum      = 0.0;
+        double              totalWeight      = 0.0;
+        Map<String, Double> rawContributions = new java.util.LinkedHashMap<>();
+
+        for (Map.Entry<String, FeatureValue> entry : queryFeatures.entrySet()) {
+            FeatureField field = findField(schema, entry.getKey());
+            if (field == null) {continue;}
+            if (field instanceof FeatureField.CategoricalList
+                || field instanceof FeatureField.NumericList
+                || field instanceof FeatureField.NestedObject
+                || field instanceof FeatureField.ObjectList) {continue;}
+
+            double       weight    = weights.getOrDefault(entry.getKey(), 1.0);
+            FeatureValue caseValue = caseFeatures.get(entry.getKey());
+            double localSim = caseValue == null ? 0.0
+                                                : localSimilarity(field, entry.getValue(), caseValue, overrides, dtwAbandonCostThreshold);
+
+            double contribution = weight * localSim;
+            weightedSum += contribution;
+            totalWeight += weight;
+            rawContributions.put(entry.getKey(), contribution);
+        }
+
+        double              score       = totalWeight > 0 ? weightedSum / totalWeight : 1.0;
+        Map<String, Double> featureSims = new java.util.LinkedHashMap<>();
+        if (totalWeight > 0) {
+            for (var e : rawContributions.entrySet()) {
+                featureSims.put(e.getKey(), e.getValue() / totalWeight);
+            }
+        }
+        return new SimilarityBreakdown(score, featureSims);
+    }
+
+
+    private static double localSimilarity(FeatureField field, FeatureValue queryVal, FeatureValue caseVal,
                                           Map<String, LocalSimilarityFunction> overrides) {
+        return localSimilarity(field, queryVal, caseVal, overrides, Double.POSITIVE_INFINITY);
+    }
+
+    private static double localSimilarity(FeatureField field, FeatureValue queryVal, FeatureValue caseVal,
+                                          Map<String, LocalSimilarityFunction> overrides,
+                                          double dtwAbandonCostThreshold) {
         LocalSimilarityFunction override = overrides.get(field.name());
         if (override != null) {return override.compute(queryVal, caseVal);}
 
@@ -123,19 +154,21 @@ public final class CbrSimilarityScorer {
             case FeatureField.NumericList nl -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.NestedObject no -> throw new IllegalStateException("Structured field in scorer");
             case FeatureField.ObjectList ol -> throw new IllegalStateException("Structured field in scorer");
-            case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal);
+            case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal, dtwAbandonCostThreshold);
             case FeatureField.DiscreteSequence ds -> editDistanceSimilarity(ds, queryVal, caseVal);
-        };}
+        };
+    }
 
     private static double categoricalSimilarity(FeatureField.Categorical field,
-                                                 Object queryVal, Object caseVal) {
+                                                FeatureValue queryVal, FeatureValue caseVal) {
         if (field.similaritySpec() == null) {return queryVal.equals(caseVal) ? 1.0 : 0.0;}
         return switch (field.similaritySpec()) {
             case SimilaritySpec.CategoricalTable ct -> {
-                String q = (String) queryVal;
-                String c = (String) caseVal;
-                if (q.equals(c)) {yield 1.0;}
-                yield ct.similarities().getOrDefault(q, Map.of()).getOrDefault(c, 0.0);
+                if (queryVal instanceof FeatureValue.StringVal qs && caseVal instanceof FeatureValue.StringVal cs) {
+                    if (qs.value().equals(cs.value())) {yield 1.0;}
+                    yield ct.similarities().getOrDefault(qs.value(), Map.of()).getOrDefault(cs.value(), 0.0);
+                }
+                yield 0.0;
             }
             case SimilaritySpec.GaussianDecay gd -> throw new IllegalStateException(
                     "Unexpected spec on Categorical: " + field.similaritySpec());
@@ -147,10 +180,11 @@ public final class CbrSimilarityScorer {
                     "Unexpected spec on Categorical: " + field.similaritySpec());
             case SimilaritySpec.EditDistanceSpec es -> throw new IllegalStateException(
                     "Unexpected spec on Categorical: " + field.similaritySpec());
-        };}
+        };
+    }
 
     private static double numericSimilarity(FeatureField.Numeric field,
-                                             Object queryVal, Object caseVal) {
+                                            FeatureValue queryVal, FeatureValue caseVal) {
         double range = field.max() - field.min();
         if (range <= 0) {return queryVal.equals(caseVal) ? 1.0 : 0.0;}
 
@@ -169,36 +203,42 @@ public final class CbrSimilarityScorer {
                     "Unexpected spec on Numeric: " + field.similaritySpec());
             case SimilaritySpec.EditDistanceSpec es -> throw new IllegalStateException(
                     "Unexpected spec on Numeric: " + field.similaritySpec());
-        };}
+        };
+    }
 
     private static double computeNormalizedDistance(FeatureField.Numeric field,
-                                                    Object queryVal, Object caseVal) {
+                                                    FeatureValue queryVal, FeatureValue caseVal) {
         double range = field.max() - field.min();
-        double caseNum = ((Number) caseVal).doubleValue();
+        if (!(caseVal instanceof FeatureValue.NumberVal cn)) {return 1.0;}
+        double caseNum = cn.value();
 
-        if (queryVal instanceof NumericRange nr) {
-            if (caseNum >= nr.min() && caseNum <= nr.max()) return 0.0;
-            double dist = caseNum < nr.min() ? nr.min() - caseNum : caseNum - nr.max();
+        if (queryVal instanceof FeatureValue.RangeVal rv) {
+            if (caseNum >= rv.min() && caseNum <= rv.max()) {return 0.0;}
+            double dist = caseNum < rv.min() ? rv.min() - caseNum : caseNum - rv.max();
             return dist / range;
         }
 
-        double queryNum = ((Number) queryVal).doubleValue();
-        return Math.abs(queryNum - caseNum) / range;
+        if (queryVal instanceof FeatureValue.NumberVal qn) {
+            return Math.abs(qn.value() - caseNum) / range;
+        }
+        return 1.0;
     }
 
-    @SuppressWarnings("unchecked")
     private static double dtwSimilarity(FeatureField.TimeSeries ts,
-                                        Object queryVal, Object caseVal) {
+                                        FeatureValue queryVal, FeatureValue caseVal,
+                                        double abandonCostThreshold) {
         WarpingConstraint constraint = ts.similaritySpec() instanceof SimilaritySpec.DtwSpec ds
                                        ? ds.constraint() : new WarpingConstraint.Unconstrained();
-        return DtwSimilarity.compute(
-                (java.util.List<java.util.Map<String, Object>>) queryVal,
-                (java.util.List<java.util.Map<String, Object>>) caseVal, ts, constraint).score();
+        if (queryVal instanceof FeatureValue.StructListVal qObs
+            && caseVal instanceof FeatureValue.StructListVal cObs) {
+            return DtwSimilarity.compute(qObs.items(), cObs.items(), ts, constraint,
+                                         abandonCostThreshold).score();
+        }
+        return 0.0;
     }
 
-    @SuppressWarnings("unchecked")
     private static double editDistanceSimilarity(FeatureField.DiscreteSequence ds,
-                                                 Object queryVal, Object caseVal) {
+                                                 FeatureValue queryVal, FeatureValue caseVal) {
         java.util.Map<String, java.util.Map<String, Double>> subSim     = null;
         Double                                               insertCost = null;
         Double                                               deleteCost = null;
@@ -207,9 +247,11 @@ public final class CbrSimilarityScorer {
             insertCost = es.insertCost();
             deleteCost = es.deleteCost();
         }
-        return EditDistanceSimilarity.compute(
-                (java.util.List<String>) queryVal,
-                (java.util.List<String>) caseVal, subSim, insertCost, deleteCost).score();
+        if (queryVal instanceof FeatureValue.StringListVal qSeq
+            && caseVal instanceof FeatureValue.StringListVal cSeq) {
+            return EditDistanceSimilarity.compute(qSeq.values(), cSeq.values(), subSim, insertCost, deleteCost).score();
+        }
+        return 0.0;
     }
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {

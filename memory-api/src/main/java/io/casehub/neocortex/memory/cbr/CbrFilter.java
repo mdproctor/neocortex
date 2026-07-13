@@ -28,16 +28,17 @@ public sealed interface CbrFilter {
         }
     }
 
-    record HasMatch(Map<String, Object> subFields) implements CbrFilter {
+    record HasMatch(Map<String, FeatureValue> subFields) implements CbrFilter {
         public HasMatch {
             Objects.requireNonNull(subFields, "subFields");
-            if (subFields.isEmpty()) throw new IllegalArgumentException("subFields must not be empty");
-            for (Map.Entry<String, Object> e : subFields.entrySet()) {
-                Object v = e.getValue();
-                if (!(v instanceof String) && !(v instanceof Number) && !(v instanceof NumericRange))
+            if (subFields.isEmpty()) {throw new IllegalArgumentException("subFields must not be empty");}
+            for (Map.Entry<String, FeatureValue> e : subFields.entrySet()) {
+                FeatureValue v = e.getValue();
+                if (!(v instanceof FeatureValue.StringVal) && !(v instanceof FeatureValue.NumberVal) && !(v instanceof FeatureValue.RangeVal)) {
                     throw new IllegalArgumentException(
-                        "Sub-field '" + e.getKey() + "' value must be String, Number, or NumericRange, got: "
-                        + v.getClass().getSimpleName());
+                            "Sub-field '" + e.getKey() + "' value must be StringVal, NumberVal, or RangeVal, got: "
+                            + v.getClass().getSimpleName());
+                }
             }
             subFields = Map.copyOf(subFields);
         }
@@ -78,7 +79,8 @@ public sealed interface CbrFilter {
     static Contains contains(String value) { return new Contains(value); }
     static ContainsAll containsAll(List<String> values) { return new ContainsAll(values); }
     static ContainsAny containsAny(List<String> values) { return new ContainsAny(values); }
-    static HasMatch hasMatch(Map<String, Object> subFields) { return new HasMatch(subFields); }
+
+    static HasMatch hasMatch(Map<String, FeatureValue> subFields) {return new HasMatch(subFields);}
 
     static NotContains notContains(String value)            {return new NotContains(value);}
 

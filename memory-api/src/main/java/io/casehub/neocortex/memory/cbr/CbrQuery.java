@@ -7,19 +7,19 @@ import java.util.Map;
 import java.util.Objects;
 
 public record CbrQuery(
-    String tenantId,
-    MemoryDomain domain,
-    String caseType,
-    Map<String, Object> features,
-    Map<String, CbrFilter> filters,
-    Map<String, Double> weights,
-    int topK,
-    double minSimilarity,
-    Instant notBefore,
-    String problem,
-    double vectorWeight,
-    RetrievalMode retrievalMode,
-    FusionStrategy fusionStrategy
+        String tenantId,
+        MemoryDomain domain,
+        String caseType,
+        Map<String, FeatureValue> features,
+        Map<String, CbrFilter> filters,
+        Map<String, Double> weights,
+        int topK,
+        double minSimilarity,
+        Instant notBefore,
+        String problem,
+        double vectorWeight,
+        RetrievalMode retrievalMode,
+        FusionStrategy fusionStrategy
 ) {
     public CbrQuery {
         Objects.requireNonNull(tenantId, "tenantId required");
@@ -31,23 +31,27 @@ public record CbrQuery(
         filters = Map.copyOf(filters);
         Objects.requireNonNull(weights, "weights required");
         weights = Map.copyOf(weights);
-        if (topK < 1) throw new IllegalArgumentException("topK must be >= 1, got: " + topK);
-        if (minSimilarity < 0.0 || minSimilarity > 1.0)
+        if (topK < 1) {throw new IllegalArgumentException("topK must be >= 1, got: " + topK);}
+        if (minSimilarity < 0.0 || minSimilarity > 1.0) {
             throw new IllegalArgumentException("minSimilarity must be in [0,1], got: " + minSimilarity);
-        if (vectorWeight < 0.0 || vectorWeight > 1.0)
-            throw new IllegalArgumentException("vectorWeight must be in [0,1], got: " + vectorWeight);
-        for (Map.Entry<String, Double> w : weights.entrySet()) {
-            if (w.getValue() < 0)
-                throw new IllegalArgumentException("weight for '" + w.getKey() + "' must be non-negative");
         }
-        if (problem != null && problem.isBlank())
+        if (vectorWeight < 0.0 || vectorWeight > 1.0) {
+            throw new IllegalArgumentException("vectorWeight must be in [0,1], got: " + vectorWeight);
+        }
+        for (Map.Entry<String, Double> w : weights.entrySet()) {
+            if (w.getValue() < 0) {
+                throw new IllegalArgumentException("weight for '" + w.getKey() + "' must be non-negative");
+            }
+        }
+        if (problem != null && problem.isBlank()) {
             throw new IllegalArgumentException("problem must not be blank when provided");
+        }
         Objects.requireNonNull(retrievalMode, "retrievalMode required");
         Objects.requireNonNull(fusionStrategy, "fusionStrategy required");
     }
 
     public static CbrQuery of(String tenantId, MemoryDomain domain,
-                               String caseType, Map<String, Object> features, int topK) {
+                              String caseType, Map<String, FeatureValue> features, int topK) {
         return new CbrQuery(tenantId, domain, caseType, features, Map.of(), Map.of(), topK,
                             0.0, null, null, 0.5, RetrievalMode.HYBRID, FusionStrategy.RRF);
     }

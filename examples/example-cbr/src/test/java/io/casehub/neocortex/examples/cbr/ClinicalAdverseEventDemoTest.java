@@ -5,6 +5,7 @@ import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrCaseMemoryStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("smoke")
@@ -25,8 +26,8 @@ class ClinicalAdverseEventDemoTest {
             var c = (FeatureVectorCbrCase) r.scored().cbrCase();
             assertThat(c.problem()).isNotBlank();
             assertThat(c.solution()).isNotBlank();
-            assertThat(c.features().get("adverse_event_type")).isEqualTo("Hepatotoxicity");
-            assertThat(c.features().get("trial_arm")).isEqualTo("TREATMENT");
+            assertThat(c.features().get("adverse_event_type")).isEqualTo(string("Hepatotoxicity"));
+            assertThat(c.features().get("trial_arm")).isEqualTo(string("TREATMENT"));
         });
     }
 

@@ -1,5 +1,7 @@
 package io.casehub.neocortex.memory.cbr;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
+
 import io.casehub.neocortex.fusion.FusionStrategy;
 import io.casehub.neocortex.memory.MemoryDomain;
 import org.junit.jupiter.api.Test;
@@ -16,7 +18,7 @@ class CbrQueryTest {
     @Test
     void of_createsValidQuery() {
         var q = CbrQuery.of("tenant1", CBR, "starcraft-game",
-            Map.of("race", "Zerg"), 5);
+            Map.of("race", string("Zerg")), 5);
         assertThat(q.tenantId()).isEqualTo("tenant1");
         assertThat(q.domain()).isEqualTo(CBR);
         assertThat(q.caseType()).isEqualTo("starcraft-game");
@@ -55,10 +57,10 @@ class CbrQueryTest {
 
     @Test
     void featuresDefensivelyCopied() {
-        var features = new java.util.HashMap<String, Object>();
-        features.put("race", "Zerg");
+        var features = new java.util.HashMap<String, FeatureValue>();
+        features.put("race", string("Zerg"));
         var q = CbrQuery.of("t", CBR, "type", features, 5);
-        features.put("extra", "value");
+        features.put("extra", string("value"));
         assertThat(q.features()).doesNotContainKey("extra");
     }
 
@@ -232,7 +234,7 @@ class CbrQueryTest {
     void withFilters_replacesAll() {
         var q = CbrQuery.of("t", CBR, "type", Map.of(), 5)
                         .withFilter("phases", CbrFilter.contains("A"))
-                        .withFilters(Map.of("moments", CbrFilter.hasMatch(Map.of("type", "X"))));
+                        .withFilters(Map.of("moments", CbrFilter.hasMatch(Map.of("type", string("X")))));
         assertThat(q.filters()).hasSize(1);
         assertThat(q.filters()).containsKey("moments");
     }
@@ -248,10 +250,10 @@ class CbrQueryTest {
 
     @Test
     void withFilter_preservesOtherFields() {
-        var q = CbrQuery.of("t", CBR, "type", Map.of("race", "Zerg"), 5)
+        var q = CbrQuery.of("t", CBR, "type", Map.of("race", string("Zerg")), 5)
                         .withWeights(Map.of("race", 2.0)).withProblem("test")
                         .withFilter("phases", CbrFilter.contains("A"));
-        assertThat(q.features()).containsEntry("race", "Zerg");
+        assertThat(q.features()).containsEntry("race", string("Zerg"));
         assertThat(q.weights()).containsEntry("race", 2.0);
         assertThat(q.problem()).isEqualTo("test");
     }

@@ -5,6 +5,7 @@ import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrCaseMemoryStore;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("smoke")
@@ -25,8 +26,8 @@ class LifeContractorDemoTest {
             var c = (FeatureVectorCbrCase) r.scored().cbrCase();
             assertThat(c.problem()).isNotBlank();
             assertThat(c.solution()).isNotBlank();
-            assertThat(c.features().get("job_type")).isEqualTo("PLUMBING");
-            assertThat(c.features().get("property_area")).isEqualTo("HVAC");
+            assertThat(c.features().get("job_type")).isEqualTo(string("PLUMBING"));
+            assertThat(c.features().get("property_area")).isEqualTo(string("HVAC"));
         });
     }
 

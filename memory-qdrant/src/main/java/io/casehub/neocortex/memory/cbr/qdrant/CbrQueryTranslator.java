@@ -5,6 +5,7 @@ import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.NumericRange;
 import io.qdrant.client.ConditionFactory;
 import io.qdrant.client.grpc.Common.Filter;
@@ -68,9 +69,9 @@ final class CbrQueryTranslator {
         if (!query.features().isEmpty() && schema != null) {
             validateQueryFeatures(query.features(), schema);
 
-            for (Map.Entry<String, Object> entry : query.features().entrySet()) {
+            for (var entry : query.features().entrySet()) {
                 String name = entry.getKey();
-                Object value = entry.getValue();
+                FeatureValue value = entry.getValue();
 
                 FeatureField field = findField(schema, name);
                 if (field == null) {
@@ -80,24 +81,24 @@ final class CbrQueryTranslator {
                 String payloadKey = "f_" + name;
                 switch (field) {
                     case FeatureField.Categorical c ->
-                        builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
+                        builder.addMust(ConditionFactory.matchKeyword(payloadKey, ((FeatureValue.StringVal) value).value()));
                     case FeatureField.Numeric n -> {
-                        if (value instanceof NumericRange range) {
+                        if (value instanceof FeatureValue.RangeVal range) {
                             builder.addMust(ConditionFactory.range(payloadKey,
                                 Range.newBuilder()
                                     .setGte(range.min())
                                     .setLte(range.max())
                                     .build()));
-                        } else {
+                        } else if (value instanceof FeatureValue.NumberVal nv) {
                             builder.addMust(ConditionFactory.range(payloadKey,
                                 Range.newBuilder()
-                                    .setGte(((Number) value).doubleValue())
-                                    .setLte(((Number) value).doubleValue())
+                                    .setGte(nv.value())
+                                    .setLte(nv.value())
                                     .build()));
                         }
                     }
                     case FeatureField.Text t ->
-                        builder.addMust(ConditionFactory.matchKeyword(payloadKey, (String) value));
+                        builder.addMust(ConditionFactory.matchKeyword(payloadKey, ((FeatureValue.StringVal) value).value()));
                     case FeatureField.CategoricalList cl -> throw new IllegalStateException(
                         "Structured field in toFilter — use applyStructuralFilters");
                     case FeatureField.NumericList nl -> throw new IllegalStateException(
@@ -172,15 +173,17 @@ final class CbrQueryTranslator {
     }
 
 
-    private static void addSubFieldCondition(Filter.Builder builder, String key, Object value) {
-        if (value instanceof String s) {
-            builder.addMust(ConditionFactory.matchKeyword(key, s));
-        } else if (value instanceof NumericRange range) {
-            builder.addMust(ConditionFactory.range(key,
-                                                   Range.newBuilder().setGte(range.min()).setLte(range.max()).build()));
-        } else if (value instanceof Number n) {
-            builder.addMust(ConditionFactory.range(key,
-                                                   Range.newBuilder().setGte(n.doubleValue()).setLte(n.doubleValue()).build()));
+    private static void addSubFieldCondition(Filter.Builder builder, String key, FeatureValue value) {
+        switch (value) {
+            case FeatureValue.StringVal s ->
+                builder.addMust(ConditionFactory.matchKeyword(key, s.value()));
+            case FeatureValue.RangeVal r ->
+                builder.addMust(ConditionFactory.range(key,
+                                                       Range.newBuilder().setGte(r.min()).setLte(r.max()).build()));
+            case FeatureValue.NumberVal n ->
+                builder.addMust(ConditionFactory.range(key,
+                                                       Range.newBuilder().setGte(n.value()).setLte(n.value()).build()));
+            default -> throw new IllegalArgumentException("Unsupported sub-field value type: " + value.getClass().getSimpleName());
         }
     }
 
@@ -189,7 +192,7 @@ final class CbrQueryTranslator {
      * Validate query features against schema types.
      * Throws IllegalArgumentException on type mismatches.
      */
-    static void validateQueryFeatures(Map<String, Object> features, CbrFeatureSchema schema) {CbrFeatureValidator.validateQueryFeatures(features, schema);}
+    static void validateQueryFeatures(Map<String, FeatureValue> features, CbrFeatureSchema schema) {CbrFeatureValidator.validateQueryFeatures(features, schema);}
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {
         for (FeatureField f : schema.fields()) {

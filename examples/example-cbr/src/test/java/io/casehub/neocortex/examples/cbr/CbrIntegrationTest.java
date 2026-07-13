@@ -16,6 +16,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.Map;
 
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @QuarkusTest
@@ -43,7 +44,7 @@ class CbrIntegrationTest {
     void denseVectorSearchRanksByProblemSimilarity() {
         // Query with problem text — Qdrant should rank by embedding similarity
         var query = CbrQuery.of("demo", new MemoryDomain("aml"),
-                "aml-investigation", Map.of("transaction_pattern", "STRUCTURING"), 10)
+                "aml-investigation", Map.of("transaction_pattern", string("STRUCTURING")), 10)
             .withProblem("cash deposits split across branches to avoid reporting threshold");
 
         var results = store.retrieveSimilar(query, FeatureVectorCbrCase.class);
@@ -59,7 +60,7 @@ class CbrIntegrationTest {
     @Order(2)
     void minSimilarityFiltersLowScores() {
         var query = CbrQuery.of("demo", new MemoryDomain("aml"),
-                "aml-investigation", Map.of("transaction_pattern", "STRUCTURING"), 10)
+                "aml-investigation", Map.of("transaction_pattern", string("STRUCTURING")), 10)
             .withProblem("cash deposits split across branches")
             .withMinSimilarity(0.99);
 
@@ -76,7 +77,7 @@ class CbrIntegrationTest {
     void planTraceRoundTripsThroughQdrant() {
         var query = CbrQuery.of("demo", new MemoryDomain("quarkmind"),
                 "quarkmind-battle",
-                Map.of("opponent_race", "ZERG", "detected_build", "ROACH_RUSH"), 10);
+                Map.of("opponent_race", string("ZERG"), "detected_build", string("ROACH_RUSH")), 10);
 
         var results = store.retrieveSimilar(query, PlanCbrCase.class);
         assertThat(results).isNotEmpty();
@@ -91,7 +92,7 @@ class CbrIntegrationTest {
     void crossDomainIsolation() {
         // AML query should not return clinical cases
         var query = CbrQuery.of("demo", new MemoryDomain("aml"),
-                "aml-investigation", Map.of("transaction_pattern", "STRUCTURING"), 100);
+                "aml-investigation", Map.of("transaction_pattern", string("STRUCTURING")), 100);
 
         var results = store.retrieveSimilar(query, FeatureVectorCbrCase.class);
         // With graded similarity, all AML cases are returned (filtered by identity: tenant, domain, caseType)
@@ -100,7 +101,7 @@ class CbrIntegrationTest {
         var topResults = results.stream().limit(4).toList();
         assertThat(topResults).allSatisfy(r -> {
             assertThat(r.score()).isEqualTo(1.0);
-            assertThat(r.cbrCase().features().get("transaction_pattern")).isEqualTo("STRUCTURING");
+            assertThat(r.cbrCase().features().get("transaction_pattern")).isEqualTo(string("STRUCTURING"));
         });
         // All results should be from AML domain (no cross-domain leakage)
         assertThat(results).allSatisfy(r ->
@@ -112,7 +113,7 @@ class CbrIntegrationTest {
     void notBeforeFiltersOldCases() {
         // All seed cases were just stored — notBefore set to future should return nothing
         var query = CbrQuery.of("demo", new MemoryDomain("aml"),
-                "aml-investigation", Map.of("transaction_pattern", "STRUCTURING"), 10)
+                "aml-investigation", Map.of("transaction_pattern", string("STRUCTURING")), 10)
             .withNotBefore(java.time.Instant.now().plusSeconds(3600));
 
         var results = store.retrieveSimilar(query, FeatureVectorCbrCase.class);

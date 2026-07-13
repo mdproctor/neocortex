@@ -5,6 +5,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import io.casehub.neocortex.memory.cbr.*;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
 import io.casehub.neocortex.memory.cbr.testing.CbrCaseMemoryStoreContractTest;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
@@ -142,10 +143,10 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
             s.registerSchema(CbrFeatureSchema.of("log-test",
                 FeatureField.categorical("cat")));
             s.store(new FeatureVectorCbrCase("problem", "solution", null, null,
-                Map.of("cat", "A")), "log-test", ENTITY, CBR, TENANT, "case-log");
+                Map.of("cat", string("A"))), "log-test", ENTITY, CBR, TENANT, "case-log");
 
             s.retrieveSimilar(CbrQuery.of(TENANT, CBR, "log-test",
-                Map.of("cat", "A"), 5).withProblem("query text"), FeatureVectorCbrCase.class);
+                Map.of("cat", string("A")), 5).withProblem("query text"), FeatureVectorCbrCase.class);
 
             assertThat(handler.records).anyMatch(r ->
                 r.getLevel() == java.util.logging.Level.WARNING
@@ -171,26 +172,26 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
             "marine rush problem",
             "build bunkers early",
             null, null,
-            Map.of("category", "defense", "notes", "early game marine rush attack")),
+            Map.of("category", string("defense"), "notes", string("early game marine rush attack"))),
             "semantic-text-test", ENTITY, CBR, TENANT, "case-1");
 
         semanticStore.store(new FeatureVectorCbrCase(
             "late game problem",
             "expand to third base",
             null, null,
-            Map.of("category", "economy", "notes", "late game economy management and expansion")),
+            Map.of("category", string("economy"), "notes", string("late game economy management and expansion"))),
             "semantic-text-test", ENTITY, CBR, TENANT, "case-2");
 
         semanticStore.store(new FeatureVectorCbrCase(
             "early aggression problem",
             "scout and prepare defenses",
             null, null,
-            Map.of("category", "defense", "notes", "defending against early game aggression")),
+            Map.of("category", string("defense"), "notes", string("defending against early game aggression"))),
             "semantic-text-test", ENTITY, CBR, TENANT, "case-3");
 
         // Query with text semantically similar to case-1 and case-3 (early game defense)
         var query = CbrQuery.of(TENANT, CBR, "semantic-text-test",
-            Map.of("category", "defense", "notes", "how to stop early marine attacks"), 3);
+            Map.of("category", string("defense"), "notes", string("how to stop early marine attacks")), 3);
 
         var results = semanticStore.retrieveSimilar(query, FeatureVectorCbrCase.class);
 
