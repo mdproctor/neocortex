@@ -19,4 +19,7 @@ public interface CbrCaseMemoryStore {
 
     void recordOutcome(String caseId, String tenantId, CbrOutcome outcome);
 
+    Integer purge(CbrRetentionPolicy policy);
+
+
 }

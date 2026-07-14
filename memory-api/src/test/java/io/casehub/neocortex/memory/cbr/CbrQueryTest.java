@@ -51,7 +51,7 @@ class CbrQueryTest {
     @Test
     void minSimilarityOutOfRangeRejected() {
         assertThatThrownBy(() -> new CbrQuery("t", CBR, "type", Map.of(), Map.of(), Map.of(), 5, 1.5, null, null, 0.5,
-                RetrievalMode.HYBRID, FusionStrategy.RRF))
+                RetrievalMode.HYBRID, FusionStrategy.RRF, null))
             .isInstanceOf(IllegalArgumentException.class);
     }
 

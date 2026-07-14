@@ -109,7 +109,7 @@ class CbrQueryTranslatorTest {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
             Map.of(), Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
-            RetrievalMode.HYBRID, FusionStrategy.RRF);
+            RetrievalMode.HYBRID, FusionStrategy.RRF, null);
         Filter filter = CbrQueryTranslator.toFilter(query, schema);
 
         assertThat(filter.getMustCount()).isEqualTo(4);
@@ -162,7 +162,7 @@ class CbrQueryTranslatorTest {
         Instant notBefore = Instant.parse("2025-01-01T00:00:00Z");
         var query = new CbrQuery("tenant-1", CBR, "starcraft-game",
             Map.of("opponent_race", string("Zerg")), Map.of(), Map.of(), 5, 0.0, notBefore, null, 0.5,
-            RetrievalMode.HYBRID, FusionStrategy.RRF);
+            RetrievalMode.HYBRID, FusionStrategy.RRF, null);
         Filter filter = CbrQueryTranslator.toIdentityFilter(query);
 
         // 3 identity + 1 notBefore

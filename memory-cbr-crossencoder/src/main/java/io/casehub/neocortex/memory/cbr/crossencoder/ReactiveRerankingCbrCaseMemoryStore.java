@@ -7,6 +7,7 @@ import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
@@ -68,7 +69,7 @@ public class ReactiveRerankingCbrCaseMemoryStore implements ReactiveCbrCaseMemor
                 query.tenantId(), query.domain(), query.caseType(),
                 query.features(), query.filters(), query.weights(), fetchSize,
                 query.minSimilarity(), query.notBefore(), query.problem(),
-                query.vectorWeight(), query.retrievalMode(), query.fusionStrategy());
+                query.vectorWeight(), query.retrievalMode(), query.fusionStrategy(), query.temporalDecay());
 
         return delegate.retrieveSimilar(overfetchQuery, caseClass)
                        .onItem().transformToUni(candidates -> {
@@ -98,6 +99,11 @@ public class ReactiveRerankingCbrCaseMemoryStore implements ReactiveCbrCaseMemor
     @Override
     public Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         return delegate.recordOutcome(caseId, tenantId, outcome);
+    }
+
+    @Override
+    public Uni<Integer> purge(CbrRetentionPolicy policy) {
+        return delegate.purge(policy);
     }
 
 

@@ -4,9 +4,9 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.BridgedCbrStore;
 import io.casehub.neocortex.memory.cbr.CbrCase;
-import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrRetrievalRecorded;
 import io.casehub.neocortex.memory.cbr.CbrRetrievalTrace;
@@ -96,4 +96,10 @@ public class ReactiveTrackingCbrCaseMemoryStore implements ReactiveCbrCaseMemory
     public Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         return delegate.recordOutcome(caseId, tenantId, outcome);
     }
+
+    @Override
+    public Uni<Integer> purge(CbrRetentionPolicy policy) {
+        return delegate.purge(policy);
+    }
+
 }

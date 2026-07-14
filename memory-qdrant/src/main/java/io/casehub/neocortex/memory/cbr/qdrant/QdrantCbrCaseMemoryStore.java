@@ -19,6 +19,7 @@ import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrSimilarityScorer;
 import io.casehub.neocortex.memory.cbr.FeatureField;
@@ -36,10 +37,9 @@ import io.qdrant.client.PointIdFactory;
 import io.qdrant.client.ValueFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.grpc.Common.Filter;
-import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Common.PointId;
+import io.qdrant.client.grpc.JsonWithInt.Value;
 import io.qdrant.client.grpc.Points.PointStruct;
-import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScoredPoint;
 import io.qdrant.client.grpc.Points.SearchPoints;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -620,6 +620,71 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
             }
         }
     }
+
+    @Override
+    public Integer purge(CbrRetentionPolicy policy) {
+        int deleted = 0;
+        List<String> targetTypes = policy.caseType() != null
+                                   ? List.of(policy.caseType())
+                                   : List.copyOf(schemas.keySet());
+
+        for (String caseType : targetTypes) {
+            String collection = collectionManager.collectionName(caseType);
+            try {
+                if (!collectionManager.client().collectionExistsAsync(collection).get()) {
+                    continue;
+                }
+
+                if (policy.maxAgeDays() != null) {
+                    long cutoffMillis = Instant.now().minus(java.time.Duration.ofDays(policy.maxAgeDays())).toEpochMilli();
+                    Filter ageFilter = Filter.newBuilder()
+                                             .addMust(ConditionFactory.matchKeyword("tenantId", policy.tenantId()))
+                                             .addMust(ConditionFactory.matchKeyword("domain", policy.domain().name()))
+                                             .addMust(ConditionFactory.range("_stored_at", io.qdrant.client.grpc.Common.Range.newBuilder().setLt(cutoffMillis).build()))
+                                             .build();
+                    deleted += collectionManager.deleteByFilter(collection, ageFilter);
+                }
+
+                if (policy.maxCasesPerType() != null) {
+                    Filter scopeFilter = Filter.newBuilder()
+                                               .addMust(ConditionFactory.matchKeyword("tenantId", policy.tenantId()))
+                                               .addMust(ConditionFactory.matchKeyword("domain", policy.domain().name()))
+                                               .build();
+                    var scrollResult = collectionManager.client().scrollAsync(
+                            io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+                                                                     .setCollectionName(collection)
+                                                                     .setFilter(scopeFilter)
+                                                                     .setLimit(100000)
+                                                                     .setWithPayload(WithPayloadSelectorFactory.include(List.of("_stored_at")))
+                                                                     .build()).get();
+
+                    var points = new ArrayList<>(scrollResult.getResultList());
+                    if (points.size() > policy.maxCasesPerType()) {
+                        points.sort((a, b) -> {
+                            long aTime = a.getPayloadOrDefault("_stored_at", ValueFactory.value(0L))
+                                          .getIntegerValue();
+                            long bTime = b.getPayloadOrDefault("_stored_at", ValueFactory.value(0L))
+                                          .getIntegerValue();
+                            return Long.compare(bTime, aTime);
+                        });
+                        List<PointId> toDelete = new ArrayList<>();
+                        for (int i = policy.maxCasesPerType(); i < points.size(); i++) {
+                            toDelete.add(points.get(i).getId());
+                        }
+                        collectionManager.client().deleteAsync(collection, toDelete).get();
+                        deleted += toDelete.size();
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted during purge", e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException("Purge failed", e.getCause());
+            }
+        }
+        return deleted;
+    }
+
 
     private int vectorDimension() {
         return embeddingModel != null ? embeddingModel.dimension() : 0;

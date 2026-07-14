@@ -20,4 +20,7 @@ public interface ReactiveCbrCaseMemoryStore {
 
     Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome);
 
+    Uni<Integer> purge(CbrRetentionPolicy policy);
+
+
 }

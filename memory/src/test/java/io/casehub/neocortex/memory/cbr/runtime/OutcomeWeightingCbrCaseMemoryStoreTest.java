@@ -121,6 +121,7 @@ class OutcomeWeightingCbrCaseMemoryStoreTest {
             @Override public Integer erase(EraseRequest r) { return 0; }
             @Override public Integer eraseEntity(String e, String t) { return 0; }
             @Override public void recordOutcome(String c, String t, CbrOutcome o) {}
+            @Override public Integer purge(io.casehub.neocortex.memory.cbr.CbrRetentionPolicy p) { return 0; }
         };
     }
 }

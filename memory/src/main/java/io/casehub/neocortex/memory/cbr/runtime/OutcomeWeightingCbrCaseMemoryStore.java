@@ -6,6 +6,7 @@ import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.OutcomeWeightingFunction;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
@@ -79,4 +80,10 @@ public class OutcomeWeightingCbrCaseMemoryStore implements CbrCaseMemoryStore {
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         delegate.recordOutcome(caseId, tenantId, outcome);
     }
+
+    @Override
+    public Integer purge(CbrRetentionPolicy policy) {
+        return delegate.purge(policy);
+    }
+
 }

@@ -9,6 +9,8 @@ import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
+import io.casehub.neocortex.memory.cbr.TemporalDecay;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
@@ -281,7 +283,7 @@ public abstract class CbrCaseMemoryStoreContractTest {
 
         var q = new CbrQuery(TENANT, CBR, "starcraft-game",
                              Map.of("opponent_race", string("Zerg")), Map.of(), Map.of(), 10, 0.0, boundary, null, 0.5,
-                             RetrievalMode.HYBRID, FusionStrategy.RRF);
+                             RetrievalMode.HYBRID, FusionStrategy.RRF, null);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().cbrCase().problem()).isEqualTo("new game");
@@ -1867,5 +1869,131 @@ public abstract class CbrCaseMemoryStoreContractTest {
                         .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
                 FeatureVectorCbrCase.class);
         assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.84, within(0.001));
+    }
+
+    @Test
+    void purge_countBased_keepsNewestCases() {
+        registerDefaultSchema();
+        for (int i = 0; i < 5; i++) {
+            store().store(
+                    new FeatureVectorCbrCase("problem-" + i, "solution-" + i, null, null,
+                                             Map.of("severity", FeatureValue.string("HIGH"))),
+                    "diagnosis", ENTITY, CBR, TENANT, "case-" + i);
+        }
+
+        var policy  = new CbrRetentionPolicy(TENANT, CBR, "diagnosis", null, 3);
+        int deleted = store().purge(policy);
+
+        assertThat(deleted).isEqualTo(2);
+        var remaining = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, "diagnosis",
+                            Map.of("severity", FeatureValue.string("HIGH")), 10),
+                FeatureVectorCbrCase.class);
+        assertThat(remaining).hasSize(3);
+    }
+
+    @Test
+    void purge_countBased_noPurgeWhenUnderLimit() {
+        registerDefaultSchema();
+        store().store(
+                new FeatureVectorCbrCase("p1", "s1", null, null,
+                                         Map.of("severity", FeatureValue.string("HIGH"))),
+                "diagnosis", ENTITY, CBR, TENANT, "case-1");
+
+        var policy  = new CbrRetentionPolicy(TENANT, CBR, "diagnosis", null, 5);
+        int deleted = store().purge(policy);
+        assertThat(deleted).isEqualTo(0);
+    }
+
+    @Test
+    void purge_ageBased_recentCasesNotPurged() {
+        registerDefaultSchema();
+        store().store(
+                new FeatureVectorCbrCase("p1", "s1", null, null,
+                                         Map.of("severity", FeatureValue.string("HIGH"))),
+                "diagnosis", ENTITY, CBR, TENANT, "case-1");
+
+        var policy  = new CbrRetentionPolicy(TENANT, CBR, "diagnosis", 365, null);
+        int deleted = store().purge(policy);
+        assertThat(deleted).isEqualTo(0);
+    }
+
+    @Test
+    void purge_scopedByTenant() {
+        registerDefaultSchema();
+        store().store(
+                new FeatureVectorCbrCase("p1", "s1", null, null,
+                                         Map.of("severity", FeatureValue.string("HIGH"))),
+                "diagnosis", ENTITY, CBR, TENANT, "case-1");
+        store().store(
+                new FeatureVectorCbrCase("p2", "s2", null, null,
+                                         Map.of("severity", FeatureValue.string("LOW"))),
+                "diagnosis", ENTITY, CBR, "other-tenant", "case-2");
+
+        var policy  = new CbrRetentionPolicy(TENANT, CBR, "diagnosis", null, 0 + 1);
+        int deleted = store().purge(policy);
+
+        assertThat(deleted).isEqualTo(0);
+        var otherResults = store().retrieveSimilar(
+                CbrQuery.of("other-tenant", CBR, "diagnosis",
+                            Map.of("severity", FeatureValue.string("LOW")), 10),
+                FeatureVectorCbrCase.class);
+        assertThat(otherResults).hasSize(1);
+    }
+
+    @Test
+    void purge_combinedAgeAndCount() {
+        registerDefaultSchema();
+        for (int i = 0; i < 4; i++) {
+            store().store(
+                    new FeatureVectorCbrCase("problem-" + i, "solution-" + i, null, null,
+                                             Map.of("severity", FeatureValue.string("HIGH"))),
+                    "diagnosis", ENTITY, CBR, TENANT, "case-" + i);
+        }
+
+        var policy  = new CbrRetentionPolicy(TENANT, CBR, "diagnosis", 365, 2);
+        int deleted = store().purge(policy);
+        assertThat(deleted).isEqualTo(2);
+    }
+
+    @Test
+    void temporalDecay_null_noEffect() {
+        registerDefaultSchema();
+        store().store(new FeatureVectorCbrCase("p1", "s1", null, null,
+                                               Map.of("severity", FeatureValue.string("HIGH"))),
+                      "diagnosis", ENTITY, CBR, TENANT, "case-1");
+
+        var query = CbrQuery.of(TENANT, CBR, "diagnosis",
+                                Map.of("severity", FeatureValue.string("HIGH")), 10);
+        assertThat(query.temporalDecay()).isNull();
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().score()).isCloseTo(1.0, within(0.01));
+    }
+
+    @Test
+    void temporalDecay_longHalfLife_recentCasesUnaffected() {
+        registerDefaultSchema();
+        store().store(new FeatureVectorCbrCase("p1", "s1", null, null,
+                                               Map.of("severity", FeatureValue.string("HIGH"))),
+                      "diagnosis", ENTITY, CBR, TENANT, "case-1");
+
+        var query = CbrQuery.of(TENANT, CBR, "diagnosis",
+                                Map.of("severity", FeatureValue.string("HIGH")), 10)
+                            .withTemporalDecay(new TemporalDecay.HalfLife(java.time.Duration.ofDays(365)));
+        var results = store().retrieveSimilar(query, FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().score()).isCloseTo(1.0, within(0.01));
+    }
+
+    @Test
+    void temporalDecay_withTemporalDecay_builderPreservesOtherFields() {
+        var base = CbrQuery.of(TENANT, CBR, "diagnosis",
+                               Map.of("severity", FeatureValue.string("HIGH")), 5)
+                           .withMinSimilarity(0.3);
+        var decayed = base.withTemporalDecay(new TemporalDecay.HalfLife(java.time.Duration.ofDays(30)));
+        assertThat(decayed.minSimilarity()).isEqualTo(0.3);
+        assertThat(decayed.topK()).isEqualTo(5);
+        assertThat(decayed.temporalDecay()).isInstanceOf(TemporalDecay.HalfLife.class);
     }
 }

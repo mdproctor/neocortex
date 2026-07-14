@@ -239,7 +239,7 @@ public class SqliteCbrRetrievalTracker implements CbrRetrievalTracker {
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> deserializeFilter((Map<String, Object>) e.getValue())))
                 : Map.of();
         return new CbrQuery(tid, dom, ct, features, filters, weights,
-                topK, minSim, notBefore, problem, vecW, mode, fusion);
+                topK, minSim, notBefore, problem, vecW, mode, fusion, null);
     }
 
     static Map<String, Object> serializeFilter(CbrFilter filter) {

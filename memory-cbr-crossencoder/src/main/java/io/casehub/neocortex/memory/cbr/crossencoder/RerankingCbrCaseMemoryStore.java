@@ -6,8 +6,9 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
-import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
@@ -74,7 +75,7 @@ public class RerankingCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 query.tenantId(), query.domain(), query.caseType(),
                 query.features(), query.filters(), query.weights(), fetchSize,
                 query.minSimilarity(), query.notBefore(), query.problem(),
-                query.vectorWeight(), query.retrievalMode(), query.fusionStrategy());
+                query.vectorWeight(), query.retrievalMode(), query.fusionStrategy(), query.temporalDecay());
 
         List<ScoredCbrCase<C>> candidates = delegate.retrieveSimilar(overfetchQuery, caseClass);
         if (candidates.isEmpty()) {return candidates;}
@@ -114,6 +115,11 @@ public class RerankingCbrCaseMemoryStore implements CbrCaseMemoryStore {
     @Override
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         delegate.recordOutcome(caseId, tenantId, outcome);
+    }
+
+    @Override
+    public Integer purge(CbrRetentionPolicy policy) {
+        return delegate.purge(policy);
     }
 
 

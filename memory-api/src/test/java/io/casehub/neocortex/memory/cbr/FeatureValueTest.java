@@ -1,9 +1,12 @@
 package io.casehub.neocortex.memory.cbr;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FeatureValueTest {
 
@@ -141,5 +144,38 @@ class FeatureValueTest {
             case FeatureValue.StructListVal sl -> "structList";
         };
         assertThat(result).isEqualTo("string:test");
+    }
+
+    @Test
+    void of_boolean_true_mapsToStringVal() {
+        var result = FeatureValue.of(true);
+        assertThat(result).isEqualTo(FeatureValue.string("true"));
+    }
+
+    @Test
+    void of_boolean_false_mapsToStringVal() {
+        var result = FeatureValue.of(false);
+        assertThat(result).isEqualTo(FeatureValue.string("false"));
+    }
+
+    @Test
+    void of_boxedBoolean_mapsToStringVal() {
+        Boolean boxed  = Boolean.TRUE;
+        var     result = FeatureValue.of(boxed);
+        assertThat(result).isEqualTo(FeatureValue.string("true"));
+    }
+
+    @Test
+    void toFeatureMap_withBoolean_mapsToStringVal() {
+        var raw    = Map.<String, Object>of("active", true, "name", "test");
+        var result = FeatureValue.toFeatureMap(raw);
+        assertThat(result.get("active")).isEqualTo(FeatureValue.string("true"));
+        assertThat(result.get("name")).isEqualTo(FeatureValue.string("test"));
+    }
+
+    @Test
+    void of_booleanList_mapsToStringListVal() {
+        var result = FeatureValue.of(List.of(true, false, true));
+        assertThat(result).isEqualTo(FeatureValue.stringList("true", "false", "true"));
     }
 }

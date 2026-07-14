@@ -11,6 +11,7 @@ import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrSimilarityScorer;
 import io.casehub.neocortex.memory.cbr.FeatureField;
@@ -138,9 +139,13 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
             CbrSimilarityScorer.SimilarityBreakdown breakdown = CbrSimilarityScorer.scoreDetailed(
                     query.features(), reconstructed.features(), query.weights(), schema, Map.of());
 
-            if (breakdown.score() >= query.minSimilarity()) {
+            double score = breakdown.score();
+            if (query.temporalDecay() != null) {
+                score *= query.temporalDecay().factor(entity.storedAt, Instant.now());
+            }
+            if (score >= query.minSimilarity()) {
                 candidates.add(new ScoredCbrCase<>((C) reconstructed, entity.caseId,
-                                                   breakdown.score(), false, breakdown.featureSimilarities()));
+                                                   score, false, breakdown.featureSimilarities()));
             }
         }
 
@@ -199,6 +204,51 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
         entity.outcomeDetail = outcome.detail();
         entity.lastOutcomeAt = outcome.observedAt();
         em.merge(entity);
+    }
+
+    @Override
+    @Transactional
+    public Integer purge(CbrRetentionPolicy policy) {
+        int deleted = 0;
+        if (policy.maxAgeDays() != null) {
+            Instant cutoff = Instant.now().minus(java.time.Duration.ofDays(policy.maxAgeDays()));
+            String jpql = "DELETE FROM CbrCaseEntity e WHERE e.tenantId = :t AND e.domain = :d AND e.storedAt < :cutoff"
+                          + (policy.caseType() != null ? " AND e.caseType = :ct" : "");
+            var q = em.createQuery(jpql)
+                      .setParameter("t", policy.tenantId())
+                      .setParameter("d", policy.domain().name())
+                      .setParameter("cutoff", cutoff);
+            if (policy.caseType() != null) {
+                q.setParameter("ct", policy.caseType());
+            }
+            deleted += q.executeUpdate();
+        }
+        if (policy.maxCasesPerType() != null) {
+            String typeJpql = "SELECT DISTINCT e.caseType FROM CbrCaseEntity e WHERE e.tenantId = :t AND e.domain = :d"
+                              + (policy.caseType() != null ? " AND e.caseType = :ct" : "");
+            var typeQuery = em.createQuery(typeJpql, String.class)
+                              .setParameter("t", policy.tenantId())
+                              .setParameter("d", policy.domain().name());
+            if (policy.caseType() != null) {
+                typeQuery.setParameter("ct", policy.caseType());
+            }
+            for (String ct : typeQuery.getResultList()) {
+                var ids = em.createQuery(
+                                    "SELECT e.id FROM CbrCaseEntity e WHERE e.tenantId = :t AND e.domain = :d AND e.caseType = :ct ORDER BY e.storedAt DESC",
+                                    String.class)
+                            .setParameter("t", policy.tenantId())
+                            .setParameter("d", policy.domain().name())
+                            .setParameter("ct", ct)
+                            .getResultList();
+                if (ids.size() > policy.maxCasesPerType()) {
+                    List<String> toDelete = ids.subList(policy.maxCasesPerType(), ids.size());
+                    deleted += em.createQuery("DELETE FROM CbrCaseEntity e WHERE e.id IN :ids")
+                                 .setParameter("ids", toDelete)
+                                 .executeUpdate();
+                }
+            }
+        }
+        return deleted;
     }
 
 

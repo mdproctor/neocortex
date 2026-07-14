@@ -4,10 +4,11 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
-import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrFeatureValidator;
 import io.casehub.neocortex.memory.cbr.CbrFilter;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrSimilarityScorer;
 import io.casehub.neocortex.memory.cbr.FeatureField;
@@ -126,9 +127,13 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                     query.features(), stored.cbrCase().features(), query.weights(), schema, Map.of(),
                     abandonCost);
 
-            if (breakdown.score() >= query.minSimilarity()) {
+            double score = breakdown.score();
+            if (query.temporalDecay() != null) {
+                score *= query.temporalDecay().factor(stored.storedAt(), Instant.now());
+            }
+            if (score >= query.minSimilarity()) {
                 candidates.add(new ScoredCbrCase<>((C) stored.cbrCase(), stored.caseId(),
-                                                   breakdown.score(), false, breakdown.featureSimilarities()));
+                                                   score, false, breakdown.featureSimilarities()));
                 candidates.sort((a, b) -> Double.compare(b.score(), a.score()));
             }
         }
@@ -178,6 +183,36 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                 return;
             }
         }
+    }
+
+    @Override
+    public Integer purge(CbrRetentionPolicy policy) {
+        int before = cases.size();
+        if (policy.maxAgeDays() != null) {
+            Instant cutoff = Instant.now().minus(java.time.Duration.ofDays(policy.maxAgeDays()));
+            cases.removeIf(sc -> sc.tenantId().equals(policy.tenantId())
+                                 && sc.domain().equals(policy.domain())
+                                 && (policy.caseType() == null || sc.caseType().equals(policy.caseType()))
+                                 && sc.storedAt().isBefore(cutoff));
+        }
+        if (policy.maxCasesPerType() != null) {
+            var grouped = new java.util.LinkedHashMap<String, java.util.List<StoredCase>>();
+            for (StoredCase sc : cases) {
+                if (!sc.tenantId().equals(policy.tenantId()) || !sc.domain().equals(policy.domain())) {continue;}
+                if (policy.caseType() != null && !sc.caseType().equals(policy.caseType())) {continue;}
+                grouped.computeIfAbsent(sc.caseType(), k -> new java.util.ArrayList<>()).add(sc);
+            }
+            for (var entry : grouped.values()) {
+                if (entry.size() > policy.maxCasesPerType()) {
+                    entry.sort(java.util.Comparator.comparing(StoredCase::storedAt));
+                    int excess = entry.size() - policy.maxCasesPerType();
+                    for (int i = 0; i < excess; i++) {
+                        cases.remove(entry.get(i));
+                    }
+                }
+            }
+        }
+        return before - cases.size();
     }
 
 

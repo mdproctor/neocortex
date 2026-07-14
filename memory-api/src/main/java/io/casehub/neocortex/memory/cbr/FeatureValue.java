@@ -63,6 +63,7 @@ public sealed interface FeatureValue {
     static FeatureValue of(Object value) {
         if (value instanceof FeatureValue fv) {return fv;}
         if (value instanceof String s) {return string(s);}
+        if (value instanceof Boolean b) {return string(b.toString());}
         if (value instanceof Number n) {return number(n.doubleValue());}
         if (value instanceof Map<?, ?> map) {
             var fields = new java.util.LinkedHashMap<String, FeatureValue>(map.size());
@@ -72,6 +73,9 @@ public sealed interface FeatureValue {
         if (value instanceof List<?> list) {
             if (list.isEmpty()) {return stringList(List.of());}
             Object first = list.getFirst();
+            if (first instanceof Boolean) {
+                return stringList(list.stream().map(Object::toString).toList());
+            }
             if (first instanceof String) {return stringList((List<String>) list);}
             if (first instanceof Number) {
                 return numberList(list.stream().map(e -> ((Number) e).doubleValue()).toList());

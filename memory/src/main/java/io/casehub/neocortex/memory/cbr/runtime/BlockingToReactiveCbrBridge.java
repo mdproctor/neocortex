@@ -8,6 +8,7 @@ import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.quarkus.arc.DefaultBean;
@@ -63,4 +64,10 @@ public class BlockingToReactiveCbrBridge implements ReactiveCbrCaseMemoryStore, 
                   .invoke(() -> delegate.recordOutcome(caseId, tenantId, outcome))
                   .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
+
+    @Override
+    public Uni<Integer> purge(CbrRetentionPolicy policy) {
+        return Uni.createFrom().item(() -> delegate.purge(policy))
+                  .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());}
+
 }
