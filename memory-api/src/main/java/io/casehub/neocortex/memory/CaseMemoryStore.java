@@ -36,6 +36,12 @@ public interface CaseMemoryStore {
      * {@code MemoryInput} directly. Explicit {@code @ActivateRequestContext} is not
      * required for memory writes from batch or startup code.
      *
+     * <p><b>Fire-and-forget:</b> for CDI observers ({@code @ObservesAsync}) and other
+     * contexts where backend failures must not propagate, inject
+     * {@link io.casehub.memory.runtime.MemoryEmitter MemoryEmitter} instead — it wraps
+     * this store with error isolation and structured logging. {@link SecurityException}
+     * from tenant assertion still propagates through {@code MemoryEmitter}.
+     *
      * <p><b>Text field guidance:</b> {@link MemoryInput#text()} must be human-readable
      * natural language when using semantic adapters (Mem0, Graphiti) — it is the field
      * embedded for vector search. Use {@link MemoryInput#attributes()} for structured
