@@ -595,6 +595,67 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     @Override
+    public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {
+        java.util.Objects.requireNonNull(scope, "scope required");
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+
+        int totalErased = 0;
+        for (String caseType : schemas.keySet()) {
+            String collection = collectionManager.collectionName(caseType);
+            try {
+                if (!collectionManager.client().collectionExistsAsync(collection).get()) {
+                    continue;
+                }
+
+                Filter tenantFilter = Filter.newBuilder()
+                                            .addMust(ConditionFactory.matchKeyword("tenantId", tenantId))
+                                            .build();
+
+                var scrollResult = collectionManager.client().scrollAsync(
+                        io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+                                                                 .setCollectionName(collection)
+                                                                 .setFilter(tenantFilter)
+                                                                 .setLimit(100000)
+                                                                 .setWithPayload(WithPayloadSelectorFactory.include(
+                                                                         List.of("scope", "entityId", "domain", "caseId")))
+                                                                 .build()).get();
+
+                List<PointId> toDelete = new ArrayList<>();
+                for (var point : scrollResult.getResultList()) {
+                    Map<String, Value>                payload     = point.getPayloadMap();
+                    io.casehub.platform.api.path.Path storedScope = extractScope(payload);
+                    if (scope.segments().isEmpty()
+                        || storedScope.equals(scope)
+                        || scope.isAncestorOf(storedScope)) {
+                        toDelete.add(point.getId());
+                        if (delegate != null) {
+                            String entityId = extractString(payload, "entityId");
+                            String domain   = extractString(payload, "domain");
+                            String caseId   = extractString(payload, "caseId");
+                            if (entityId != null && domain != null && caseId != null) {
+                                delegate.erase(new EraseRequest(entityId,
+                                                                new MemoryDomain(domain), tenantId, caseId));
+                            }
+                        }
+                    }
+                }
+
+                if (!toDelete.isEmpty()) {
+                    collectionManager.client().deleteAsync(collection, toDelete).get();
+                    totalErased += toDelete.size();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted during eraseByScope", e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException("eraseByScope failed", e.getCause());
+            }
+        }
+        return totalErased;
+    }
+
+
+    @Override
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         for (String caseType : schemas.keySet()) {
             String collection = collectionManager.collectionName(caseType);

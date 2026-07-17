@@ -188,6 +188,24 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     @Override
     @Transactional
+    public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {
+        java.util.Objects.requireNonNull(scope, "scope required");
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        if (scope.segments().isEmpty()) {
+            return em.createQuery("DELETE FROM CbrCaseEntity e WHERE e.tenantId = :t")
+                     .setParameter("t", tenantId)
+                     .executeUpdate();
+        }
+        return em.createQuery("DELETE FROM CbrCaseEntity e WHERE e.tenantId = :t AND (e.scope = :s OR e.scope LIKE :prefix)")
+                 .setParameter("t", tenantId)
+                 .setParameter("s", scope.value())
+                 .setParameter("prefix", scope.value() + "/%")
+                 .executeUpdate();
+    }
+
+
+    @Override
+    @Transactional
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         var results = em.createQuery(
                                 "SELECT c FROM CbrCaseEntity c WHERE c.caseId = :caseId AND c.tenantId = :tenantId",

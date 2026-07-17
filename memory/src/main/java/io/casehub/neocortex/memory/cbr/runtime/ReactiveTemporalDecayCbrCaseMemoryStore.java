@@ -63,6 +63,10 @@ public class ReactiveTemporalDecayCbrCaseMemoryStore implements ReactiveCbrCaseM
     public Uni<String> store(CbrCase c, String ct, String e, MemoryDomain d, String t, String ci, io.casehub.platform.api.path.Path scope) {return delegate.store(c, ct, e, d, t, ci, scope);}
     @Override public Uni<Integer> erase(EraseRequest r) { return delegate.erase(r); }
     @Override public Uni<Integer> eraseEntity(String e, String t) { return delegate.eraseEntity(e, t); }
+
+    @Override
+    public Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {return delegate.eraseByScope(scope, tenantId);}
+
     @Override public Uni<Void> recordOutcome(String ci, String t, CbrOutcome o) { return delegate.recordOutcome(ci, t, o); }
     @Override public Uni<Integer> purge(CbrRetentionPolicy p) { return delegate.purge(p); }
     @Override public Uni<Void> supersede(String caseId, String tenantId, String supersedingCaseId, String reason) { return delegate.supersede(caseId, tenantId, supersedingCaseId, reason); }

@@ -138,6 +138,7 @@ class DecoratorChainIntegrationTest {
             @Override public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery q, Class<C> cl) { return (List<ScoredCbrCase<C>>) (List<?>) results; }
             @Override public Integer erase(EraseRequest r) { return 0; }
             @Override public Integer eraseEntity(String e, String t) { return 0; }
+            @Override public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String t) { return 0; }
             @Override public void recordOutcome(String c, String t, CbrOutcome o) {}
             @Override public Integer purge(CbrRetentionPolicy p) { return 0; }
             @Override public void supersede(String c, String t, String s, String r) {}
@@ -153,6 +154,7 @@ class DecoratorChainIntegrationTest {
             @Override public <C extends CbrCase> Uni<List<ScoredCbrCase<C>>> retrieveSimilar(CbrQuery q, Class<C> cl) { return Uni.createFrom().item((List<ScoredCbrCase<C>>) (List<?>) results); }
             @Override public Uni<Integer> erase(EraseRequest r) { return Uni.createFrom().item(0); }
             @Override public Uni<Integer> eraseEntity(String e, String t) { return Uni.createFrom().item(0); }
+            @Override public Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String t) { return Uni.createFrom().item(0); }
             @Override public Uni<Void> recordOutcome(String c, String t, CbrOutcome o) { return Uni.createFrom().voidItem(); }
             @Override public Uni<Integer> purge(CbrRetentionPolicy p) { return Uni.createFrom().item(0); }
             @Override public Uni<Void> supersede(String c, String t, String s, String r) { return Uni.createFrom().voidItem(); }
@@ -208,6 +210,7 @@ class DecoratorChainIntegrationTest {
         }
         @Override public Integer erase(EraseRequest r) { return delegate.erase(r); }
         @Override public Integer eraseEntity(String e, String t) { return delegate.eraseEntity(e, t); }
+        @Override public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String t) { return delegate.eraseByScope(scope, t); }
         @Override public void recordOutcome(String c, String t, CbrOutcome o) { delegate.recordOutcome(c, t, o); }
         @Override public Integer purge(CbrRetentionPolicy p) { return delegate.purge(p); }
         @Override public void supersede(String c, String t, String s, String r) { delegate.supersede(c, t, s, r); }
@@ -222,6 +225,7 @@ class DecoratorChainIntegrationTest {
         @Override public <C extends CbrCase> Uni<List<ScoredCbrCase<C>>> retrieveSimilar(CbrQuery q, Class<C> cl) { return Uni.createFrom().item(() -> delegate.retrieveSimilar(q, cl)); }
         @Override public Uni<Integer> erase(EraseRequest r) { return Uni.createFrom().item(() -> delegate.erase(r)); }
         @Override public Uni<Integer> eraseEntity(String e, String t) { return Uni.createFrom().item(() -> delegate.eraseEntity(e, t)); }
+        @Override public Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String t) { return Uni.createFrom().item(() -> delegate.eraseByScope(scope, t)); }
         @Override public Uni<Void> recordOutcome(String c, String t, CbrOutcome o) { return Uni.createFrom().voidItem().invoke(() -> delegate.recordOutcome(c, t, o)); }
         @Override public Uni<Integer> purge(CbrRetentionPolicy p) { return Uni.createFrom().item(() -> delegate.purge(p)); }
         @Override public Uni<Void> supersede(String c, String t, String s, String r) { return Uni.createFrom().voidItem().invoke(() -> delegate.supersede(c, t, s, r)); }

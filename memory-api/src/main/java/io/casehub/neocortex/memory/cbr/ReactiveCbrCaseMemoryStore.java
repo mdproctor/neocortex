@@ -18,6 +18,9 @@ public interface ReactiveCbrCaseMemoryStore {
 
     Uni<Integer> eraseEntity(String entityId, String tenantId);
 
+    Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId);
+
+
     Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome);
 
     Uni<Integer> purge(CbrRetentionPolicy policy);

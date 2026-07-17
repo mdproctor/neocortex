@@ -43,6 +43,12 @@ public class NoOpCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     @Override
+    public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {
+        return 0;
+    }
+
+
+    @Override
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {}
 
     @Override

@@ -164,6 +164,17 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     @Override
+    public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {
+        java.util.Objects.requireNonNull(scope, "scope required");
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        int before = cases.size();
+        cases.removeIf(sc -> sc.tenantId().equals(tenantId)
+                             && (sc.scope().equals(scope) || scope.isAncestorOf(sc.scope())));
+        return before - cases.size();
+    }
+
+
+    @Override
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         for (int i = 0; i < cases.size(); i++) {
             StoredCase stored = cases.get(i);

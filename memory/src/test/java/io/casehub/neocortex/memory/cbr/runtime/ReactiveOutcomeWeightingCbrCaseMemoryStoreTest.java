@@ -117,6 +117,7 @@ class ReactiveOutcomeWeightingCbrCaseMemoryStoreTest {
             }
             @Override public Uni<Integer> erase(EraseRequest r) { return Uni.createFrom().item(0); }
             @Override public Uni<Integer> eraseEntity(String e, String t) { return Uni.createFrom().item(0); }
+            @Override public Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String t) { return Uni.createFrom().item(0); }
             @Override public Uni<Void> recordOutcome(String c, String t, CbrOutcome o) { return Uni.createFrom().voidItem(); }
             @Override public Uni<Integer> purge(io.casehub.neocortex.memory.cbr.CbrRetentionPolicy p) { return Uni.createFrom().item(0); }
             @Override public Uni<Void> supersede(String c, String t, String s, String r) { return Uni.createFrom().voidItem(); }

@@ -59,6 +59,13 @@ public class BlockingToReactiveCbrBridge implements ReactiveCbrCaseMemoryStore, 
     }
 
     @Override
+    public Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {
+        return Uni.createFrom().item(() -> delegate.eraseByScope(scope, tenantId))
+                  .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
+
+    @Override
     public Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         return Uni.createFrom().voidItem()
                   .invoke(() -> delegate.recordOutcome(caseId, tenantId, outcome))

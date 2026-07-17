@@ -58,6 +58,10 @@ public class ScopeDecayCbrCaseMemoryStore implements CbrCaseMemoryStore {
     @Override public String store(CbrCase c, String ct, String e, MemoryDomain d, String t, String ci, Path scope) { return delegate.store(c, ct, e, d, t, ci, scope); }
     @Override public Integer erase(EraseRequest r) { return delegate.erase(r); }
     @Override public Integer eraseEntity(String e, String t) { return delegate.eraseEntity(e, t); }
+
+    @Override
+    public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {return delegate.eraseByScope(scope, tenantId);}
+
     @Override public void recordOutcome(String ci, String t, CbrOutcome o) { delegate.recordOutcome(ci, t, o); }
     @Override public Integer purge(CbrRetentionPolicy p) { return delegate.purge(p); }
     @Override public void supersede(String caseId, String tenantId, String supersedingCaseId, String reason) { delegate.supersede(caseId, tenantId, supersedingCaseId, reason); }

@@ -17,6 +17,9 @@ public interface CbrCaseMemoryStore {
 
     Integer eraseEntity(String entityId, String tenantId);
 
+    Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId);
+
+
     void recordOutcome(String caseId, String tenantId, CbrOutcome outcome);
 
     Integer purge(CbrRetentionPolicy policy);

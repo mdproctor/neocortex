@@ -105,6 +105,7 @@ class ScopeDecayCbrCaseMemoryStoreTest {
         }
         @Override public Integer erase(EraseRequest r) { return 0; }
         @Override public Integer eraseEntity(String e, String t) { return 0; }
+        @Override public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String t) { return 0; }
         @Override public void recordOutcome(String ci, String t, CbrOutcome o) {}
         @Override public Integer purge(CbrRetentionPolicy p) { return 0; }
         @Override public void supersede(String ci, String t, String s, String r) {}

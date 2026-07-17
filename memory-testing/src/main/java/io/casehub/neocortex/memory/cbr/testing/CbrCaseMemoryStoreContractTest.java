@@ -2264,6 +2264,121 @@ public abstract class CbrCaseMemoryStoreContractTest {
         assertThat(results).isEmpty();
     }
 
+
+    @Test
+    void eraseByScope_exactScope_erasesOnlyCasesAtThatScope() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("at-target", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase", ENTITY, CBR, TENANT, "c-1", Path.of("org", "site"));
+        store().store(new FeatureVectorCbrCase("at-parent", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase", ENTITY, CBR, TENANT, "c-2", Path.of("org"));
+        int erased = store().eraseByScope(Path.of("org", "site"), TENANT);
+        assertThat(erased).isEqualTo(1);
+        var q = CbrQuery.of(TENANT, CBR, Path.of("org"), "scoped-erase",
+                            Map.of("level", string("a")), 10);
+        assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).hasSize(1);
+    }
+
+    @Test
+    void eraseByScope_parentScope_erasesAllDescendants() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase2",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("at-parent", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase2", ENTITY, CBR, TENANT, "c-1", Path.of("org"));
+        store().store(new FeatureVectorCbrCase("at-child", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase2", ENTITY, CBR, TENANT, "c-2", Path.of("org", "site"));
+        store().store(new FeatureVectorCbrCase("at-grandchild", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase2", ENTITY, CBR, TENANT, "c-3", Path.of("org", "site", "ward"));
+        int erased = store().eraseByScope(Path.of("org"), TENANT);
+        assertThat(erased).isEqualTo(3);
+    }
+
+    @Test
+    void eraseByScope_rootScope_erasesAllCasesForTenant() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase3",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("root-case", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase3", ENTITY, CBR, TENANT, "c-1", Path.root());
+        store().store(new FeatureVectorCbrCase("nested-case", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase3", ENTITY, CBR, TENANT, "c-2", Path.of("org", "site"));
+        int erased = store().eraseByScope(Path.root(), TENANT);
+        assertThat(erased).isEqualTo(2);
+    }
+
+    @Test
+    void eraseByScope_tenantIsolation() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase4",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("t1-case", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase4", ENTITY, CBR, TENANT, "c-1", Path.of("org"));
+        store().store(new FeatureVectorCbrCase("t2-case", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase4", ENTITY, CBR, "other-tenant", "c-2", Path.of("org"));
+        int erased = store().eraseByScope(Path.of("org"), TENANT);
+        assertThat(erased).isEqualTo(1);
+        var q = CbrQuery.of("other-tenant", CBR, Path.of("org"), "scoped-erase4",
+                            Map.of("level", string("a")), 10);
+        assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).hasSize(1);
+    }
+
+    @Test
+    void eraseByScope_returnsCorrectCount() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase5",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("c1", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase5", ENTITY, CBR, TENANT, "c-1", Path.of("org"));
+        store().store(new FeatureVectorCbrCase("c2", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase5", ENTITY, CBR, TENANT, "c-2", Path.of("org", "site"));
+        int erased = store().eraseByScope(Path.of("org"), TENANT);
+        assertThat(erased).isEqualTo(2);
+    }
+
+    @Test
+    void eraseByScope_noMatchingCases_returnsZero() {
+        int erased = store().eraseByScope(Path.of("nonexistent"), TENANT);
+        assertThat(erased).isEqualTo(0);
+    }
+
+    @Test
+    void eraseByScope_siblingIsolation_doesNotAffectSiblingScope() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase7",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("site-a", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase7", ENTITY, CBR, TENANT, "c-1", Path.of("site-a"));
+        store().store(new FeatureVectorCbrCase("site-ab", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase7", ENTITY, CBR, TENANT, "c-2", Path.of("site-ab"));
+        int erased = store().eraseByScope(Path.of("site-a"), TENANT);
+        assertThat(erased).isEqualTo(1);
+        var q = CbrQuery.of(TENANT, CBR, Path.of("site-ab"), "scoped-erase7",
+                            Map.of("level", string("a")), 10);
+        assertThat(store().retrieveSimilar(q, FeatureVectorCbrCase.class)).hasSize(1);
+    }
+
+    @Test
+    void eraseByScope_supersededCasesAlsoErased() {
+        store().registerSchema(CbrFeatureSchema.of("scoped-erase8",
+                                                   FeatureField.categorical("level")));
+        store().store(new FeatureVectorCbrCase("original", "s", null, null,
+                                               Map.of("level", string("a"))),
+                      "scoped-erase8", ENTITY, CBR, TENANT, "c-1", Path.of("org"));
+        store().supersede("c-1", TENANT, "c-2", "better case available");
+        int erased = store().eraseByScope(Path.of("org"), TENANT);
+        assertThat(erased).isEqualTo(1);
+    }
+
     @Test
     void scope_roundTrip_scopePreservedOnScoredCase() {
         store().registerSchema(CbrFeatureSchema.of("scoped5",

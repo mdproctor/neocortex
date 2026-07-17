@@ -78,6 +78,10 @@ public class ReactiveTrendEnrichmentCbrCaseMemoryStore implements ReactiveCbrCas
     }
 
     @Override
+    public Uni<Integer> eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {return delegate.eraseByScope(scope, tenantId);}
+
+
+    @Override
     public Uni<Void> recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         return delegate.recordOutcome(caseId, tenantId, outcome);
     }

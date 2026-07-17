@@ -75,6 +75,10 @@ public class OutcomeWeightingCbrCaseMemoryStore implements CbrCaseMemoryStore {
     }
 
     @Override
+    public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String tenantId) {return delegate.eraseByScope(scope, tenantId);}
+
+
+    @Override
     public void recordOutcome(String caseId, String tenantId, CbrOutcome outcome) {
         delegate.recordOutcome(caseId, tenantId, outcome);
     }
