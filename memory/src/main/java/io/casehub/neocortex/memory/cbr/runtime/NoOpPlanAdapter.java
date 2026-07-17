@@ -16,15 +16,15 @@ import java.util.Map;
 @ApplicationScoped
 public class NoOpPlanAdapter implements PlanAdapter {
     @Override
-    public AdaptedPlan adapt(ScoredCbrCase<PlanCbrCase> retrieved,
+    public AdaptedPlan adapt(String caseType, ScoredCbrCase<PlanCbrCase> retrieved,
                              Map<String, FeatureValue> currentFeatures) {
         return new AdaptedPlan(
                 retrieved.cbrCase().planTrace().stream()
-                        .map(t -> new AdaptedStep(
-                                t.bindingName(), t.capabilityName(), t.workerName(),
-                                t.stepOutcome(), t.priority(), t.parameters(),
-                                AdaptationAction.RETAINED, null))
-                        .toList()
+                         .map(t -> new AdaptedStep(
+                                 t.bindingName(), t.capabilityName(), t.workerName(),
+                                 t.stepOutcome(), t.priority(), t.parameters(),
+                                 AdaptationAction.RETAINED, null))
+                         .toList()
         );
     }
 }

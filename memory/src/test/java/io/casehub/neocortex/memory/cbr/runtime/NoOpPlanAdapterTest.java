@@ -10,20 +10,21 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class NoOpPlanAdapterTest {
 
     private final NoOpPlanAdapter adapter = new NoOpPlanAdapter();
 
-    @Test void retainsAllSteps() {
+    @Test
+    void retainsAllSteps() {
         var trace1 = new PlanTrace("b1", "cap1", "w1", "SUCCESS", 0, Map.of());
         var trace2 = new PlanTrace("b2", "cap2", "w2", "FAILURE", 1, Map.of("p", "v"));
         var plan = new PlanCbrCase("problem", "solution", "WIN", 0.9,
-                Map.of("f", FeatureValue.string("v")), List.of(trace1, trace2));
+                                   Map.of("f", FeatureValue.string("v")), List.of(trace1, trace2));
         var scored = new ScoredCbrCase<>(plan, "c1", 0.85);
 
-        var result = adapter.adapt(scored, Map.of("f", FeatureValue.string("q")));
+        var result = adapter.adapt("typeA", scored, Map.of("f", FeatureValue.string("q")));
 
         assertThat(result.steps()).hasSize(2);
         assertThat(result.steps()).allSatisfy(s -> {
@@ -32,15 +33,16 @@ class NoOpPlanAdapterTest {
         });
     }
 
-    @Test void preservesStepFields() {
+    @Test
+    void preservesStepFields() {
         var trace = new PlanTrace("b1", "cap1", "w1", "SUCCESS", 3,
-                Map.of("key", "val"));
+                                  Map.of("key", "val"));
         var plan = new PlanCbrCase("problem", "solution", null, null,
-                Map.of(), List.of(trace));
+                                   Map.of(), List.of(trace));
         var scored = new ScoredCbrCase<>(plan, "c1", 0.5);
 
-        var result = adapter.adapt(scored, Map.of());
-        var step = result.steps().getFirst();
+        var result = adapter.adapt("typeA", scored, Map.of());
+        var step   = result.steps().getFirst();
 
         assertThat(step.bindingName()).isEqualTo("b1");
         assertThat(step.capabilityName()).isEqualTo("cap1");
@@ -50,12 +52,13 @@ class NoOpPlanAdapterTest {
         assertThat(step.parameters()).containsEntry("key", "val");
     }
 
-    @Test void emptyTrace() {
+    @Test
+    void emptyTrace() {
         var plan = new PlanCbrCase("problem", "solution", null, null,
-                Map.of(), List.of());
+                                   Map.of(), List.of());
         var scored = new ScoredCbrCase<>(plan, "c1", 0.5);
 
-        var result = adapter.adapt(scored, Map.of());
+        var result = adapter.adapt("typeA", scored, Map.of());
 
         assertThat(result.steps()).isEmpty();
     }

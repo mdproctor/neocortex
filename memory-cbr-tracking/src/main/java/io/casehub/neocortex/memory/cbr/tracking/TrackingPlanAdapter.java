@@ -44,13 +44,14 @@ public class TrackingPlanAdapter implements PlanAdapter {
     }
 
     @Override
-    public AdaptedPlan adapt(ScoredCbrCase<PlanCbrCase> retrieved,
+    public AdaptedPlan adapt(String caseType, ScoredCbrCase<PlanCbrCase> retrieved,
                              Map<String, FeatureValue> currentFeatures) {
-        AdaptedPlan result = delegate.adapt(retrieved, currentFeatures);
+        AdaptedPlan result = delegate.adapt(caseType, retrieved, currentFeatures);
         try {
             var trace = new AdaptationTrace(
                     UUID.randomUUID().toString(),
                     null,
+                    caseType,
                     retrieved.caseId(),
                     retrieved.score(),
                     result.steps(),

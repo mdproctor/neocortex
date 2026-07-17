@@ -27,60 +27,66 @@ class TrackingPlanAdapterTest {
     }
 
     private PlanAdapter noOpDelegate() {
-        return (retrieved, features) -> new AdaptedPlan(
+        return (caseType, retrieved, features) -> new AdaptedPlan(
                 retrieved.cbrCase().planTrace().stream()
-                        .map(t -> new AdaptedStep(t.bindingName(), t.capabilityName(),
-                                t.workerName(), t.stepOutcome(), t.priority(), t.parameters(),
-                                AdaptationAction.RETAINED, null))
-                        .toList());
+                         .map(t -> new AdaptedStep(t.bindingName(), t.capabilityName(),
+                                                   t.workerName(), t.stepOutcome(), t.priority(), t.parameters(),
+                                                   AdaptationAction.RETAINED, null))
+                         .toList());
     }
 
-    @Test void firesEventAfterAdaptation() {
+    @Test
+    void firesEventAfterAdaptation() {
         var eventRef  = new AtomicReference<CbrAdaptationRecorded>();
         var decorator = new TrackingPlanAdapter(noOpDelegate(), eventRef::set);
 
         Map<String, FeatureValue> features = Map.of("f", FeatureValue.string("q"));
-        decorator.adapt(scored(), features);
+        decorator.adapt("typeA", scored(), features);
 
         assertThat(eventRef.get()).isNotNull();
         assertThat(eventRef.get().trace().traceId()).isNotBlank();
+        assertThat(eventRef.get().trace().caseType()).isEqualTo("typeA");
         assertThat(eventRef.get().trace().steps()).hasSize(1);
         assertThat(eventRef.get().trace().timestamp()).isNotNull();
     }
 
-    @Test void traceContainsCorrectFields() {
+    @Test
+    void traceContainsCorrectFields() {
         var                       eventRef  = new AtomicReference<CbrAdaptationRecorded>();
         var                       decorator = new TrackingPlanAdapter(noOpDelegate(), eventRef::set);
         Map<String, FeatureValue> features  = Map.of("f", FeatureValue.string("q"));
 
-        decorator.adapt(scored(), features);
+        decorator.adapt("typeB", scored(), features);
         var trace = eventRef.get().trace();
 
+        assertThat(trace.caseType()).isEqualTo("typeB");
         assertThat(trace.sourceCaseId()).isEqualTo("c1");
         assertThat(trace.sourceScore()).isEqualTo(0.85);
         assertThat(trace.currentFeatures()).containsKey("f");
         assertThat(trace.steps().getFirst().action()).isEqualTo(AdaptationAction.RETAINED);
     }
 
-    @Test void trackingFailureDoesNotBreakAdaptation() {
+    @Test
+    void trackingFailureDoesNotBreakAdaptation() {
         var decorator = new TrackingPlanAdapter(noOpDelegate(), e -> {
             throw new RuntimeException("event sink failure");
         });
 
-        var result = decorator.adapt(scored(), Map.of());
+        var result = decorator.adapt("typeA", scored(), Map.of());
 
         assertThat(result.steps()).hasSize(1);
         assertThat(result.steps().getFirst().bindingName()).isEqualTo("b1");
     }
 
-    @Test void firesForNoOpAdapter() {
-        var eventRef = new AtomicReference<CbrAdaptationRecorded>();
+    @Test
+    void firesForNoOpAdapter() {
+        var eventRef  = new AtomicReference<CbrAdaptationRecorded>();
         var decorator = new TrackingPlanAdapter(noOpDelegate(), eventRef::set);
 
         var emptyPlan = new PlanCbrCase("problem", "solution", null, null,
-                Map.of(), List.of());
+                                        Map.of(), List.of());
         var scored = new ScoredCbrCase<>(emptyPlan, "c2", 0.3);
-        decorator.adapt(scored, Map.of());
+        decorator.adapt("typeA", scored, Map.of());
 
         assertThat(eventRef.get()).isNotNull();
         assertThat(eventRef.get().trace().steps()).isEmpty();
