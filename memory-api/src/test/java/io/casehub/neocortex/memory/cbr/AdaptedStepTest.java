@@ -1,8 +1,12 @@
 package io.casehub.neocortex.memory.cbr;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 class AdaptedStepTest {
 
@@ -25,10 +29,11 @@ class AdaptedStepTest {
                         Map.of(), AdaptationAction.RETAINED, null));
     }
 
-    @Test void nullCapabilityNameRejected() {
-        assertThatNullPointerException().isThrownBy(() ->
-                new AdaptedStep("b", null, "w", "SUCCESS", 0,
-                        Map.of(), AdaptationAction.RETAINED, null));
+    @Test
+    void nullCapabilityNameAccepted() {
+        var step = new AdaptedStep("b1", null, "w1", "SUCCESS", 0,
+                                   Map.of("k", "v"), AdaptationAction.RETAINED, null);
+        assertThat(step.capabilityName()).isNull();
     }
 
     @Test void negativePriorityRejected() {

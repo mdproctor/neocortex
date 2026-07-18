@@ -15,8 +15,7 @@ public record AdaptedStep(
 ) {
     public AdaptedStep {
         Objects.requireNonNull(bindingName, "bindingName");
-        Objects.requireNonNull(capabilityName, "capabilityName");
-        if (priority < 0) throw new IllegalArgumentException("priority must be >= 0");
+                if (priority < 0) throw new IllegalArgumentException("priority must be >= 0");
         parameters = parameters != null ? Map.copyOf(parameters) : Map.of();
         Objects.requireNonNull(action, "action");
     }
