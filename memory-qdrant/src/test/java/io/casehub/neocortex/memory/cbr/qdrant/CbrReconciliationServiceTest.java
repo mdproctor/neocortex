@@ -1,8 +1,23 @@
 package io.casehub.neocortex.memory.cbr.qdrant;
 
-import io.casehub.neocortex.memory.*;
-import io.casehub.neocortex.memory.cbr.*;
-import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
+import io.casehub.neocortex.memory.CaseMemoryStore;
+import io.casehub.neocortex.memory.EraseRequest;
+import io.casehub.neocortex.memory.Memory;
+import io.casehub.neocortex.memory.MemoryCapability;
+import io.casehub.neocortex.memory.MemoryCapabilityException;
+import io.casehub.neocortex.memory.MemoryDomain;
+import io.casehub.neocortex.memory.MemoryInput;
+import io.casehub.neocortex.memory.MemoryQuery;
+import io.casehub.neocortex.memory.MemoryScanRequest;
+import io.casehub.neocortex.memory.cbr.CbrCase;
+import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.CbrQuery;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
+import io.casehub.neocortex.memory.cbr.FeatureField;
+import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
+import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import org.junit.jupiter.api.AfterEach;
@@ -13,10 +28,18 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.*;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 class CbrReconciliationServiceTest {
@@ -31,7 +54,7 @@ class CbrReconciliationServiceTest {
     private static final String TENANT = "test-tenant";
     private static final String ENTITY = "test-entity";
 
-    private QdrantCbrCaseMemoryStore cbrStore;
+    private CbrCaseMemoryStore cbrStore;
     private InMemoryDelegateStore delegate;
     private CbrReconciliationService reconciler;
     private CbrCollectionManager collectionManager;
@@ -45,7 +68,8 @@ class CbrReconciliationServiceTest {
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         collectionManager = new CbrCollectionManager(client, config);
         delegate = new InMemoryDelegateStore();
-        cbrStore = new QdrantCbrCaseMemoryStore(collectionManager, null, config, delegate);
+        var reactiveStore = new ReactiveQdrantCbrCaseMemoryStore(collectionManager, null, config, delegate, null);
+        cbrStore = new BlockingWrapper(reactiveStore);
         reconciler = new CbrReconciliationService(collectionManager, null, config, delegate, null);
     }
 
@@ -331,5 +355,41 @@ class CbrReconciliationServiceTest {
         @Override public String store(MemoryInput i) { return ""; }
         @Override public List<Memory> query(MemoryQuery q) { return List.of(); }
         @Override public int erase(EraseRequest r) { return 0; }
+    }
+
+    private static class BlockingWrapper implements CbrCaseMemoryStore {
+        private final ReactiveQdrantCbrCaseMemoryStore delegate;
+
+        BlockingWrapper(ReactiveQdrantCbrCaseMemoryStore delegate)                                                                        {this.delegate = delegate;}
+
+        @Override
+        public void registerSchema(CbrFeatureSchema schema)                                                                               {delegate.registerSchema(schema).await().indefinitely();}
+
+        @Override
+        public String store(CbrCase c, String ct, String e, MemoryDomain d, String t, String ci, io.casehub.platform.api.path.Path scope) {return delegate.store(c, ct, e, d, t, ci, scope).await().indefinitely();}
+
+        @Override
+        public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery q, Class<C> ct)                                        {return delegate.retrieveSimilar(q, ct).await().indefinitely();}
+
+        @Override
+        public Integer erase(EraseRequest r)                                                                                              {return delegate.erase(r).await().indefinitely();}
+
+        @Override
+        public Integer eraseEntity(String e, String t)                                                                                    {return delegate.eraseEntity(e, t).await().indefinitely();}
+
+        @Override
+        public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String t)                                                    {return delegate.eraseByScope(scope, t).await().indefinitely();}
+
+        @Override
+        public void recordOutcome(String ci, String t, CbrOutcome o)                                                                      {delegate.recordOutcome(ci, t, o).await().indefinitely();}
+
+        @Override
+        public Integer purge(CbrRetentionPolicy p)                                                                                        {return delegate.purge(p).await().indefinitely();}
+
+        @Override
+        public void supersede(String ci, String t, String sci, String r)                                                                  {delegate.supersede(ci, t, sci, r).await().indefinitely();}
+
+        @Override
+        public void reinstate(String ci, String t)                                                                                        {delegate.reinstate(ci, t).await().indefinitely();}
     }
 }
