@@ -3,10 +3,6 @@ package io.casehub.neocortex.memory.cbr.qdrant;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -66,6 +62,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static io.casehub.neocortex.memory.cbr.qdrant.QdrantFutures.toUni;
+
 @ApplicationScoped
 public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemoryStore {
 
@@ -106,16 +104,6 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
         this.sparseEmbedder = sparseEmbedder;
     }
 
-    // ── ListenableFuture → Uni adapter ───────────────────────────────────────
-
-    private static <T> Uni<T> toUni(ListenableFuture<T> future) {
-        return Uni.createFrom().<T>emitter(em ->
-            Futures.addCallback(future, new FutureCallback<>() {
-                @Override public void onSuccess(T result) { em.complete(result); }
-                @Override public void onFailure(Throwable t) { em.fail(t); }
-            }, MoreExecutors.directExecutor()));
-    }
-
     // ── payload helpers (pure CPU) ───────────────────────────────────────────
 
     private static String extractString(Map<String, Value> payload, String key) {
@@ -150,9 +138,7 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
     @Override
     public Uni<Void> registerSchema(CbrFeatureSchema schema) {
         schemas.put(schema.caseType(), schema);
-        return Uni.createFrom().voidItem()
-                  .invoke(() -> collectionManager.registerSchemaIndexes(schema, vectorDimension()))
-                  .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());}
+        return collectionManager.registerSchemaIndexesAsync(schema, vectorDimension());}
 
     // ── store ────────────────────────────────────────────────────────────────
 
@@ -172,8 +158,6 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                                   cbrCase, entityId, domain, tenantId, caseId, caseType);
                           mid = delegate.store(memoryInput);
                       }
-
-                      collectionManager.ensureCollection(caseType, vectorDimension());
 
                       Embedding embedding = null;
                       if (embeddingModel != null) {
@@ -200,6 +184,8 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                       return new StoreContext(mid, collection, point);
                   })
                   .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                  .chain(ctx -> collectionManager.ensureCollectionAsync(caseType, vectorDimension())
+                                                 .replaceWith(ctx))
                   .chain(ctx -> upsertWithRetry(ctx.collection(), List.of(ctx.point()), config.maxRetries())
                                         .replaceWith(ctx.memoryId()));}
 
@@ -605,8 +591,7 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                     return toUni(collectionManager.client().collectionExistsAsync(collection))
                                    .chain(exists -> {
                                        if (!exists) {return Uni.createFrom().item(0);}
-                                       return Uni.createFrom().item(() -> collectionManager.deleteByFilter(collection, filter))
-                                                 .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+                                       return collectionManager.deleteByFilterAsync(collection, filter);
                                    });
                 })
                     .collect().asList()
@@ -816,7 +801,7 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                                      .addMust(ConditionFactory.range("_stored_at",
                                                                      io.qdrant.client.grpc.Common.Range.newBuilder().setLt(cutoffMillis).build()))
                                      .build();
-            ageUni = Uni.createFrom().item(() -> collectionManager.deleteByFilter(collection, ageFilter));
+            ageUni = collectionManager.deleteByFilterAsync(collection, ageFilter);
         } else {
             ageUni = Uni.createFrom().item(0);
         }
@@ -830,9 +815,9 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
             countUni = toUni(collectionManager.client().scrollAsync(
                     io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
                                                              .setCollectionName(collection)
+                                                             .setWithPayload(WithPayloadSelectorFactory.include(List.of("_stored_at")))
                                                              .setFilter(scopeFilter)
                                                              .setLimit(100000)
-                                                             .setWithPayload(WithPayloadSelectorFactory.include(List.of("_stored_at")))
                                                              .build()))
                                .chain(scrollResult -> {
                                    var points = new ArrayList<>(scrollResult.getResultList());

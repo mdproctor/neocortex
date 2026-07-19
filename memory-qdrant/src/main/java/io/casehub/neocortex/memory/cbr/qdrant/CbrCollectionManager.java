@@ -1,5 +1,7 @@
 package io.casehub.neocortex.memory.cbr.qdrant;
 
+import static io.casehub.neocortex.memory.cbr.qdrant.QdrantFutures.toUni;
+
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.qdrant.client.QdrantClient;
@@ -13,9 +15,11 @@ import io.qdrant.client.grpc.Collections.VectorParams;
 import io.qdrant.client.grpc.Collections.VectorParamsMap;
 import io.qdrant.client.grpc.Collections.VectorsConfig;
 
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
+
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 
 /**
@@ -50,150 +54,46 @@ final class CbrCollectionManager {
         return config.collectionPrefix() + "_" + caseType;
     }
 
-    /**
-     * Ensure the collection exists with base payload indexes.
-     * Creates the collection if it does not exist.
-     *
-     * @param caseType       the case type (determines collection name)
-     * @param vectorDimension dimension of dense vectors, or 0 if no embedding model
-     */
     void ensureCollection(String caseType, int vectorDimension) {
+        ensureCollectionAsync(caseType, vectorDimension).await().indefinitely();
+    }
+
+    Uni<Void> ensureCollectionAsync(String caseType, int vectorDimension) {
         String collection = collectionName(caseType);
         if (knownCollections.contains(collection)) {
-            return;
+            return Uni.createFrom().voidItem();
         }
 
         int effectiveDim = vectorDimension > 0 ? vectorDimension : 1;
 
-        try {
-            if (client.collectionExistsAsync(collection).get()) {
-                var info = client.getCollectionInfoAsync(collection).get();
-                var vectorsConfig = info.getConfig().getParams().getVectorsConfig();
-                if (vectorsConfig.hasParamsMap()) {
-                    var params = vectorsConfig.getParamsMap().getMapMap().get(config.denseVectorName());
-                    if (params != null && params.getSize() != effectiveDim) {
-                        if (!config.allowDimensionMigration()) {
-                            throw new CbrDimensionMismatchException(collection, (int) params.getSize(), effectiveDim);
-                        }
-                        LOG.warning("Collection " + collection + " dimension mismatch ("
-                            + params.getSize() + " → " + effectiveDim
-                            + ") — recreating. ALL tenants sharing caseType=" + caseType
-                            + " are affected. Run reconciliation per tenant to recover data.");
-                        client.deleteCollectionAsync(collection).get();
-                    } else if (hasMissingSparseVectors(info)) {
-                        if (!config.allowSparseVectorMigration()) {
-                            throw new CbrSparseVectorMigrationException(collection);
-                        }
-                        LOG.warning("Collection " + collection
-                            + " missing required sparse vectors — recreating."
-                            + " Run reconciliation per tenant to recover data.");
-                        client.deleteCollectionAsync(collection).get();
-                    } else {
-                        knownCollections.add(collection);
-                        return;
-                    }
-                } else if (hasMissingSparseVectors(info)) {
-                    if (!config.allowSparseVectorMigration()) {
-                        throw new CbrSparseVectorMigrationException(collection);
-                    }
-                    LOG.warning("Collection " + collection
-                        + " missing required sparse vectors — recreating."
-                        + " Run reconciliation per tenant to recover data.");
-                    client.deleteCollectionAsync(collection).get();
-                } else {
-                    knownCollections.add(collection);
-                    return;
-                }
-            }
-
-            VectorParams denseParams = VectorParams.newBuilder()
-                .setSize(effectiveDim)
-                .setDistance(Distance.Cosine)
-                .build();
-
-            CreateCollection.Builder createBuilder = CreateCollection.newBuilder()
-                .setCollectionName(collection)
-                .setVectorsConfig(VectorsConfig.newBuilder()
-                    .setParamsMap(VectorParamsMap.newBuilder()
-                        .putMap(config.denseVectorName(), denseParams)
-                        .build())
-                    .build());
-
-            if (config.spladeEnabled() || config.bm25Enabled()) {
-                SparseVectorConfig.Builder sparseBuilder = SparseVectorConfig.newBuilder();
-                if (config.spladeEnabled()) {
-                    sparseBuilder.putMap(config.spladeVectorName(), SparseVectorParams.getDefaultInstance());
-                }
-                if (config.bm25Enabled()) {
-                    sparseBuilder.putMap(config.bm25VectorName(),
-                        SparseVectorParams.newBuilder().setModifier(Modifier.Idf).build());
-                }
-                createBuilder.setSparseVectorsConfig(sparseBuilder.build());
-            }
-
-            client.createCollectionAsync(createBuilder.build()).get();
-            createBasePayloadIndexes(collection);
-            knownCollections.add(collection);
-
-        } catch (CbrDimensionMismatchException | CbrSparseVectorMigrationException e) {
-            throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted during ensureCollection", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("ensureCollection failed for " + collection, e.getCause());
-        }
+        return toUni(client.collectionExistsAsync(collection))
+                       .chain(exists -> {
+                           if (exists) {
+                               return toUni(client.getCollectionInfoAsync(collection))
+                                              .chain(info -> handleExistingCollectionAsync(collection, caseType, info, effectiveDim));
+                           }
+                           return createNewCollectionAsync(collection, effectiveDim);
+                       })
+                       .invoke(() -> knownCollections.add(collection));
     }
 
-    /**
-     * Register feature schema payload indexes on the collection.
-     * Called from {@code registerSchema()} — creates indexes asynchronously
-     * (fires and waits to ensure they exist for subsequent queries).
-     */
-    void registerSchemaIndexes(CbrFeatureSchema schema, int vectorDimension) {
-        ensureCollection(schema.caseType(), vectorDimension);
-        String collection = collectionName(schema.caseType());
 
-        try {
-            for (FeatureField field : schema.fields()) {
-                String payloadKey = "f_" + field.name();
-                switch (field) {
-                    case FeatureField.Categorical c -> client.createPayloadIndexAsync(collection, payloadKey,
-                                                                                      PayloadSchemaType.Keyword, null, true, null, null).get();
-                    case FeatureField.Numeric n -> client.createPayloadIndexAsync(collection, payloadKey,
-                                                                                  PayloadSchemaType.Float, null, true, null, null).get();
-                    case FeatureField.Text t -> client.createPayloadIndexAsync(collection, payloadKey,
-                                                                               PayloadSchemaType.Keyword, null, true, null, null).get();
-                    case FeatureField.CategoricalList cl -> client.createPayloadIndexAsync(collection, payloadKey,
-                                                                                           PayloadSchemaType.Keyword, null, true, null, null).get();
-                    case FeatureField.NumericList nl -> client.createPayloadIndexAsync(collection, payloadKey,
-                                                                                       PayloadSchemaType.Float, null, true, null, null).get();
-                    case FeatureField.NestedObject no -> {
-                        for (FeatureField inner : no.innerFields()) {
-                            String            innerKey = payloadKey + "." + inner.name();
-                            PayloadSchemaType type     = innerPayloadType(inner);
-                            client.createPayloadIndexAsync(collection, innerKey,
-                                                           type, null, true, null, null).get();
-                        }
-                    }
-                    case FeatureField.ObjectList ol -> {
-                        for (FeatureField inner : ol.innerFields()) {
-                            String            innerKey = payloadKey + "[]." + inner.name();
-                            PayloadSchemaType type     = innerPayloadType(inner);
-                            client.createPayloadIndexAsync(collection, innerKey,
-                                                           type, null, true, null, null).get();
-                        }
-                    }
-                    case FeatureField.TimeSeries ts -> {}
-                    case FeatureField.DiscreteSequence ds -> {}
-                }
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted during registerSchemaIndexes", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("registerSchemaIndexes failed", e.getCause());
-        }}
+    void registerSchemaIndexes(CbrFeatureSchema schema, int vectorDimension) {
+        registerSchemaIndexesAsync(schema, vectorDimension).await().indefinitely();
+    }
+
+    Uni<Void> registerSchemaIndexesAsync(CbrFeatureSchema schema, int vectorDimension) {
+        return ensureCollectionAsync(schema.caseType(), vectorDimension)
+                       .chain(() -> {
+                           String collection = collectionName(schema.caseType());
+                           return Multi.createFrom().iterable(schema.fields())
+                                       .onItem().transformToUniAndConcatenate(field ->
+                                                                                      indexesForField(collection, "f_" + field.name(), field))
+                                       .collect().asList()
+                                       .replaceWithVoid();
+                       });
+    }
+
 
     private static PayloadSchemaType innerPayloadType(FeatureField field) {
         return switch (field) {
@@ -204,44 +104,140 @@ final class CbrCollectionManager {
         };
     }
 
+    private Uni<Void> indexesForField(String collection, String payloadKey, FeatureField field) {
+        return switch (field) {
+            case FeatureField.Categorical c -> toUni(client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                    PayloadSchemaType.Keyword, null, true, null, null)).replaceWithVoid();
+            case FeatureField.Numeric n -> toUni(client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                PayloadSchemaType.Float, null, true, null, null)).replaceWithVoid();
+            case FeatureField.Text t -> toUni(client.createPayloadIndexAsync(collection, payloadKey,
+                                                                             PayloadSchemaType.Keyword, null, true, null, null)).replaceWithVoid();
+            case FeatureField.CategoricalList cl -> toUni(client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                         PayloadSchemaType.Keyword, null, true, null, null)).replaceWithVoid();
+            case FeatureField.NumericList nl -> toUni(client.createPayloadIndexAsync(collection, payloadKey,
+                                                                                     PayloadSchemaType.Float, null, true, null, null)).replaceWithVoid();
+            case FeatureField.NestedObject no -> Multi.createFrom().iterable(no.innerFields())
+                                                      .onItem().transformToUniAndConcatenate(inner ->
+                                                                                                     toUni(client.createPayloadIndexAsync(collection, payloadKey + "." + inner.name(),
+                                                                                                                                          innerPayloadType(inner), null, true, null, null)).replaceWithVoid())
+                                                      .collect().asList().replaceWithVoid();
+            case FeatureField.ObjectList ol -> Multi.createFrom().iterable(ol.innerFields())
+                                                    .onItem().transformToUniAndConcatenate(inner ->
+                                                                                                   toUni(client.createPayloadIndexAsync(collection, payloadKey + "[]." + inner.name(),
+                                                                                                                                        innerPayloadType(inner), null, true, null, null)).replaceWithVoid())
+                                                    .collect().asList().replaceWithVoid();
+            case FeatureField.TimeSeries ts -> Uni.createFrom().voidItem();
+            case FeatureField.DiscreteSequence ds -> Uni.createFrom().voidItem();
+        };
+    }
 
-    /**
-     * Delete all points matching a filter from a collection.
-     * Returns the estimated count of deleted points (via scroll before delete).
-     */
+
     int deleteByFilter(String collection, io.qdrant.client.grpc.Common.Filter filter) {
-        try {
-            // Count matching points by scrolling
-            var scrollBuilder = io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
-                .setCollectionName(collection)
-                .setFilter(filter)
-                .setLimit(10000)
-                .setWithPayload(io.qdrant.client.WithPayloadSelectorFactory.enable(false));
+        return deleteByFilterAsync(collection, filter).await().indefinitely();
+    }
 
-            var response = client.scrollAsync(scrollBuilder.build()).get();
-            int count = response.getResultCount();
+    Uni<Integer> deleteByFilterAsync(String collection, io.qdrant.client.grpc.Common.Filter filter) {
+        var scrollBuilder = io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+                                                                     .setCollectionName(collection)
+                                                                     .setFilter(filter)
+                                                                     .setLimit(10000)
+                                                                     .setWithPayload(io.qdrant.client.WithPayloadSelectorFactory.enable(false));
 
-            if (count > 0) {
-                client.deleteAsync(collection, filter).get();
+        return toUni(client.scrollAsync(scrollBuilder.build()))
+                       .chain(response -> {
+                           int count = response.getResultCount();
+                           if (count > 0) {
+                               return toUni(client.deleteAsync(collection, filter))
+                                              .replaceWith(count);
+                           }
+                           return Uni.createFrom().item(0);
+                       });
+    }
+
+
+    private Uni<Void> createBasePayloadIndexesAsync(String collection) {
+        return Multi.createFrom().items(BASE_KEYWORD_FIELDS)
+                    .onItem().transformToUniAndConcatenate(field ->
+                                                                   toUni(client.createPayloadIndexAsync(collection, field,
+                                                                                                        PayloadSchemaType.Keyword, null, true, null, null)).replaceWithVoid())
+                    .collect().asList()
+                    .chain(() -> toUni(client.createPayloadIndexAsync(collection, "_stored_at",
+                                                                      PayloadSchemaType.Float, null, true, null, null)).replaceWithVoid());
+    }
+
+    private Uni<Void> createNewCollectionAsync(String collection, int effectiveDim) {
+        VectorParams denseParams = VectorParams.newBuilder()
+                                               .setSize(effectiveDim)
+                                               .setDistance(Distance.Cosine)
+                                               .build();
+
+        CreateCollection.Builder createBuilder = CreateCollection.newBuilder()
+                                                                 .setCollectionName(collection)
+                                                                 .setVectorsConfig(VectorsConfig.newBuilder()
+                                                                                                .setParamsMap(VectorParamsMap.newBuilder()
+                                                                                                                             .putMap(config.denseVectorName(), denseParams)
+                                                                                                                             .build())
+                                                                                                .build());
+
+        if (config.spladeEnabled() || config.bm25Enabled()) {
+            SparseVectorConfig.Builder sparseBuilder = SparseVectorConfig.newBuilder();
+            if (config.spladeEnabled()) {
+                sparseBuilder.putMap(config.spladeVectorName(), SparseVectorParams.getDefaultInstance());
             }
-            return count;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted during delete", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Delete failed", e.getCause());
+            if (config.bm25Enabled()) {
+                sparseBuilder.putMap(config.bm25VectorName(),
+                                     SparseVectorParams.newBuilder().setModifier(Modifier.Idf).build());
+            }
+            createBuilder.setSparseVectorsConfig(sparseBuilder.build());
+        }
+
+        return toUni(client.createCollectionAsync(createBuilder.build()))
+                       .chain(v -> createBasePayloadIndexesAsync(collection));
+    }
+
+    private Uni<Void> handleExistingCollectionAsync(String collection, String caseType,
+                                                    io.qdrant.client.grpc.Collections.CollectionInfo info,
+                                                    int effectiveDim) {
+        var vectorsConfig = info.getConfig().getParams().getVectorsConfig();
+        if (vectorsConfig.hasParamsMap()) {
+            var params = vectorsConfig.getParamsMap().getMapMap().get(config.denseVectorName());
+            if (params != null && params.getSize() != effectiveDim) {
+                if (!config.allowDimensionMigration()) {
+                    return Uni.createFrom().failure(
+                            new CbrDimensionMismatchException(collection, (int) params.getSize(), effectiveDim));
+                }
+                LOG.warning("Collection " + collection + " dimension mismatch ("
+                            + params.getSize() + " → " + effectiveDim
+                            + ") — recreating. ALL tenants sharing caseType=" + caseType
+                            + " are affected. Run reconciliation per tenant to recover data.");
+                return toUni(client.deleteCollectionAsync(collection))
+                               .chain(v -> createNewCollectionAsync(collection, effectiveDim));
+            } else if (hasMissingSparseVectors(info)) {
+                if (!config.allowSparseVectorMigration()) {
+                    return Uni.createFrom().failure(new CbrSparseVectorMigrationException(collection));
+                }
+                LOG.warning("Collection " + collection
+                            + " missing required sparse vectors — recreating."
+                            + " Run reconciliation per tenant to recover data.");
+                return toUni(client.deleteCollectionAsync(collection))
+                               .chain(v -> createNewCollectionAsync(collection, effectiveDim));
+            } else {
+                return Uni.createFrom().voidItem();
+            }
+        } else if (hasMissingSparseVectors(info)) {
+            if (!config.allowSparseVectorMigration()) {
+                return Uni.createFrom().failure(new CbrSparseVectorMigrationException(collection));
+            }
+            LOG.warning("Collection " + collection
+                        + " missing required sparse vectors — recreating."
+                        + " Run reconciliation per tenant to recover data.");
+            return toUni(client.deleteCollectionAsync(collection))
+                           .chain(v -> createNewCollectionAsync(collection, effectiveDim));
+        } else {
+            return Uni.createFrom().voidItem();
         }
     }
 
-    private void createBasePayloadIndexes(String collection)
-            throws InterruptedException, ExecutionException {
-        for (String field : BASE_KEYWORD_FIELDS) {
-            client.createPayloadIndexAsync(collection, field,
-                PayloadSchemaType.Keyword, null, true, null, null).get();
-        }
-        client.createPayloadIndexAsync(collection, "_stored_at",
-            PayloadSchemaType.Float, null, true, null, null).get();
-    }
 
     private boolean hasMissingSparseVectors(io.qdrant.client.grpc.Collections.CollectionInfo info) {
         var existingSparse = info.getConfig().getParams()
