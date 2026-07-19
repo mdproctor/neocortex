@@ -11,4 +11,9 @@ class InMemoryCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
     protected CbrCaseMemoryStore store() {
         return store;
     }
+
+    @Override
+    protected void clearStore() {
+        store.clearCases();
+    }
 }

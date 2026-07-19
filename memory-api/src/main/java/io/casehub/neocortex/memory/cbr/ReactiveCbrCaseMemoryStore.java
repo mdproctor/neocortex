@@ -28,4 +28,9 @@ public interface ReactiveCbrCaseMemoryStore {
     Uni<Void> supersede(String caseId, String tenantId, String supersedingCaseId, String reason);
 
     Uni<Void> reinstate(String caseId, String tenantId);
+
+    Uni<SupersessionStatus> getSupersessionStatus(String caseId, String tenantId);
+
+    Uni<List<SupersessionStatus>> findSupersededCases(String tenantId, MemoryDomain domain);
+
 }

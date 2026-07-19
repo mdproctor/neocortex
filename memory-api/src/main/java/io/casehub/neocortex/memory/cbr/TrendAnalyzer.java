@@ -109,7 +109,7 @@ public final class TrendAnalyzer {
 
         List<FeatureField> allFields = new ArrayList<>(schema.fields());
         allFields.addAll(additional);
-        return new CbrFeatureSchema(schema.caseType(), allFields);
+        return new CbrFeatureSchema(schema.caseType(), allFields, schema.learningRate());
     }
 
     // -- Algorithm implementations --

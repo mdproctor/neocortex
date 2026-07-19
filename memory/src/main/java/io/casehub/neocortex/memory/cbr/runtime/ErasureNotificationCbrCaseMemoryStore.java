@@ -4,6 +4,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.CbrCasesErased;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
@@ -93,4 +94,15 @@ public class ErasureNotificationCbrCaseMemoryStore implements CbrCaseMemoryStore
     @Override public Integer purge(CbrRetentionPolicy policy) { return delegate.purge(policy); }
     @Override public void supersede(String caseId, String tenantId, String supersedingCaseId, String reason) { delegate.supersede(caseId, tenantId, supersedingCaseId, reason); }
     @Override public void reinstate(String caseId, String tenantId) { delegate.reinstate(caseId, tenantId); }
+
+    @Override
+    public SupersessionStatus getSupersessionStatus(String caseId, String tenantId) {
+        return delegate.getSupersessionStatus(caseId, tenantId);
+    }
+
+    @Override
+    public java.util.List<SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return delegate.findSupersededCases(tenantId, domain);
+    }
+
 }

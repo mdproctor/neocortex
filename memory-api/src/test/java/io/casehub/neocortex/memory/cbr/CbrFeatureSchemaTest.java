@@ -54,4 +54,27 @@ class CbrFeatureSchemaTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Duplicate field name");
     }
+
+    @Test
+    void learningRate_defaultsToNull() {
+        var schema = CbrFeatureSchema.of("test", FeatureField.categorical("cat"));
+        assertThat(schema.learningRate()).isNull();
+    }
+
+    @Test
+    void learningRate_customValue() {
+        var schema = new CbrFeatureSchema("test",
+                                          java.util.List.of(FeatureField.categorical("cat")), 0.5);
+        assertThat(schema.learningRate()).isEqualTo(0.5);
+    }
+
+    @Test
+    void learningRate_rejectsOutOfRange() {
+        assertThatThrownBy(() -> new CbrFeatureSchema("test",
+                                                      java.util.List.of(FeatureField.categorical("cat")), 1.5))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new CbrFeatureSchema("test",
+                                                      java.util.List.of(FeatureField.categorical("cat")), -0.1))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

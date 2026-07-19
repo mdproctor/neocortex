@@ -16,6 +16,7 @@ import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.LbKeogh;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.SimilaritySpec;
 import io.casehub.neocortex.memory.cbr.WarpingConstraint;
 import jakarta.annotation.Priority;
@@ -44,6 +45,11 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         schemas.put(schema.caseType(), schema);
     }
 
+    public void clearCases() {
+        cases.clear();
+    }
+
+
     @Override
     public String store(CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
                         String tenantId, String caseId, io.casehub.platform.api.path.Path scope) {
@@ -53,7 +59,7 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
         java.util.Objects.requireNonNull(scope, "scope required");
         String id = UUID.randomUUID().toString();
-        cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, Instant.now(), null, null, null, null, scope));
+        cases.add(new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, Instant.now(), null, null, null, null, scope, null));
         return id;
     }
 
@@ -183,16 +189,18 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
                     && !outcome.observedAt().isAfter(stored.lastOutcomeAt())) {
                     return;
                 }
+                CbrFeatureSchema schema = schemas.get(stored.caseType());
+                double lr = (schema != null && schema.learningRate() != null)
+                            ? schema.learningRate() : CbrOutcome.DEFAULT_LEARNING_RATE;
                 double newConfidence = CbrOutcome.adjustConfidence(
-                        stored.cbrCase().confidence(), outcome.successRate(),
-                        CbrOutcome.DEFAULT_LEARNING_RATE);
+                        stored.cbrCase().confidence(), outcome.successRate(), lr);
                 CbrCase updated = stored.cbrCase().withOutcome(
                         outcome.result().name(), newConfidence);
                 cases.set(i, new StoredCase(stored.id(), updated, stored.caseType(),
                                             stored.entityId(), stored.domain(), stored.tenantId(),
                                             stored.caseId(), stored.storedAt(), outcome.observedAt(),
                                             stored.supersededAt(), stored.supersedingCaseId(), stored.supersessionReason(),
-                                            stored.scope()));
+                                            stored.scope(), stored.reinstatedAt()));
                 return;
             }
         }
@@ -255,10 +263,42 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
         for (int i = 0; i < cases.size(); i++) {
             StoredCase sc = cases.get(i);
             if (caseId.equals(sc.caseId()) && tenantId.equals(sc.tenantId())) {
-                cases.set(i, sc.withSupersession(null, null, null));
+                cases.set(i, sc.withReinstatement(Instant.now()));
                 return;
             }
         }
+    }
+
+
+    @Override
+    public SupersessionStatus getSupersessionStatus(String caseId, String tenantId) {
+        java.util.Objects.requireNonNull(caseId, "caseId required");
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        for (StoredCase stored : cases) {
+            if (caseId.equals(stored.caseId()) && tenantId.equals(stored.tenantId())) {
+                if (stored.supersededAt() != null) {
+                    return new SupersessionStatus(caseId, true, stored.supersededAt(),
+                            stored.supersedingCaseId(), stored.supersessionReason(), stored.reinstatedAt());
+                }
+                return new SupersessionStatus(caseId, false, null, null, null, stored.reinstatedAt());
+            }
+        }
+        return SupersessionStatus.NOT_SUPERSEDED;
+    }
+
+    @Override
+    public List<SupersessionStatus> findSupersededCases(String tenantId, MemoryDomain domain) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        java.util.Objects.requireNonNull(domain, "domain required");
+        List<SupersessionStatus> result = new ArrayList<>();
+        for (StoredCase stored : cases) {
+            if (stored.tenantId().equals(tenantId) && stored.domain().equals(domain)
+                    && stored.supersededAt() != null) {
+                result.add(new SupersessionStatus(stored.caseId(), true, stored.supersededAt(),
+                        stored.supersedingCaseId(), stored.supersessionReason(), stored.reinstatedAt()));
+            }
+        }
+        return Collections.unmodifiableList(result);
     }
 
     @SuppressWarnings("unchecked")
@@ -335,11 +375,15 @@ public class InMemoryCbrCaseMemoryStore implements CbrCaseMemoryStore {
             String id, CbrCase cbrCase, String caseType, String entityId, MemoryDomain domain,
             String tenantId, String caseId, Instant storedAt, Instant lastOutcomeAt,
             Instant supersededAt, String supersedingCaseId, String supersessionReason,
-            io.casehub.platform.api.path.Path scope
+            io.casehub.platform.api.path.Path scope, Instant reinstatedAt
     ) {
         StoredCase withSupersession(Instant supersededAt, String supersedingCaseId, String supersessionReason) {
             return new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, storedAt, lastOutcomeAt,
-                                  supersededAt, supersedingCaseId, supersessionReason, scope);
+                                  supersededAt, supersedingCaseId, supersessionReason, scope, null);
+        }
+        StoredCase withReinstatement(Instant reinstatedAt) {
+            return new StoredCase(id, cbrCase, caseType, entityId, domain, tenantId, caseId, storedAt, lastOutcomeAt,
+                                  null, null, null, scope, reinstatedAt);
         }
     }
 }

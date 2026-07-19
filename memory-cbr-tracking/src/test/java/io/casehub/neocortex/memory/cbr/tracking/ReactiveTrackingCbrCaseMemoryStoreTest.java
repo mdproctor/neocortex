@@ -129,6 +129,9 @@ class ReactiveTrackingCbrCaseMemoryStoreTest {
             @Override public Uni<Integer> purge(io.casehub.neocortex.memory.cbr.CbrRetentionPolicy p) { return Uni.createFrom().item(0); }
             @Override public Uni<Void> supersede(String c, String t, String s, String r) { return Uni.createFrom().voidItem(); }
             @Override public Uni<Void> reinstate(String c, String t) { return Uni.createFrom().voidItem(); }
+        @Override public io.smallrye.mutiny.Uni<io.casehub.neocortex.memory.cbr.SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) { return io.smallrye.mutiny.Uni.createFrom().item(io.casehub.neocortex.memory.cbr.SupersessionStatus.NOT_SUPERSEDED); }
+        @Override public io.smallrye.mutiny.Uni<java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return io.smallrye.mutiny.Uni.createFrom().item(java.util.List.of()); }
+
         };
     }
 
@@ -152,6 +155,9 @@ class ReactiveTrackingCbrCaseMemoryStoreTest {
         @Override public Uni<Integer> purge(io.casehub.neocortex.memory.cbr.CbrRetentionPolicy p) { return Uni.createFrom().item(0); }
         @Override public Uni<Void> supersede(String c, String t, String s, String r) { return Uni.createFrom().voidItem(); }
         @Override public Uni<Void> reinstate(String c, String t) { return Uni.createFrom().voidItem(); }
+        @Override public io.smallrye.mutiny.Uni<io.casehub.neocortex.memory.cbr.SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) { return io.smallrye.mutiny.Uni.createFrom().item(io.casehub.neocortex.memory.cbr.SupersessionStatus.NOT_SUPERSEDED); }
+        @Override public io.smallrye.mutiny.Uni<java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return io.smallrye.mutiny.Uni.createFrom().item(java.util.List.of()); }
+
     }
 
     @SuppressWarnings("unchecked")

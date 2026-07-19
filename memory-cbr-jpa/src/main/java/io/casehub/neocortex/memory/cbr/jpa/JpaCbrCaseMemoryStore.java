@@ -21,6 +21,7 @@ import io.casehub.neocortex.memory.cbr.PlanCbrCase;
 import io.casehub.neocortex.memory.cbr.PlanTrace;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.TextualCbrCase;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -219,8 +220,11 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
             && !outcome.observedAt().isAfter(entity.lastOutcomeAt)) {
             return;
         }
+        CbrFeatureSchema schema = schemas.get(entity.caseType);
+        double lr = (schema != null && schema.learningRate() != null)
+                    ? schema.learningRate() : CbrOutcome.DEFAULT_LEARNING_RATE;
         double newConfidence = CbrOutcome.adjustConfidence(
-                entity.confidence, outcome.successRate(), CbrOutcome.DEFAULT_LEARNING_RATE);
+                entity.confidence, outcome.successRate(), lr);
         entity.outcome       = outcome.result().name();
         entity.confidence    = newConfidence;
         entity.outcomeDetail = outcome.detail();
@@ -291,6 +295,7 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
             entity.supersedingCaseId = supersedingCaseId;
             entity.supersessionReason = reason;
         }
+        entity.reinstatedAt = null;
     }
 
     @Override
@@ -302,13 +307,14 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
                         .setParameter("cid", caseId).setParameter("t", tenantId).getResultList();
         if (results.isEmpty()) return;
         CbrCaseEntity entity = results.getFirst();
+        entity.reinstatedAt = Instant.now();
         entity.supersededAt = null;
         entity.supersedingCaseId = null;
         entity.supersessionReason = null;
     }
 
     private CbrCase reconstruct(CbrCaseEntity entity) {
-        Map<String, FeatureValue> features = FeatureValue.toFeatureMap(deserializeMap(entity.features));
+        Map<String, FeatureValue> features = deserializeFeatures(entity.features);
         return switch (entity.cbrType) {
             case "plan" -> new PlanCbrCase(
                     entity.problem, entity.solution, entity.outcome, entity.confidence,
@@ -394,10 +400,11 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
         }
     }
 
-    private Map<String, Object> deserializeMap(String json) {
+    private Map<String, FeatureValue> deserializeFeatures(String json) {
         if (json == null || json.isBlank()) {return Map.of();}
         try {
-            return objectMapper.readValue(json, MAP_TYPE);
+            Map<String, Object> raw = objectMapper.readValue(json, MAP_TYPE);
+            return FeatureValue.toFeatureMap(raw);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to deserialize features JSON", e);
         }
@@ -412,4 +419,32 @@ public class JpaCbrCaseMemoryStore implements CbrCaseMemoryStore {
             return List.of();
         }
     }
+
+    @Override
+    public SupersessionStatus getSupersessionStatus(String caseId, String tenantId) {
+        java.util.Objects.requireNonNull(caseId, "caseId required");
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        var results = em.createQuery("SELECT e FROM CbrCaseEntity e WHERE e.caseId = :cid AND e.tenantId = :t", CbrCaseEntity.class)
+                        .setParameter("cid", caseId).setParameter("t", tenantId).getResultList();
+        if (results.isEmpty()) return SupersessionStatus.NOT_SUPERSEDED;
+        CbrCaseEntity entity = results.getFirst();
+        if (entity.supersededAt != null) {
+            return new SupersessionStatus(caseId, true, entity.supersededAt,
+                    entity.supersedingCaseId, entity.supersessionReason, entity.reinstatedAt);
+        }
+        return new SupersessionStatus(caseId, false, null, null, null, entity.reinstatedAt);
+    }
+
+    @Override
+    public List<SupersessionStatus> findSupersededCases(String tenantId, MemoryDomain domain) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        java.util.Objects.requireNonNull(domain, "domain required");
+        var results = em.createQuery(
+                "SELECT e FROM CbrCaseEntity e WHERE e.tenantId = :t AND e.domain = :d AND e.supersededAt IS NOT NULL",
+                CbrCaseEntity.class)
+                .setParameter("t", tenantId).setParameter("d", domain.name()).getResultList();
+        return results.stream().map(e -> new SupersessionStatus(e.caseId, true, e.supersededAt,
+                e.supersedingCaseId, e.supersessionReason, e.reinstatedAt)).toList();
+    }
+
 }

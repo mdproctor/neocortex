@@ -65,10 +65,12 @@ public final class CbrSimilarityScorer {
         for (Map.Entry<String, FeatureValue> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
             if (field == null) {continue;}
-            if (field instanceof FeatureField.CategoricalList
-                || field instanceof FeatureField.NumericList
-                || field instanceof FeatureField.NestedObject
-                || field instanceof FeatureField.ObjectList) {continue;}
+            LocalSimilarityFunction override = overrides.get(entry.getKey());
+            if (override == null
+                && (field instanceof FeatureField.CategoricalList
+                    || field instanceof FeatureField.NumericList
+                    || field instanceof FeatureField.NestedObject
+                    || field instanceof FeatureField.ObjectList)) {continue;}
 
             double       weight    = weights.getOrDefault(entry.getKey(), 1.0);
             FeatureValue caseValue = caseFeatures.get(entry.getKey());
@@ -108,10 +110,12 @@ public final class CbrSimilarityScorer {
         for (Map.Entry<String, FeatureValue> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
             if (field == null) {continue;}
-            if (field instanceof FeatureField.CategoricalList
-                || field instanceof FeatureField.NumericList
-                || field instanceof FeatureField.NestedObject
-                || field instanceof FeatureField.ObjectList) {continue;}
+            LocalSimilarityFunction override2 = overrides.get(entry.getKey());
+            if (override2 == null
+                && (field instanceof FeatureField.CategoricalList
+                    || field instanceof FeatureField.NumericList
+                    || field instanceof FeatureField.NestedObject
+                    || field instanceof FeatureField.ObjectList)) {continue;}
 
             double       weight    = weights.getOrDefault(entry.getKey(), 1.0);
             FeatureValue caseValue = caseFeatures.get(entry.getKey());
@@ -150,10 +154,10 @@ public final class CbrSimilarityScorer {
             case FeatureField.Numeric n -> numericSimilarity(n, queryVal, caseVal);
             case FeatureField.Categorical c -> categoricalSimilarity(c, queryVal, caseVal);
             case FeatureField.Text t -> queryVal.equals(caseVal) ? 1.0 : 0.0;
-            case FeatureField.CategoricalList cl -> throw new IllegalStateException("Structured field in scorer");
-            case FeatureField.NumericList nl -> throw new IllegalStateException("Structured field in scorer");
-            case FeatureField.NestedObject no -> throw new IllegalStateException("Structured field in scorer");
-            case FeatureField.ObjectList ol -> throw new IllegalStateException("Structured field in scorer");
+            case FeatureField.CategoricalList cl -> 0.0;
+            case FeatureField.NumericList nl -> 0.0;
+            case FeatureField.NestedObject no -> 0.0;
+            case FeatureField.ObjectList ol -> 0.0;
             case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal, dtwAbandonCostThreshold);
             case FeatureField.DiscreteSequence ds -> editDistanceSimilarity(ds, queryVal, caseVal);
         };

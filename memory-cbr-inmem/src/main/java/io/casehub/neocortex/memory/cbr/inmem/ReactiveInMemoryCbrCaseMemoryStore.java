@@ -11,9 +11,9 @@ import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.smallrye.mutiny.Uni;
-import jakarta.enterprise.inject.Alternative;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Inject;
 
 import java.util.List;
@@ -85,5 +85,22 @@ public class ReactiveInMemoryCbrCaseMemoryStore implements ReactiveCbrCaseMemory
     @Override
     public Uni<Void> reinstate(String caseId, String tenantId) {
         return Uni.createFrom().voidItem().invoke(() -> delegate.reinstate(caseId, tenantId));
+    }
+
+    @Override
+    public Uni<io.casehub.neocortex.memory.cbr.SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) {
+        return Uni.createFrom().item(() -> delegate.getSupersessionStatus(caseId, tenantId));
+    }
+
+    @Override
+    public Uni<List<io.casehub.neocortex.memory.cbr.SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return Uni.createFrom().item(() -> delegate.findSupersededCases(tenantId, domain));
+    }
+
+
+    public void clearCases() {
+        if (delegate instanceof InMemoryCbrCaseMemoryStore inmem) {
+            inmem.clearCases();
+        }
     }
 }

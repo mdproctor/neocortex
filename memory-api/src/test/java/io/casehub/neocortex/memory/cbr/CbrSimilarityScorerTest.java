@@ -1,9 +1,13 @@
 package io.casehub.neocortex.memory.cbr;
 
-import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
-
 import org.junit.jupiter.api.Test;
+
 import java.util.Map;
+
+import static io.casehub.neocortex.memory.cbr.FeatureValue.number;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.stringList;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.structList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CbrSimilarityScorerTest {
@@ -495,5 +499,37 @@ class CbrSimilarityScorerTest {
 
         assertThat(breakdown.score()).isEqualTo(1.0);
         assertThat(breakdown.featureSimilarities().get("color")).isEqualTo(1.0);
+    }
+
+    @Test
+    void structuredField_overrideRespected() {
+        var schema = CbrFeatureSchema.of("test",
+                                         FeatureField.categorical("cat"),
+                                         FeatureField.categoricalList("tags"));
+
+        Map<String, FeatureValue> query = Map.of("cat", FeatureValue.string("a"),
+                           "tags", FeatureValue.stringList("x", "y", "z"));
+        Map<String, FeatureValue> caseF = Map.of("cat", FeatureValue.string("a"),
+                           "tags", FeatureValue.stringList("x", "y"));
+
+        double scoreWithout = CbrSimilarityScorer.score(query, caseF,
+                                                        Map.of("cat", 1.0, "tags", 1.0), schema);
+        assertThat(scoreWithout).isEqualTo(1.0);
+
+        LocalSimilarityFunction jaccard = (q, c) -> {
+            if (q instanceof FeatureValue.StringListVal ql
+                && c instanceof FeatureValue.StringListVal cl) {
+                var union = new java.util.HashSet<>(ql.values());
+                union.addAll(cl.values());
+                long intersection = ql.values().stream().filter(cl.values()::contains).count();
+                return union.isEmpty() ? 1.0 : (double) intersection / union.size();
+            }
+            return 0.0;
+        };
+
+        double scoreWith = CbrSimilarityScorer.score(query, caseF,
+                                                     Map.of("cat", 1.0, "tags", 1.0), schema,
+                                                     Map.of("tags", jaccard));
+        assertThat(scoreWith).isCloseTo(0.833, org.assertj.core.data.Offset.offset(0.01));
     }
 }

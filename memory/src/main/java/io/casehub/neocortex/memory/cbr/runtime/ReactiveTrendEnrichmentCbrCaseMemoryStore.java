@@ -9,6 +9,7 @@ import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.casehub.neocortex.memory.cbr.TrendAnalyzer;
 import io.smallrye.mutiny.Uni;
@@ -100,4 +101,15 @@ public class ReactiveTrendEnrichmentCbrCaseMemoryStore implements ReactiveCbrCas
     public Uni<Void> reinstate(String caseId, String tenantId) {
         return delegate.reinstate(caseId, tenantId);
     }
+
+    @Override
+    public io.smallrye.mutiny.Uni<SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) {
+        return delegate.getSupersessionStatus(caseId, tenantId);
+    }
+
+    @Override
+    public io.smallrye.mutiny.Uni<java.util.List<SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return delegate.findSupersededCases(tenantId, domain);
+    }
+
 }

@@ -110,5 +110,9 @@ class ScopeDecayCbrCaseMemoryStoreTest {
         @Override public Integer purge(CbrRetentionPolicy p) { return 0; }
         @Override public void supersede(String ci, String t, String s, String r) {}
         @Override public void reinstate(String ci, String t) {}
+
+        @Override public io.casehub.neocortex.memory.cbr.SupersessionStatus getSupersessionStatus(String caseId, String tenantId) { return io.casehub.neocortex.memory.cbr.SupersessionStatus.NOT_SUPERSEDED; }
+        @Override public java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return java.util.List.of(); }
+
     }
 }

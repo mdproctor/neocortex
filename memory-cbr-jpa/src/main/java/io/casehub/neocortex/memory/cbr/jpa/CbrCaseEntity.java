@@ -69,5 +69,8 @@ public class CbrCaseEntity {
     public String supersessionReason;
     @jakarta.persistence.Column(name = "scope", nullable = false)
     public String scope;
+    @Column(name = "reinstated_at")
+    public Instant reinstatedAt;
+
 
 }

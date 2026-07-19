@@ -55,8 +55,12 @@ public abstract class CbrCaseMemoryStoreContractTest {
 
     protected abstract CbrCaseMemoryStore store();
 
+    protected void clearStore() {}
+
+
     @BeforeEach
     void registerDefaultSchema() {
+        clearStore();
         store().registerSchema(CbrFeatureSchema.of("starcraft-game",
                                                    FeatureField.categorical("opponent_race"),
                                                    FeatureField.categorical("detected_build"),
@@ -1800,6 +1804,31 @@ public abstract class CbrCaseMemoryStoreContractTest {
     }
 
     @Test
+    void recordOutcome_customLearningRate_convergesFaster() {
+        var fastSchema = new CbrFeatureSchema("fast-learn",
+                                              java.util.List.of(FeatureField.categorical("cat"), FeatureField.numeric("val", 0, 100)),
+                                              0.8);
+        store().registerSchema(fastSchema);
+
+        store().store(new FeatureVectorCbrCase("p", "s", "o", 1.0,
+                                               Map.of("cat", string("a"), "val", number(50))),
+                      "fast-learn", ENTITY, CBR, TENANT, "c-lr-1", Path.root());
+
+        store().recordOutcome("c-lr-1", TENANT,
+                              CbrOutcome.of(0.0, "fail", Instant.now()));
+
+        var results = store().retrieveSimilar(
+                CbrQuery.of(TENANT, CBR, Path.root(), "fast-learn",
+                            Map.of("cat", string("a"), "val", number(50)), 10)
+                        .withRetrievalMode(RetrievalMode.FEATURE_ONLY),
+                FeatureVectorCbrCase.class);
+        assertThat(results).hasSize(1);
+        // With learning rate 0.8: confidence = (1-0.8)*1.0 + 0.8*0.0 = 0.2
+        assertThat(results.getFirst().cbrCase().confidence()).isCloseTo(0.2, within(0.01));
+    }
+
+
+    @Test
     void recordOutcome_nullInitialConfidence_treatsAsOne() {
         store().store(new FeatureVectorCbrCase("prob", "sol", null, null,
                                                Map.of("opponent_race", string("Zerg"))),
@@ -2406,5 +2435,72 @@ public abstract class CbrCaseMemoryStoreContractTest {
                             "scoped6", Map.of("level", FeatureValue.string("site")), 10);
         var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
         assertThat(results).isEmpty();
+    }
+
+    @Test
+    void getSupersessionStatus_notSuperseded() {
+        String caseId = store().store(
+                new FeatureVectorCbrCase("p", "s", null, null, Map.of("opponent_race", string("Zerg"))),
+                "starcraft-game", ENTITY, CBR, TENANT, "sup-status-1", Path.root());
+        var status = store().getSupersessionStatus("sup-status-1", TENANT);
+        assertThat(status.superseded()).isFalse();
+        assertThat(status.caseId()).isEqualTo("sup-status-1");
+        assertThat(status.wasReinstated()).isFalse();
+    }
+
+    @Test
+    void getSupersessionStatus_afterSupersede() {
+        store().store(
+                new FeatureVectorCbrCase("p", "s", null, null, Map.of("opponent_race", string("Zerg"))),
+                "starcraft-game", ENTITY, CBR, TENANT, "sup-status-2", Path.root());
+        store().supersede("sup-status-2", TENANT, "new-case", "better data");
+        var status = store().getSupersessionStatus("sup-status-2", TENANT);
+        assertThat(status.superseded()).isTrue();
+        assertThat(status.supersedingCaseId()).isEqualTo("new-case");
+        assertThat(status.reason()).isEqualTo("better data");
+        assertThat(status.supersededAt()).isNotNull();
+        assertThat(status.wasReinstated()).isFalse();
+    }
+
+    @Test
+    void getSupersessionStatus_afterReinstate() {
+        store().store(
+                new FeatureVectorCbrCase("p", "s", null, null, Map.of("opponent_race", string("Zerg"))),
+                "starcraft-game", ENTITY, CBR, TENANT, "sup-status-3", Path.root());
+        store().supersede("sup-status-3", TENANT, "new-case", "better data");
+        store().reinstate("sup-status-3", TENANT);
+        var status = store().getSupersessionStatus("sup-status-3", TENANT);
+        assertThat(status.superseded()).isFalse();
+        assertThat(status.reinstatedAt()).isNotNull();
+        assertThat(status.wasReinstated()).isTrue();
+    }
+
+    @Test
+    void getSupersessionStatus_reSupersede_clearsReinstatedAt() {
+        store().store(
+                new FeatureVectorCbrCase("p", "s", null, null, Map.of("opponent_race", string("Zerg"))),
+                "starcraft-game", ENTITY, CBR, TENANT, "sup-status-4", Path.root());
+        store().supersede("sup-status-4", TENANT, "case-a", "first");
+        store().reinstate("sup-status-4", TENANT);
+        store().supersede("sup-status-4", TENANT, "case-b", "second");
+        var status = store().getSupersessionStatus("sup-status-4", TENANT);
+        assertThat(status.superseded()).isTrue();
+        assertThat(status.supersedingCaseId()).isEqualTo("case-b");
+        assertThat(status.wasReinstated()).isFalse();
+    }
+
+    @Test
+    void findSupersededCases_filtersCorrectly() {
+        store().store(
+                new FeatureVectorCbrCase("p1", "s1", null, null, Map.of("opponent_race", string("Zerg"))),
+                "starcraft-game", ENTITY, CBR, TENANT, "sup-find-1", Path.root());
+        store().store(
+                new FeatureVectorCbrCase("p2", "s2", null, null, Map.of("opponent_race", string("Terran"))),
+                "starcraft-game", ENTITY, CBR, TENANT, "sup-find-2", Path.root());
+        store().supersede("sup-find-1", TENANT, "new", "reason");
+        var superseded = store().findSupersededCases(TENANT, CBR);
+        assertThat(superseded).hasSize(1);
+        assertThat(superseded.getFirst().caseId()).isEqualTo("sup-find-1");
+        assertThat(superseded.getFirst().superseded()).isTrue();
     }
 }

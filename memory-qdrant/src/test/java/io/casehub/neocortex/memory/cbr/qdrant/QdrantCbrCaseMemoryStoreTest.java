@@ -478,5 +478,8 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
 
         @Override
         public void reinstate(String ci, String t)                                                                                        {delegate.reinstate(ci, t).await().indefinitely();}
+        public io.casehub.neocortex.memory.cbr.SupersessionStatus getSupersessionStatus(String caseId, String tenantId) { return delegate.getSupersessionStatus(caseId, tenantId).await().indefinitely(); }
+        public java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return delegate.findSupersededCases(tenantId, domain).await().indefinitely(); }
+
     }
 }

@@ -4,6 +4,7 @@ import io.casehub.neocortex.memory.EraseRequest;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
@@ -61,5 +62,16 @@ public class NoOpCbrCaseMemoryStore implements CbrCaseMemoryStore {
 
     @Override
     public void reinstate(String caseId, String tenantId) {}
+
+
+    @Override
+    public SupersessionStatus getSupersessionStatus(String caseId, String tenantId) {
+        return SupersessionStatus.NOT_SUPERSEDED;
+    }
+
+    @Override
+    public java.util.List<SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return java.util.List.of();
+    }
 
 }

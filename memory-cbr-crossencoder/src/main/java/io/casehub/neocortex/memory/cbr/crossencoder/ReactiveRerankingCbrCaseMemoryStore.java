@@ -146,4 +146,15 @@ public class ReactiveRerankingCbrCaseMemoryStore implements ReactiveCbrCaseMemor
         if (query.retrievalMode() == RetrievalMode.FEATURE_ONLY) return true;
         return query.problem() == null;
     }
+
+    @Override
+    public io.smallrye.mutiny.Uni<io.casehub.neocortex.memory.cbr.SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) {
+        return delegate.getSupersessionStatus(caseId, tenantId);
+    }
+
+    @Override
+    public io.smallrye.mutiny.Uni<java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return delegate.findSupersededCases(tenantId, domain);
+    }
+
 }

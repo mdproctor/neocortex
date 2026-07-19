@@ -27,4 +27,9 @@ public interface CbrCaseMemoryStore {
     void supersede(String caseId, String tenantId, String supersedingCaseId, String reason);
 
     void reinstate(String caseId, String tenantId);
+
+    SupersessionStatus getSupersessionStatus(String caseId, String tenantId);
+
+    List<SupersessionStatus> findSupersededCases(String tenantId, MemoryDomain domain);
+
 }

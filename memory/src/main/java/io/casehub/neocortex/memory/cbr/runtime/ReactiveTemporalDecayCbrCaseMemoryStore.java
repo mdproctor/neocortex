@@ -8,6 +8,7 @@ import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.casehub.neocortex.memory.cbr.TemporalDecay;
 import io.smallrye.mutiny.Uni;
@@ -71,4 +72,15 @@ public class ReactiveTemporalDecayCbrCaseMemoryStore implements ReactiveCbrCaseM
     @Override public Uni<Integer> purge(CbrRetentionPolicy p) { return delegate.purge(p); }
     @Override public Uni<Void> supersede(String caseId, String tenantId, String supersedingCaseId, String reason) { return delegate.supersede(caseId, tenantId, supersedingCaseId, reason); }
     @Override public Uni<Void> reinstate(String caseId, String tenantId) { return delegate.reinstate(caseId, tenantId); }
+
+    @Override
+    public io.smallrye.mutiny.Uni<SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) {
+        return delegate.getSupersessionStatus(caseId, tenantId);
+    }
+
+    @Override
+    public io.smallrye.mutiny.Uni<java.util.List<SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return delegate.findSupersededCases(tenantId, domain);
+    }
+
 }

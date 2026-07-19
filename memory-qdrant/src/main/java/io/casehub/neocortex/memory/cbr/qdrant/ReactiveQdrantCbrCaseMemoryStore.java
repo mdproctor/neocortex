@@ -30,6 +30,7 @@ import io.casehub.neocortex.memory.cbr.PlanTrace;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.RetrievalMode;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.TextualCbrCase;
 import io.casehub.neocortex.memory.cbr.embedding.EmbeddingTextSimilarity;
 import io.qdrant.client.ConditionFactory;
@@ -677,8 +678,11 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                                 }
 
                                 Double oldConfidence = extractDouble(payload, "confidence");
+                                CbrFeatureSchema schema = schemas.get(caseType);
+                                double lr = (schema != null && schema.learningRate() != null)
+                                            ? schema.learningRate() : CbrOutcome.DEFAULT_LEARNING_RATE;
                                 double newConfidence = CbrOutcome.adjustConfidence(
-                                    oldConfidence, outcome.successRate(), CbrOutcome.DEFAULT_LEARNING_RATE);
+                                    oldConfidence, outcome.successRate(), lr);
 
                                 Map<String, Value> updates = new HashMap<>();
                                 updates.put("outcome", ValueFactory.value(outcome.result().name()));
@@ -728,9 +732,12 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                                     if (reason != null) updates.put("_supersession_reason", ValueFactory.value(reason));
                                 }
 
-                                if (updates.isEmpty()) return Uni.createFrom().item(true);
+                                updates.put("_reinstated_at", ValueFactory.value(0L));
+                                if (updates.size() == 1) return Uni.createFrom().item(true);
                                 return toUni(collectionManager.client().setPayloadAsync(
                                     collection, updates, (PointId) pointId, null, null, null))
+                                    .chain(() -> toUni(collectionManager.client().deletePayloadAsync(
+                                        collection, List.of("_reinstated_at"), (PointId) pointId, null, null, null)))
                                     .replaceWith(true);
                             });
                     });
@@ -755,7 +762,7 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
                             .chain(points -> {
                                 if (points.isEmpty()) return Uni.createFrom().item(false);
                                 Map<String, Value> updates = new HashMap<>();
-                                updates.put("_superseded_at", ValueFactory.value(0L));
+                                updates.put("_reinstated_at", ValueFactory.value(Instant.now().toEpochMilli()));
                                 return toUni(collectionManager.client().setPayloadAsync(
                                     collection, updates, (PointId) pointId, null, null, null))
                                     .chain(() -> toUni(collectionManager.client().deletePayloadAsync(
@@ -987,4 +994,76 @@ public class ReactiveQdrantCbrCaseMemoryStore implements ReactiveCbrCaseMemorySt
         io.casehub.platform.api.path.Path scope) {}
 
     private record StoreContext(String memoryId, String collection, PointStruct point) {}
+
+    @Override
+    public Uni<SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) {
+        java.util.Objects.requireNonNull(caseId, "caseId required");
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        return Multi.createFrom().iterable(schemas.keySet())
+            .onItem().transformToUniAndConcatenate(caseType -> {
+                String collection = collectionManager.collectionName(caseType);
+                return toUni(collectionManager.client().collectionExistsAsync(collection))
+                    .chain(exists -> {
+                        if (!exists) return Uni.createFrom().nullItem();
+                        UUID pointUuid = CbrPointBuilder.pointId(tenantId, caseType, caseId);
+                        var pointId = PointIdFactory.id(pointUuid);
+                        return toUni(collectionManager.client().retrieveAsync(collection, List.of(pointId), true, false, null))
+                            .map(points -> {
+                                if (points.isEmpty()) return null;
+                                var payload = points.getFirst().getPayloadMap();
+                                return buildSupersessionStatus(caseId, payload);
+                            });
+                    });
+            })
+            .filter(java.util.Objects::nonNull)
+            .collect().first()
+            .map(s -> s != null ? s : SupersessionStatus.NOT_SUPERSEDED);
+    }
+
+    @Override
+    public Uni<List<SupersessionStatus>> findSupersededCases(String tenantId, MemoryDomain domain) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId required");
+        java.util.Objects.requireNonNull(domain, "domain required");
+        return Multi.createFrom().iterable(schemas.keySet())
+            .onItem().transformToUniAndConcatenate(caseType -> {
+                String collection = collectionManager.collectionName(caseType);
+                return toUni(collectionManager.client().collectionExistsAsync(collection))
+                    .chain(exists -> {
+                        if (!exists) return Uni.createFrom().item(List.<SupersessionStatus>of());
+                        Filter domainFilter = Filter.newBuilder()
+                            .addMust(ConditionFactory.matchKeyword("tenantId", tenantId))
+                            .addMust(ConditionFactory.matchKeyword("domain", domain.name()))
+                            .build();
+                        return toUni(collectionManager.client().scrollAsync(
+                            io.qdrant.client.grpc.Points.ScrollPoints.newBuilder()
+                                .setCollectionName(collection)
+                                .setFilter(domainFilter)
+                                .setLimit(10000)
+                                .setWithPayload(io.qdrant.client.grpc.Points.WithPayloadSelector.newBuilder().setEnable(true).build())
+                                .build()))
+                            .map(scrollResult -> scrollResult.getResultList().stream()
+                                .filter(p -> {
+                                    Value v = p.getPayloadMap().get("_superseded_at");
+                                    return v != null && v.hasIntegerValue() && v.getIntegerValue() > 0;
+                                })
+                                .map(p -> buildSupersessionStatus(extractString(p.getPayloadMap(), "caseId"), p.getPayloadMap()))
+                                .toList());
+                    });
+            })
+            .collect().asList()
+            .map(lists -> lists.stream().flatMap(List::stream).toList());
+    }
+
+    private SupersessionStatus buildSupersessionStatus(String caseId, Map<String, Value> payload) {
+        Value supersededAtVal = payload.get("_superseded_at");
+        Value reinstatedAtVal = payload.get("_reinstated_at");
+        boolean superseded = supersededAtVal != null && supersededAtVal.hasIntegerValue() && supersededAtVal.getIntegerValue() > 0;
+        Instant supersededAt = superseded ? Instant.ofEpochMilli(supersededAtVal.getIntegerValue()) : null;
+        Instant reinstatedAt = reinstatedAtVal != null && reinstatedAtVal.hasIntegerValue() && reinstatedAtVal.getIntegerValue() > 0
+                               ? Instant.ofEpochMilli(reinstatedAtVal.getIntegerValue()) : null;
+        String supersedingCaseId = superseded ? extractString(payload, "_superseding_case_id") : null;
+        String reason = superseded ? extractString(payload, "_supersession_reason") : null;
+        return new SupersessionStatus(caseId, superseded, supersededAt, supersedingCaseId, reason, reinstatedAt);
+    }
+
 }

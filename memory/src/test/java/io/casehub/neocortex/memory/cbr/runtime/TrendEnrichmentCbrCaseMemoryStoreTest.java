@@ -169,6 +169,10 @@ class TrendEnrichmentCbrCaseMemoryStoreTest {
 
             @Override
             public void reinstate(String caseId, String tenantId) {}
+
+        @Override public io.casehub.neocortex.memory.cbr.SupersessionStatus getSupersessionStatus(String caseId, String tenantId) { return io.casehub.neocortex.memory.cbr.SupersessionStatus.NOT_SUPERSEDED; }
+        @Override public java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return java.util.List.of(); }
+
         };
     }
 }

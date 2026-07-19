@@ -5,11 +5,13 @@ import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.cbr.BridgedCbrStore;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
 import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
 import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
+import io.casehub.neocortex.memory.cbr.SupersessionStatus;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.quarkus.arc.DefaultBean;
 import io.smallrye.mutiny.Uni;
@@ -89,6 +91,19 @@ public class BlockingToReactiveCbrBridge implements ReactiveCbrCaseMemoryStore, 
         return Uni.createFrom().voidItem()
                   .invoke(() -> delegate.reinstate(caseId, tenantId))
                   .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
+
+    @Override
+    public io.smallrye.mutiny.Uni<SupersessionStatus> getSupersessionStatus(String caseId, String tenantId) {
+        return io.smallrye.mutiny.Uni.createFrom().item(() -> delegate.getSupersessionStatus(caseId, tenantId))
+                .runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
+    }
+
+    @Override
+    public io.smallrye.mutiny.Uni<java.util.List<SupersessionStatus>> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return io.smallrye.mutiny.Uni.createFrom().item(() -> delegate.findSupersededCases(tenantId, domain))
+                .runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
     }
 
 }

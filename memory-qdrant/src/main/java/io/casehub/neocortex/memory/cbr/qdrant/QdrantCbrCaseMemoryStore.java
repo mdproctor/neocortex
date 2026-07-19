@@ -73,4 +73,15 @@ public class QdrantCbrCaseMemoryStore implements CbrCaseMemoryStore {
     public void reinstate(String caseId, String tenantId) {
         delegate.reinstate(caseId, tenantId).await().indefinitely();
     }
+
+    @Override
+    public io.casehub.neocortex.memory.cbr.SupersessionStatus getSupersessionStatus(String caseId, String tenantId) {
+        return delegate.getSupersessionStatus(caseId, tenantId).await().indefinitely();
+    }
+
+    @Override
+    public java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) {
+        return delegate.findSupersededCases(tenantId, domain).await().indefinitely();
+    }
+
 }
