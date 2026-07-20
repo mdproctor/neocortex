@@ -5,10 +5,13 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static io.casehub.neocortex.memory.cbr.FeatureValue.number;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.numberList;
 import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
 import static io.casehub.neocortex.memory.cbr.FeatureValue.stringList;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.struct;
 import static io.casehub.neocortex.memory.cbr.FeatureValue.structList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.data.Offset.offset;
 
 class CbrSimilarityScorerTest {
 
@@ -508,28 +511,299 @@ class CbrSimilarityScorerTest {
                                          FeatureField.categoricalList("tags"));
 
         Map<String, FeatureValue> query = Map.of("cat", FeatureValue.string("a"),
-                           "tags", FeatureValue.stringList("x", "y", "z"));
+                                                 "tags", FeatureValue.stringList("x", "y", "z"));
         Map<String, FeatureValue> caseF = Map.of("cat", FeatureValue.string("a"),
-                           "tags", FeatureValue.stringList("x", "y"));
+                                                 "tags", FeatureValue.stringList("x", "y"));
 
+        // Without override: Jaccard type default. intersection={x,y}, union={x,y,z} -> 2/3
+        // cat=1.0, tags=2/3, avg = (1.0 + 2/3) / 2 = 5/6
         double scoreWithout = CbrSimilarityScorer.score(query, caseF,
                                                         Map.of("cat", 1.0, "tags", 1.0), schema);
-        assertThat(scoreWithout).isEqualTo(1.0);
+        assertThat(scoreWithout).isCloseTo(5.0 / 6.0, offset(1e-9));
 
-        LocalSimilarityFunction jaccard = (q, c) -> {
-            if (q instanceof FeatureValue.StringListVal ql
-                && c instanceof FeatureValue.StringListVal cl) {
-                var union = new java.util.HashSet<>(ql.values());
-                union.addAll(cl.values());
-                long intersection = ql.values().stream().filter(cl.values()::contains).count();
-                return union.isEmpty() ? 1.0 : (double) intersection / union.size();
-            }
-            return 0.0;
-        };
-
+        // Override with a custom function that returns 0.0 always
         double scoreWith = CbrSimilarityScorer.score(query, caseF,
                                                      Map.of("cat", 1.0, "tags", 1.0), schema,
-                                                     Map.of("tags", jaccard));
-        assertThat(scoreWith).isCloseTo(0.833, org.assertj.core.data.Offset.offset(0.01));
+                                                     Map.of("tags", (q, c) -> 0.0));
+        // cat=1.0, tags=0.0, avg = 0.5
+        assertThat(scoreWith).isCloseTo(0.5, offset(1e-9));
     }
+
+    // --- CategoricalList Jaccard tests ---
+    static final CbrFeatureSchema CL_SCHEMA = CbrFeatureSchema.of("test",
+                                                                  FeatureField.categoricalList("tags"));
+
+    @Test
+    void categoricalList_identicalSets() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList("A", "B", "C")),
+                Map.of("tags", stringList("A", "B", "C")),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void categoricalList_partialOverlap() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList("A", "B", "C")),
+                Map.of("tags", stringList("A", "B", "D")),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isCloseTo(0.5, offset(1e-9));
+    }
+
+    @Test
+    void categoricalList_noOverlap() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList("A", "B")),
+                Map.of("tags", stringList("C", "D")),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isCloseTo(0.0, offset(1e-9));
+    }
+
+    @Test
+    void categoricalList_bothEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList()),
+                Map.of("tags", stringList()),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void categoricalList_queryEmpty_caseNonEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList()),
+                Map.of("tags", stringList("A", "B")),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void categoricalList_queryNonEmpty_caseEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList("A")),
+                Map.of("tags", stringList()),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isCloseTo(0.0, offset(1e-9));
+    }
+
+    @Test
+    void categoricalList_duplicatesIgnored() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList("A", "A", "B")),
+                Map.of("tags", stringList("A", "B", "B")),
+                Map.of(), CL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void categoricalList_overrideStillTrumps() {
+        LocalSimilarityFunction always1 = (q, c) -> 1.0;
+        double sim = CbrSimilarityScorer.score(
+                Map.of("tags", stringList("A")),
+                Map.of("tags", stringList("Z")),
+                Map.of(), CL_SCHEMA, Map.of("tags", always1));
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    // --- NumericList nearest-neighbor tests ---
+    static final CbrFeatureSchema NL_SCHEMA = CbrFeatureSchema.of("test",
+                                                                  FeatureField.numericList("stats", 0.0, 100.0));
+
+    @Test
+    void numericList_identicalValues() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList(10.0, 50.0, 90.0)),
+                Map.of("stats", numberList(10.0, 50.0, 90.0)),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void numericList_nearestNeighborDecay() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList(50.0)),
+                Map.of("stats", numberList(70.0)),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isCloseTo(0.8, offset(1e-9));
+    }
+
+    @Test
+    void numericList_multipleQueryElements() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList(20.0, 80.0)),
+                Map.of("stats", numberList(25.0, 75.0)),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isCloseTo(0.95, offset(1e-9));
+    }
+
+    @Test
+    void numericList_caseSizeSmaller() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList(10.0, 50.0, 90.0)),
+                Map.of("stats", numberList(50.0)),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isCloseTo(2.2 / 3.0, offset(1e-9));
+    }
+
+    @Test
+    void numericList_bothEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList()),
+                Map.of("stats", numberList()),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void numericList_queryEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList()),
+                Map.of("stats", numberList(50.0)),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void numericList_caseEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("stats", numberList(50.0)),
+                Map.of("stats", numberList()),
+                Map.of(), NL_SCHEMA);
+        assertThat(sim).isCloseTo(0.0, offset(1e-9));
+    }
+
+    @Test
+    void numericList_zeroRange_exactMatch() {
+        var schema = CbrFeatureSchema.of("test", FeatureField.numericList("x", 5.0, 5.0));
+        double sim = CbrSimilarityScorer.score(
+                Map.of("x", numberList(5.0)),
+                Map.of("x", numberList(5.0)),
+                Map.of(), schema);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void numericList_zeroRange_mismatch() {
+        var schema = CbrFeatureSchema.of("test", FeatureField.numericList("x", 5.0, 5.0));
+        double sim = CbrSimilarityScorer.score(
+                Map.of("x", numberList(5.0)),
+                Map.of("x", numberList(6.0)),
+                Map.of(), schema);
+        assertThat(sim).isEqualTo(0.0);
+    }
+
+    // --- NestedObject recursive scoring tests ---
+    static final CbrFeatureSchema NO_SCHEMA = CbrFeatureSchema.of("test",
+                                                                  FeatureField.nestedObject("economy",
+                                                                                            FeatureField.numeric("gold", 0, 100),
+                                                                                            FeatureField.categorical("tier")));
+
+    @Test
+    void nestedObject_identicalValues() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("economy", struct(Map.of("gold", number(50), "tier", string("HIGH")))),
+                Map.of("economy", struct(Map.of("gold", number(50), "tier", string("HIGH")))),
+                Map.of(), NO_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void nestedObject_partialMatch() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("economy", struct(Map.of("gold", number(50), "tier", string("HIGH")))),
+                Map.of("economy", struct(Map.of("gold", number(70), "tier", string("LOW")))),
+                Map.of(), NO_SCHEMA);
+        assertThat(sim).isCloseTo(0.4, offset(1e-9));
+    }
+
+    @Test
+    void nestedObject_missingInnerFieldInCase() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("economy", struct(Map.of("gold", number(50), "tier", string("HIGH")))),
+                Map.of("economy", struct(Map.of("gold", number(50)))),
+                Map.of(), NO_SCHEMA);
+        assertThat(sim).isCloseTo(0.5, offset(1e-9));
+    }
+
+    @Test
+    void nestedObject_emptyQueryStruct() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("economy", struct(Map.of())),
+                Map.of("economy", struct(Map.of("gold", number(50)))),
+                Map.of(), NO_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void nestedObject_outerOverrideNotPropagated() {
+        LocalSimilarityFunction always1 = (q, c) -> 1.0;
+        double sim = CbrSimilarityScorer.score(
+                Map.of("economy", struct(Map.of("gold", number(0), "tier", string("A")))),
+                Map.of("economy", struct(Map.of("gold", number(100), "tier", string("B")))),
+                Map.of(), NO_SCHEMA, Map.of("gold", always1));
+        assertThat(sim).isCloseTo(0.0, offset(1e-9));
+    }
+
+    // --- ObjectList greedy best-match tests ---
+    static final CbrFeatureSchema OL_SCHEMA = CbrFeatureSchema.of("test",
+                                                                  FeatureField.objectList("events",
+                                                                                          FeatureField.categorical("type"),
+                                                                                          FeatureField.numeric("minute", 0, 90)));
+
+    @Test
+    void objectList_identicalLists() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("events", structList(
+                        Map.of("type", string("KILL"), "minute", number(15)),
+                        Map.of("type", string("DEATH"), "minute", number(30)))),
+                Map.of("events", structList(
+                        Map.of("type", string("KILL"), "minute", number(15)),
+                        Map.of("type", string("DEATH"), "minute", number(30)))),
+                Map.of(), OL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void objectList_bestMatchWithReuse() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("events", structList(
+                        Map.of("type", string("KILL"), "minute", number(15)),
+                        Map.of("type", string("DEATH"), "minute", number(30)))),
+                Map.of("events", structList(
+                        Map.of("type", string("KILL"), "minute", number(20)))),
+                Map.of(), OL_SCHEMA);
+        double q0Best = (1.0 + (1.0 - 5.0 / 90.0)) / 2.0;
+        double q1Best = (0.0 + (1.0 - 10.0 / 90.0)) / 2.0;
+        assertThat(sim).isCloseTo((q0Best + q1Best) / 2.0, offset(1e-9));
+    }
+
+    @Test
+    void objectList_bothEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("events", structList(java.util.List.of())),
+                Map.of("events", structList(java.util.List.of())),
+                Map.of(), OL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void objectList_queryEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("events", structList(java.util.List.of())),
+                Map.of("events", structList(Map.of("type", string("KILL"), "minute", number(15)))),
+                Map.of(), OL_SCHEMA);
+        assertThat(sim).isEqualTo(1.0);
+    }
+
+    @Test
+    void objectList_caseEmpty() {
+        double sim = CbrSimilarityScorer.score(
+                Map.of("events", structList(Map.of("type", string("KILL"), "minute", number(15)))),
+                Map.of("events", structList(java.util.List.of())),
+                Map.of(), OL_SCHEMA);
+        assertThat(sim).isCloseTo(0.0, offset(1e-9));
+    }
+
+
 }

@@ -1,7 +1,9 @@
 package io.casehub.neocortex.memory.cbr;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Computes CBR similarity scores using per-field local similarity functions
@@ -11,15 +13,18 @@ import java.util.Objects;
  * <ol>
  *   <li>Caller-provided override via {@code Map<String, LocalSimilarityFunction>}</li>
  *   <li>Field-attached {@link SimilaritySpec} (if present)</li>
- *   <li>Type default (exact match for Categorical/Text, linear decay for Numeric)</li>
+ *   <li>Type default (see below)</li>
  * </ol>
  *
  * <p>Type defaults:
  * <ul>
  *   <li>{@link FeatureField.Categorical} — exact match (1.0 or 0.0)</li>
- *   <li>{@link FeatureField.Numeric} — linear decay: {@code 1.0 - |query - case| / range},
- *       with {@link NumericRange} support (1.0 inside range, linear decay outside)</li>
+ *   <li>{@link FeatureField.Numeric} — linear decay: {@code 1.0 - |query - case| / range}</li>
  *   <li>{@link FeatureField.Text} — exact match (1.0 or 0.0)</li>
+ *   <li>{@link FeatureField.CategoricalList} — Jaccard similarity on string sets</li>
+ *   <li>{@link FeatureField.NumericList} — average nearest-neighbor with linear decay</li>
+ *   <li>{@link FeatureField.NestedObject} — recursive scoring with uniform weights</li>
+ *   <li>{@link FeatureField.ObjectList} — greedy best-match with recursive inner scoring</li>
  * </ul>
  *
  * <p>Pure Java, Tier 1 — zero external dependencies.
@@ -65,12 +70,6 @@ public final class CbrSimilarityScorer {
         for (Map.Entry<String, FeatureValue> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
             if (field == null) {continue;}
-            LocalSimilarityFunction override = overrides.get(entry.getKey());
-            if (override == null
-                && (field instanceof FeatureField.CategoricalList
-                    || field instanceof FeatureField.NumericList
-                    || field instanceof FeatureField.NestedObject
-                    || field instanceof FeatureField.ObjectList)) {continue;}
 
             double       weight    = weights.getOrDefault(entry.getKey(), 1.0);
             FeatureValue caseValue = caseFeatures.get(entry.getKey());
@@ -110,12 +109,6 @@ public final class CbrSimilarityScorer {
         for (Map.Entry<String, FeatureValue> entry : queryFeatures.entrySet()) {
             FeatureField field = findField(schema, entry.getKey());
             if (field == null) {continue;}
-            LocalSimilarityFunction override2 = overrides.get(entry.getKey());
-            if (override2 == null
-                && (field instanceof FeatureField.CategoricalList
-                    || field instanceof FeatureField.NumericList
-                    || field instanceof FeatureField.NestedObject
-                    || field instanceof FeatureField.ObjectList)) {continue;}
 
             double       weight    = weights.getOrDefault(entry.getKey(), 1.0);
             FeatureValue caseValue = caseFeatures.get(entry.getKey());
@@ -154,10 +147,10 @@ public final class CbrSimilarityScorer {
             case FeatureField.Numeric n -> numericSimilarity(n, queryVal, caseVal);
             case FeatureField.Categorical c -> categoricalSimilarity(c, queryVal, caseVal);
             case FeatureField.Text t -> queryVal.equals(caseVal) ? 1.0 : 0.0;
-            case FeatureField.CategoricalList cl -> 0.0;
-            case FeatureField.NumericList nl -> 0.0;
-            case FeatureField.NestedObject no -> 0.0;
-            case FeatureField.ObjectList ol -> 0.0;
+            case FeatureField.CategoricalList cl -> categoricalListSimilarity(queryVal, caseVal);
+            case FeatureField.NumericList nl -> numericListSimilarity(nl, queryVal, caseVal);
+            case FeatureField.NestedObject no -> nestedObjectSimilarity(no, queryVal, caseVal);
+            case FeatureField.ObjectList ol -> objectListSimilarity(ol, queryVal, caseVal);
             case FeatureField.TimeSeries ts -> dtwSimilarity(ts, queryVal, caseVal, dtwAbandonCostThreshold);
             case FeatureField.DiscreteSequence ds -> editDistanceSimilarity(ds, queryVal, caseVal);
         };
@@ -257,6 +250,88 @@ public final class CbrSimilarityScorer {
         }
         return 0.0;
     }
+
+    private static double categoricalListSimilarity(FeatureValue queryVal, FeatureValue caseVal) {
+        if (!(queryVal instanceof FeatureValue.StringListVal qs)
+            || !(caseVal instanceof FeatureValue.StringListVal cs)) {return 0.0;}
+        if (qs.values().isEmpty()) {return 1.0;}
+        if (cs.values().isEmpty()) {return 0.0;}
+        Set<String> qSet  = new HashSet<>(qs.values());
+        Set<String> cSet  = new HashSet<>(cs.values());
+        Set<String> union = new HashSet<>(qSet);
+        union.addAll(cSet);
+        if (union.isEmpty()) {return 1.0;}
+        Set<String> intersection = new HashSet<>(qSet);
+        intersection.retainAll(cSet);
+        return (double) intersection.size() / union.size();
+    }
+
+    private static double numericListSimilarity(FeatureField.NumericList nl,
+                                                FeatureValue queryVal, FeatureValue caseVal) {
+        if (!(queryVal instanceof FeatureValue.NumberListVal qs)
+            || !(caseVal instanceof FeatureValue.NumberListVal cs)) {return 0.0;}
+        if (qs.values().isEmpty()) {return 1.0;}
+        if (cs.values().isEmpty()) {return 0.0;}
+        double range = nl.max() - nl.min();
+        double sum   = 0.0;
+        for (double q : qs.values()) {
+            double bestSim = 0.0;
+            for (double c : cs.values()) {
+                double sim;
+                if (range <= 0) {
+                    sim = q == c ? 1.0 : 0.0;
+                } else {
+                    sim = Math.max(0.0, 1.0 - Math.abs(q - c) / range);
+                }
+                if (sim > bestSim) {bestSim = sim;}
+            }
+            sum += bestSim;
+        }
+        return sum / qs.values().size();
+    }
+
+    private static double nestedObjectSimilarity(FeatureField.NestedObject no,
+                                                 FeatureValue queryVal, FeatureValue caseVal) {
+        if (!(queryVal instanceof FeatureValue.StructVal qs)
+            || !(caseVal instanceof FeatureValue.StructVal cs)) {return 0.0;}
+        if (qs.fields().isEmpty()) {return 1.0;}
+        return scoreInnerFields(no.innerFields(), qs.fields(), cs.fields());
+    }
+
+    private static double objectListSimilarity(FeatureField.ObjectList ol,
+                                               FeatureValue queryVal, FeatureValue caseVal) {
+        if (!(queryVal instanceof FeatureValue.StructListVal qs)
+            || !(caseVal instanceof FeatureValue.StructListVal cs)) {return 0.0;}
+        if (qs.items().isEmpty()) {return 1.0;}
+        if (cs.items().isEmpty()) {return 0.0;}
+        double sum = 0.0;
+        for (Map<String, FeatureValue> qObj : qs.items()) {
+            double bestScore = 0.0;
+            for (Map<String, FeatureValue> cObj : cs.items()) {
+                double objScore = scoreInnerFields(ol.innerFields(), qObj, cObj);
+                if (objScore > bestScore) {bestScore = objScore;}
+            }
+            sum += bestScore;
+        }
+        return sum / qs.items().size();
+    }
+
+    private static double scoreInnerFields(java.util.List<FeatureField> innerFields,
+                                           Map<String, FeatureValue> queryObj,
+                                           Map<String, FeatureValue> caseObj) {
+        double sum   = 0.0;
+        int    count = 0;
+        for (FeatureField inner : innerFields) {
+            FeatureValue qv = queryObj.get(inner.name());
+            if (qv == null) {continue;}
+            FeatureValue cv  = caseObj.get(inner.name());
+            double       sim = cv == null ? 0.0 : localSimilarity(inner, qv, cv, Map.of());
+            sum += sim;
+            count++;
+        }
+        return count == 0 ? 1.0 : sum / count;
+    }
+
 
     private static FeatureField findField(CbrFeatureSchema schema, String name) {
         for (FeatureField f : schema.fields()) {

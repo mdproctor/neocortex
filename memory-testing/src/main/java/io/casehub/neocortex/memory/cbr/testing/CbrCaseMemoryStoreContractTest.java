@@ -1188,13 +1188,16 @@ public abstract class CbrCaseMemoryStoreContractTest {
     }
 
     @Test
-    void numericList_validation_queryFeaturesRejected() {
+    void numericList_queryFeatures_participatesInScoring() {
         registerNumericListSchema();
-        assertThatThrownBy(() -> {
-            var q = CbrQuery.of(TENANT, CBR, Path.root(), "player-stats",
-                                Map.of("scores", numberList(50.0, 60.0)), 10);
-            store().retrieveSimilar(q, FeatureVectorCbrCase.class);
-        }).isInstanceOf(IllegalArgumentException.class);
+        storeNumericListCase("player1", Map.of("scores", numberList(50.0, 60.0, 70.0)), "p1");
+        storeNumericListCase("player2", Map.of("scores", numberList(10.0, 20.0, 30.0)), "p2");
+
+        var q = CbrQuery.of(TENANT, CBR, Path.root(), "player-stats",
+                            Map.of("scores", numberList(55.0, 65.0)), 10);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).isNotEmpty();
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("player1");
     }
 
     @Test
