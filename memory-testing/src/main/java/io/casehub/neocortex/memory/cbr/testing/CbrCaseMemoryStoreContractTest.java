@@ -1027,15 +1027,18 @@ public abstract class CbrCaseMemoryStoreContractTest {
     }
 
     @Test
-    void structuredFields_validation_structuredFieldInFeatures() {
+    void structuredFields_queryFeatures_categoricalListParticipatesInScoring() {
         registerStructuredSchema();
-        storeGameCase("game1", Map.of("posture", string("X"),
-                                      "phases", stringList("A")), "g1");
+        storeGameCase("game1", Map.of("posture", string("ALL_IN"),
+                                      "phases", stringList("EARLY", "MID", "LATE")), "g1");
+        storeGameCase("game2", Map.of("posture", string("DEFENSIVE"),
+                                      "phases", stringList("TURTLE", "LATE")), "g2");
+
         var q = CbrQuery.of(TENANT, CBR, Path.root(), "game",
-                            Map.of("phases", stringList("A")), 10);
-        assertThatThrownBy(() -> store().retrieveSimilar(q, FeatureVectorCbrCase.class))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must be queried via filters");
+                            Map.of("phases", stringList("EARLY", "MID")), 10);
+        var results = store().retrieveSimilar(q, FeatureVectorCbrCase.class);
+        assertThat(results).isNotEmpty();
+        assertThat(results.getFirst().cbrCase().problem()).isEqualTo("game1");
     }
 
     @Test

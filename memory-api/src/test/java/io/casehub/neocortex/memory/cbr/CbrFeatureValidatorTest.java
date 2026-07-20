@@ -1,11 +1,19 @@
 package io.casehub.neocortex.memory.cbr;
 
-import static io.casehub.neocortex.memory.cbr.FeatureValue.*;
-
 import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
-import static org.assertj.core.api.Assertions.*;
+
+import static io.casehub.neocortex.memory.cbr.FeatureValue.number;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.numberList;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.range;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.string;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.stringList;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.struct;
+import static io.casehub.neocortex.memory.cbr.FeatureValue.structList;
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CbrFeatureValidatorTest {
 
@@ -73,26 +81,76 @@ class CbrFeatureValidatorTest {
             Map.of("unknown_field", string("any_value")), SCHEMA);
     }
 
-    @Test void validateQueryFeatures_rejectsStructuredFieldInFeatures() {
-        assertThatThrownBy(() -> CbrFeatureValidator.validateQueryFeatures(
-            Map.of("phases", stringList("A")), SCHEMA))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("must be queried via filters");
+    @Test
+    void validateQueryFeatures_acceptsCategoricalListFeature() {
+        CbrFeatureValidator.validateQueryFeatures(
+                Map.of("phases", stringList("A", "B")), SCHEMA);
     }
 
-    @Test void validateQueryFeatures_rejectsNestedObjectInFeatures() {
+    @Test
+    void validateQueryFeatures_categoricalListRejectsWrongType() {
         assertThatThrownBy(() -> CbrFeatureValidator.validateQueryFeatures(
-            Map.of("economy", struct(Map.of("x", number(1)))), SCHEMA))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("must be queried via filters");
+                Map.of("phases", string("not_a_list")), SCHEMA))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("CategoricalList")
+                .hasMessageContaining("StringListVal");
+    }
+
+    @Test
+    void validateQueryFeatures_acceptsNestedObjectFeature() {
+        CbrFeatureValidator.validateQueryFeatures(
+                Map.of("economy", struct(Map.of("minute_3", number(50), "tier", string("HIGH")))), SCHEMA);
+    }
+
+    @Test
+    void validateQueryFeatures_nestedObjectRejectsWrongType() {
+        assertThatThrownBy(() -> CbrFeatureValidator.validateQueryFeatures(
+                Map.of("economy", string("not_a_struct")), SCHEMA))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NestedObject")
+                .hasMessageContaining("StructVal");
     }
 
     @SuppressWarnings("unchecked")
-    @Test void validateQueryFeatures_rejectsObjectListInFeatures() {
+    @Test
+    void validateQueryFeatures_acceptsObjectListFeature() {
+        CbrFeatureValidator.validateQueryFeatures(
+                Map.of("moments", structList(Map.of("type", string("KILL"), "minute", number(15)))), SCHEMA);
+    }
+
+    @Test
+    void validateQueryFeatures_objectListRejectsWrongType() {
         assertThatThrownBy(() -> CbrFeatureValidator.validateQueryFeatures(
-            Map.of("moments", structList(Map.of("x", string("y")))), SCHEMA))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("must be queried via filters");
+                Map.of("moments", string("not_a_list")), SCHEMA))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ObjectList")
+                .hasMessageContaining("StructListVal");
+    }
+
+    @Test
+    void validateQueryFeatures_acceptsNumericListFeature() {
+        var schema = CbrFeatureSchema.of("test", FeatureField.numericList("stats", 0, 100));
+        CbrFeatureValidator.validateQueryFeatures(
+                Map.of("stats", numberList(10.0, 50.0, 90.0)), schema);
+    }
+
+    @Test
+    void validateQueryFeatures_numericListRejectsWrongType() {
+        var schema = CbrFeatureSchema.of("test", FeatureField.numericList("stats", 0, 100));
+        assertThatThrownBy(() -> CbrFeatureValidator.validateQueryFeatures(
+                Map.of("stats", string("not_a_list")), schema))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NumericList")
+                .hasMessageContaining("NumberListVal");
+    }
+
+    @Test
+    void validateQueryFeatures_numericListRejectsOutOfRange() {
+        var schema = CbrFeatureSchema.of("test", FeatureField.numericList("stats", 0, 100));
+        assertThatThrownBy(() -> CbrFeatureValidator.validateQueryFeatures(
+                Map.of("stats", numberList(50.0, 150.0)), schema))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("outside range");
     }
 
     @Test void validateQueryFeatures_acceptsFlatFeatures() {

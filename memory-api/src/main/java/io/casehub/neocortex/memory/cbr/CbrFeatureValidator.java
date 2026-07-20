@@ -82,19 +82,49 @@ public final class CbrFeatureValidator {
                     }
                 }
                 case FeatureField.Text t -> requireType(entry.getKey(), value, FeatureValue.StringVal.class, "Text");
-                case FeatureField.CategoricalList cl -> throw new IllegalArgumentException(
-                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
-                case FeatureField.NumericList nl -> throw new IllegalArgumentException(
-                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
-                case FeatureField.NestedObject no -> throw new IllegalArgumentException(
-                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
-                case FeatureField.ObjectList ol -> throw new IllegalArgumentException(
-                        "Structured field '" + entry.getKey() + "' must be queried via filters, not features");
+                case FeatureField.CategoricalList cl -> {
+                    if (!(value instanceof FeatureValue.StringListVal)) {
+                        throw new IllegalArgumentException(
+                                "CategoricalList field '" + entry.getKey() + "' requires StringListVal, got: "
+                                + value.getClass().getSimpleName());
+                    }
+                }
+                case FeatureField.NumericList nl -> {
+                    if (!(value instanceof FeatureValue.NumberListVal nlv)) {
+                        throw new IllegalArgumentException(
+                                "NumericList field '" + entry.getKey() + "' requires NumberListVal, got: "
+                                + value.getClass().getSimpleName());
+                    }
+                    for (Double d : nlv.values()) {
+                        if (d < nl.min() || d > nl.max()) {
+                            throw new IllegalArgumentException(
+                                    "NumericList field '" + entry.getKey() + "' element " + d
+                                    + " outside range [" + nl.min() + ", " + nl.max() + "]");
+                        }
+                    }
+                }
+                case FeatureField.NestedObject no -> {
+                    if (!(value instanceof FeatureValue.StructVal sv)) {
+                        throw new IllegalArgumentException(
+                                "NestedObject field '" + entry.getKey() + "' requires StructVal, got: "
+                                + value.getClass().getSimpleName());
+                    }
+                    validateInnerValues(entry.getKey(), sv.fields(), no.innerFields());
+                }
+                case FeatureField.ObjectList ol -> {
+                    if (!(value instanceof FeatureValue.StructListVal sl)) {
+                        throw new IllegalArgumentException(
+                                "ObjectList field '" + entry.getKey() + "' requires StructListVal, got: "
+                                + value.getClass().getSimpleName());
+                    }
+                    for (Map<String, FeatureValue> item : sl.items()) {
+                        validateInnerValues(entry.getKey(), item, ol.innerFields());
+                    }
+                }
                 case FeatureField.TimeSeries ts -> validateTimeSeries(entry.getKey(), value, ts);
                 case FeatureField.DiscreteSequence ds -> validateDiscreteSequence(entry.getKey(), value);
             }
-        }
-    }
+        }}
 
     public static void validateFilters(Map<String, CbrFilter> filters, CbrFeatureSchema schema) {
         for (var entry : filters.entrySet()) {
