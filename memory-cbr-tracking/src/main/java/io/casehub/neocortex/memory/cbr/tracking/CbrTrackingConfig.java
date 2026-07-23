@@ -5,6 +5,9 @@ import io.smallrye.config.WithDefault;
 
 @ConfigMapping(prefix = "casehub.cbr.tracking")
 public interface CbrTrackingConfig {
+    @WithDefault("false")
+    boolean enabled();
+
     @WithDefault("90")
     int retentionDays();
 

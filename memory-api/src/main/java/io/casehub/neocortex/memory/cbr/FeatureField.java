@@ -204,19 +204,19 @@ public sealed interface FeatureField permits FeatureField.Categorical, FeatureFi
                 case Categorical c -> {
                     if (c.similaritySpec() != null) {
                         throw new IllegalArgumentException(
-                                "Inner field '" + c.name() + "': SimilaritySpec not supported — inner fields are filter-only");
+                                "Inner field '" + c.name() + "': SimilaritySpec not supported on inner fields — scored with type defaults only");
                     }
                 }
                 case Numeric n -> {
                     if (n.similaritySpec() != null) {
                         throw new IllegalArgumentException(
-                                "Inner field '" + n.name() + "': SimilaritySpec not supported — inner fields are filter-only");
+                                "Inner field '" + n.name() + "': SimilaritySpec not supported on inner fields — scored with type defaults only");
                     }
                 }
                 case Text t -> {
                     if (t.semantic()) {
                         throw new IllegalArgumentException(
-                                "Inner field '" + t.name() + "': semantic matching not supported — inner fields are filter-only");
+                                "Inner field '" + t.name() + "': semantic matching not supported on inner fields — scored with type defaults only");
                     }
                 }
                 case CategoricalList cl -> throw new IllegalArgumentException(

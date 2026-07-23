@@ -40,12 +40,23 @@ public class ReactiveTrackingCbrCaseMemoryStore implements ReactiveCbrCaseMemory
     @Inject
     ReactiveTrackingCbrCaseMemoryStore(@Delegate @Any ReactiveCbrCaseMemoryStore delegate,
                                        ReactiveCbrRetrievalTracker tracker,
-                                       Event<CbrRetrievalRecorded> recordedEvent) {
-        this.delegate = delegate;
-        this.tracker = tracker;
+                                       Event<CbrRetrievalRecorded> recordedEvent,
+                                       jakarta.enterprise.inject.Instance<BridgedCbrStore> bridgedInstance) {
+        this.delegate      = delegate;
+        this.tracker       = tracker;
         this.recordedEvent = recordedEvent;
-        this.bridgeActive = delegate instanceof BridgedCbrStore;
+        this.bridgeActive  = bridgedInstance.isResolvable();
     }
+
+    ReactiveTrackingCbrCaseMemoryStore(ReactiveCbrCaseMemoryStore delegate,
+                                       ReactiveCbrRetrievalTracker tracker,
+                                       Event<CbrRetrievalRecorded> recordedEvent) {
+        this.delegate      = delegate;
+        this.tracker       = tracker;
+        this.recordedEvent = recordedEvent;
+        this.bridgeActive  = delegate instanceof BridgedCbrStore;
+    }
+
 
     @Override
     public Uni<Void> registerSchema(CbrFeatureSchema schema) {

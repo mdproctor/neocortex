@@ -222,7 +222,7 @@ public class CbrOutcomeConsumer {
 
     @Inject CbrCaseMemoryStore store;
 
-    public void onEvent(@Observes @CloudEventType(CbrEventTypes.CBR_OUTCOME)
+    public void onEvent(@ObservesAsync @CloudEventType(CbrEventTypes.CBR_OUTCOME)
                         CloudEvent event) {
         CbrOutcomeData data = deserialize(event);
         CbrOutcome outcome = CbrOutcome.of(

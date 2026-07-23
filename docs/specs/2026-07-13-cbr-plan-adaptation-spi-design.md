@@ -83,10 +83,12 @@ public record AdaptedStep(
 ) {
     public AdaptedStep {
         Objects.requireNonNull(bindingName, "bindingName");
-        Objects.requireNonNull(capabilityName, "capabilityName");
         if (priority < 0) throw new IllegalArgumentException("priority must be >= 0");
         parameters = parameters != null ? Map.copyOf(parameters) : Map.of();
         Objects.requireNonNull(action, "action");
+        // capabilityName nullable — ADDED steps where the exact capability
+        //   is not yet resolved (adapter says "add a step here" but binding
+        //   to a concrete capability happens at routing time)
         // workerName nullable — REMOVED steps (no worker to assign) and
         //   ADDED steps (worker selection is the routing strategy's job)
         // stepOutcome nullable — null for ADDED steps (no historical execution).
