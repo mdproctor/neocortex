@@ -9,7 +9,12 @@ import io.casehub.neocortex.inference.MultiModalEmbedder;
 import io.casehub.neocortex.inference.MultiModalEmbedding;
 import io.casehub.neocortex.inference.splade.SparseEmbedder;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalInt;
+import java.util.Set;
 
 /**
  * Adapts separate dense (EmbeddingModel) and optional sparse (SparseEmbedder) models
@@ -20,9 +25,9 @@ import java.util.*;
  */
 public final class SeparateModelEmbedder implements MultiModalEmbedder {
 
-    private final EmbeddingModel denseModel;
-    private final SparseEmbedder sparseEmbedder;
-    private final int maxSequenceLength;
+    private final EmbeddingModel     denseModel;
+    private final SparseEmbedder     sparseEmbedder;
+    private final int                maxSequenceLength;
     private final Set<EmbeddingMode> modes;
 
     public SeparateModelEmbedder(EmbeddingModel denseModel, int maxSequenceLength) {
@@ -30,42 +35,63 @@ public final class SeparateModelEmbedder implements MultiModalEmbedder {
     }
 
     public SeparateModelEmbedder(EmbeddingModel denseModel, SparseEmbedder sparseEmbedder,
-                                  int maxSequenceLength) {
-        this.denseModel = Objects.requireNonNull(denseModel, "denseModel");
+                                 int maxSequenceLength) {
+        this.denseModel     = Objects.requireNonNull(denseModel, "denseModel");
         this.sparseEmbedder = sparseEmbedder;
-        if (maxSequenceLength <= 0)
-            throw new IllegalArgumentException("maxSequenceLength must be positive");
+        if (maxSequenceLength <= 0) {throw new IllegalArgumentException("maxSequenceLength must be positive");}
         this.maxSequenceLength = maxSequenceLength;
-        this.modes = sparseEmbedder != null
-            ? Set.of(EmbeddingMode.DENSE, EmbeddingMode.SPARSE)
-            : Set.of(EmbeddingMode.DENSE);
+        this.modes             = sparseEmbedder != null
+                                 ? Set.of(EmbeddingMode.DENSE, EmbeddingMode.SPARSE)
+                                 : Set.of(EmbeddingMode.DENSE);
     }
 
     @Override
     public MultiModalEmbedding embed(String text) {
-        float[] dense = denseModel.embed(text).content().vector();
+        float[]             dense  = denseModel.embed(text).content().vector();
         Map<Integer, Float> sparse = sparseEmbedder != null ? sparseEmbedder.embed(text) : null;
         return new MultiModalEmbedding(dense, sparse, null);
     }
 
     @Override
+    public MultiModalEmbedding embed(Map<EmbeddingMode, String> textsByMode) {
+        String denseText = Objects.requireNonNull(
+                textsByMode.get(EmbeddingMode.DENSE), "DENSE text is required");
+        float[] dense = denseModel.embed(denseText).content().vector();
+
+        Map<Integer, Float> sparse = null;
+        if (sparseEmbedder != null && textsByMode.containsKey(EmbeddingMode.SPARSE)) {
+            sparse = sparseEmbedder.embed(textsByMode.get(EmbeddingMode.SPARSE));
+        }
+
+        return new MultiModalEmbedding(dense, sparse, null);
+    }
+
+
+    @Override
     public List<MultiModalEmbedding> embedBatch(List<String> texts) {
-        List<TextSegment> segments = texts.stream().map(TextSegment::from).toList();
+        List<TextSegment>         segments      = texts.stream().map(TextSegment::from).toList();
         Response<List<Embedding>> denseResponse = denseModel.embedAll(segments);
         List<Map<Integer, Float>> sparseResults = sparseEmbedder != null
-            ? sparseEmbedder.embedBatch(texts) : null;
+                                                  ? sparseEmbedder.embedBatch(texts) : null;
 
         List<MultiModalEmbedding> results = new ArrayList<>(texts.size());
         for (int i = 0; i < texts.size(); i++) {
-            float[] dense = denseResponse.content().get(i).vector();
+            float[]             dense  = denseResponse.content().get(i).vector();
             Map<Integer, Float> sparse = sparseResults != null ? sparseResults.get(i) : null;
             results.add(new MultiModalEmbedding(dense, sparse, null));
         }
         return List.copyOf(results);
     }
 
-    @Override public Set<EmbeddingMode> supportedModes() { return modes; }
-    @Override public int denseDimension() { return denseModel.dimension(); }
-    @Override public OptionalInt colbertDimension() { return OptionalInt.empty(); }
-    @Override public int maxSequenceLength() { return maxSequenceLength; }
+    @Override
+    public Set<EmbeddingMode> supportedModes() {return modes;}
+
+    @Override
+    public int denseDimension()                {return denseModel.dimension();}
+
+    @Override
+    public OptionalInt colbertDimension()      {return OptionalInt.empty();}
+
+    @Override
+    public int maxSequenceLength()             {return maxSequenceLength;}
 }

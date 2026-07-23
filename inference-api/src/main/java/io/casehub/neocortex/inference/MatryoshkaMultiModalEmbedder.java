@@ -2,6 +2,7 @@ package io.casehub.neocortex.inference;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -14,20 +15,36 @@ import java.util.Set;
  */
 public final class MatryoshkaMultiModalEmbedder implements MultiModalEmbedder {
     private final MultiModalEmbedder delegate;
-    private final int targetDimension;
+    private final int                targetDimension;
 
     /**
-     * @param delegate         Embedder producing full-dimension dense embeddings
-     * @param targetDimension  Target dense dimension (must be ≤ delegate's dense dimension)
+     * @param delegate        Embedder producing full-dimension dense embeddings
+     * @param targetDimension Target dense dimension (must be ≤ delegate's dense dimension)
      * @throws IllegalArgumentException if targetDimension > delegate.denseDimension()
      */
     public MatryoshkaMultiModalEmbedder(MultiModalEmbedder delegate, int targetDimension) {
         if (targetDimension > delegate.denseDimension()) {
             throw new IllegalArgumentException(
-                "Target dimension " + targetDimension + " exceeds delegate dimension " + delegate.denseDimension());
+                    "Target dimension " + targetDimension + " exceeds delegate dimension " + delegate.denseDimension());
         }
-        this.delegate = delegate;
+        this.delegate        = delegate;
         this.targetDimension = targetDimension;
+    }
+
+    /**
+     * Wraps embedder with Matryoshka truncation if dimension is present and embedder
+     * is not already wrapped. Returns embedder unchanged if dimension is empty or
+     * embedder is already a MatryoshkaMultiModalEmbedder.
+     *
+     * @param embedder  embedder to potentially wrap
+     * @param dimension target dimension (empty = no wrapping)
+     * @return wrapped embedder or original embedder
+     */
+    public static MultiModalEmbedder wrapIfNeeded(MultiModalEmbedder embedder, OptionalInt dimension) {
+        if (dimension.isPresent() && !(embedder instanceof MatryoshkaMultiModalEmbedder)) {
+            return new MatryoshkaMultiModalEmbedder(embedder, dimension.getAsInt());
+        }
+        return embedder;
     }
 
     @Override
@@ -39,8 +56,13 @@ public final class MatryoshkaMultiModalEmbedder implements MultiModalEmbedder {
     @Override
     public List<MultiModalEmbedding> embedBatch(List<String> texts) {
         return delegate.embedBatch(texts).stream()
-            .map(this::truncateAndRenormalize)
-            .toList();
+                       .map(this::truncateAndRenormalize)
+                       .toList();
+    }
+
+    @Override
+    public MultiModalEmbedding embed(Map<EmbeddingMode, String> textsByMode) {
+        return truncateAndRenormalize(delegate.embed(textsByMode));
     }
 
     @Override
@@ -61,22 +83,6 @@ public final class MatryoshkaMultiModalEmbedder implements MultiModalEmbedder {
     @Override
     public int maxSequenceLength() {
         return delegate.maxSequenceLength();
-    }
-
-    /**
-     * Wraps embedder with Matryoshka truncation if dimension is present and embedder
-     * is not already wrapped. Returns embedder unchanged if dimension is empty or
-     * embedder is already a MatryoshkaMultiModalEmbedder.
-     *
-     * @param embedder  embedder to potentially wrap
-     * @param dimension target dimension (empty = no wrapping)
-     * @return wrapped embedder or original embedder
-     */
-    public static MultiModalEmbedder wrapIfNeeded(MultiModalEmbedder embedder, OptionalInt dimension) {
-        if (dimension.isPresent() && !(embedder instanceof MatryoshkaMultiModalEmbedder)) {
-            return new MatryoshkaMultiModalEmbedder(embedder, dimension.getAsInt());
-        }
-        return embedder;
     }
 
     private MultiModalEmbedding truncateAndRenormalize(MultiModalEmbedding embedding) {
