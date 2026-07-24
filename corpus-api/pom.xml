@@ -15,11 +15,7 @@
   <description>CorpusStore, CorpusReader, and ChangeSource SPIs — pure Java, zero deps. Hortora-eligible.</description>
 
   <dependencies>
-    <dependency>
-      <groupId>io.smallrye.reactive</groupId>
-      <artifactId>mutiny</artifactId>
-      <scope>provided</scope>
-    </dependency>
+
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>

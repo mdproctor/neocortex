@@ -35,11 +35,8 @@
       <artifactId>quarkus-arc</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>io.smallrye.reactive</groupId>
-      <artifactId>mutiny</artifactId>
-      <scope>provided</scope>
-    </dependency>
+
+
     <!-- Testing -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
