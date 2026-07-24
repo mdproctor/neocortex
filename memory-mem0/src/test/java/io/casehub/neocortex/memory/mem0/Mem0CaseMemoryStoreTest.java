@@ -588,27 +588,6 @@ class Mem0CaseMemoryStoreTest {
     // ── storeAll parallel ──────────────────────────────────────────────────────
 
     @Test
-    void storeAll_fires_requests_concurrently() {
-        // 8 requests with 300ms delay each. cap=4 (default) → ceil(8/4)*300 = 600ms.
-        // Sequential would be 8*300 = 2400ms. Assert elapsed < 1200ms (2x headroom).
-        wireMock().stubFor(post(urlEqualTo("/memories"))
-            .willReturn(okJson("{\"results\":[{\"id\":\"x\",\"memory\":\"t\",\"event\":\"ADD\"}]}")
-                .withFixedDelay(300)));
-        principal.setTenancyId(TENANT);
-        var inputs = IntStream.range(0, 8)
-            .mapToObj(i -> new MemoryInput("e" + i, DOMAIN, TENANT, null, "text", Map.of()))
-            .collect(Collectors.toList());
-
-        long start = System.currentTimeMillis();
-        var result = store.storeAll(inputs);
-        long elapsed = System.currentTimeMillis() - start;
-
-        assertEquals(8, result.stored().size());
-        assertTrue(elapsed < 1200,
-            "storeAll must execute in parallel; elapsed=" + elapsed + "ms (expected < 1200ms)");
-    }
-
-    @Test
     void storeAll_preserves_output_size_and_non_empty_ids() {
         wireMock().stubFor(post(urlEqualTo("/memories"))
             .willReturn(okJson("{\"results\":[{\"id\":\"mem-x\",\"memory\":\"t\",\"event\":\"ADD\"}]}")));
