@@ -4,7 +4,6 @@ import io.casehub.neocortex.memory.graphiti.dto.AddMessagesRequest;
 import io.casehub.neocortex.memory.graphiti.dto.GraphitiEpisodicNode;
 import io.casehub.neocortex.memory.graphiti.dto.GraphitiSearchRequest;
 import io.casehub.neocortex.memory.graphiti.dto.GraphitiSearchResponse;
-import io.smallrye.mutiny.Uni;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -23,26 +22,26 @@ import java.util.List;
 @RegisterRestClient(configKey = "graphiti")
 @RegisterProvider(GraphitiAuthFilter.class)
 @Path("/")
-public interface ReactiveGraphitiClient {
+public interface GraphitiClient {
 
     @POST @Path("/messages")
     @Consumes(MediaType.APPLICATION_JSON)
-    Uni<Response> addMessages(AddMessagesRequest request);
+    Response addMessages(AddMessagesRequest request);
 
     @POST @Path("/search")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    Uni<GraphitiSearchResponse> search(GraphitiSearchRequest request);
+    GraphitiSearchResponse search(GraphitiSearchRequest request);
 
     @GET @Path("/episodes/{groupId}")
     @Produces(MediaType.APPLICATION_JSON)
-    Uni<List<GraphitiEpisodicNode>> getEpisodes(
+    List<GraphitiEpisodicNode> getEpisodes(
         @PathParam("groupId") String groupId,
         @QueryParam("last_n") int lastN);
 
     @DELETE @Path("/group/{groupId}")
-    Uni<Void> deleteGroup(@PathParam("groupId") String groupId);
+    void deleteGroup(@PathParam("groupId") String groupId);
 
     @DELETE @Path("/episode/{uuid}")
-    Uni<Void> deleteEpisode(@PathParam("uuid") String uuid);
+    void deleteEpisode(@PathParam("uuid") String uuid);
 }
