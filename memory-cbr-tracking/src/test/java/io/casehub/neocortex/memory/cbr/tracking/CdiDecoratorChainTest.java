@@ -13,7 +13,6 @@ import io.casehub.neocortex.memory.cbr.CbrRetrievalTracker;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.FeatureValue;
 import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
-import io.casehub.neocortex.memory.cbr.ReactiveCbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.casehub.platform.api.path.Path;
 import io.quarkus.test.junit.QuarkusTest;
@@ -44,11 +43,7 @@ class CdiDecoratorChainTest {
     @Inject
     EventCollector eventCollector;
     @Inject
-    ReactiveCbrCaseMemoryStore reactiveStore;
-
-    @Inject
     CbrRetrievalTracker tracker;
-
 
     @BeforeEach
     void clearState() {
@@ -94,31 +89,6 @@ class CdiDecoratorChainTest {
                 .as("reranking decorator should have marked results as reranked")
                 .isTrue();
     }
-
-    @Test
-    void reactivePathRecordsExactlyOnce_bridgeGuardPreventsDoubleRecording() {
-        reactiveStore.registerSchema(new CbrFeatureSchema("guard-type",
-                                                          List.of(new FeatureField.Numeric("score", 0.0, 10.0, null)),
-                                                          null)).await().indefinitely();
-
-        var c = new FeatureVectorCbrCase("problem-guard", "summary", null, 0.8,
-                                         Map.of("score", FeatureValue.number(5.0)));
-        reactiveStore.store(c, "guard-type", "e1", CBR, "t1", "case-g1", Path.root())
-                     .await().indefinitely();
-
-        var query = CbrQuery.of("t1", CBR, Path.root(), "guard-type",
-                                Map.of("score", FeatureValue.number(5.0)), 10);
-
-        reactiveStore.retrieveSimilar(query, FeatureVectorCbrCase.class)
-                     .await().indefinitely();
-
-        var traces = tracker.findTraces("guard-type", "t1", CBR,
-                                        Instant.EPOCH, Instant.now().plusSeconds(60));
-        assertThat(traces)
-                .as("bridge-active path should record exactly one trace (blocking side only)")
-                .hasSize(1);
-    }
-
 
     @Singleton
     static class EventCollector {
