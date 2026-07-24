@@ -12,12 +12,9 @@ import io.casehub.neocortex.memory.MemoryScanRequest;
 import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
-import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
-import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
-import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import org.junit.jupiter.api.AfterEach;
@@ -68,8 +65,7 @@ class CbrReconciliationServiceTest {
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         collectionManager = new CbrCollectionManager(client, config);
         delegate = new InMemoryDelegateStore();
-        var reactiveStore = new ReactiveQdrantCbrCaseMemoryStore(collectionManager, null, config, delegate, null);
-        cbrStore = new BlockingWrapper(reactiveStore);
+        cbrStore = new QdrantCbrCaseMemoryStore(collectionManager, null, config, delegate, null);
         reconciler = new CbrReconciliationService(collectionManager, null, config, delegate, null);
     }
 
@@ -357,42 +353,4 @@ class CbrReconciliationServiceTest {
         @Override public int erase(EraseRequest r) { return 0; }
     }
 
-    private static class BlockingWrapper implements CbrCaseMemoryStore {
-        private final ReactiveQdrantCbrCaseMemoryStore delegate;
-
-        BlockingWrapper(ReactiveQdrantCbrCaseMemoryStore delegate)                                                                        {this.delegate = delegate;}
-
-        @Override
-        public void registerSchema(CbrFeatureSchema schema)                                                                               {delegate.registerSchema(schema).await().indefinitely();}
-
-        @Override
-        public String store(CbrCase c, String ct, String e, MemoryDomain d, String t, String ci, io.casehub.platform.api.path.Path scope) {return delegate.store(c, ct, e, d, t, ci, scope).await().indefinitely();}
-
-        @Override
-        public <C extends CbrCase> List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery q, Class<C> ct)                                        {return delegate.retrieveSimilar(q, ct).await().indefinitely();}
-
-        @Override
-        public Integer erase(EraseRequest r)                                                                                              {return delegate.erase(r).await().indefinitely();}
-
-        @Override
-        public Integer eraseEntity(String e, String t)                                                                                    {return delegate.eraseEntity(e, t).await().indefinitely();}
-
-        @Override
-        public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String t)                                                    {return delegate.eraseByScope(scope, t).await().indefinitely();}
-
-        @Override
-        public void recordOutcome(String ci, String t, CbrOutcome o)                                                                      {delegate.recordOutcome(ci, t, o).await().indefinitely();}
-
-        @Override
-        public Integer purge(CbrRetentionPolicy p)                                                                                        {return delegate.purge(p).await().indefinitely();}
-
-        @Override
-        public void supersede(String ci, String t, String sci, String r)                                                                  {delegate.supersede(ci, t, sci, r).await().indefinitely();}
-
-        @Override
-        public void reinstate(String ci, String t)                                                                                        {delegate.reinstate(ci, t).await().indefinitely();}
-        public io.casehub.neocortex.memory.cbr.SupersessionStatus getSupersessionStatus(String caseId, String tenantId) { return delegate.getSupersessionStatus(caseId, tenantId).await().indefinitely(); }
-        public java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return delegate.findSupersededCases(tenantId, domain).await().indefinitely(); }
-
-    }
 }

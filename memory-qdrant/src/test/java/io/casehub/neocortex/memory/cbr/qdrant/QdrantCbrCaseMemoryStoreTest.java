@@ -4,17 +4,11 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
-import io.casehub.neocortex.memory.EraseRequest;
-import io.casehub.neocortex.memory.MemoryDomain;
-import io.casehub.neocortex.memory.cbr.CbrCase;
 import io.casehub.neocortex.memory.cbr.CbrCaseMemoryStore;
 import io.casehub.neocortex.memory.cbr.CbrFeatureSchema;
-import io.casehub.neocortex.memory.cbr.CbrOutcome;
 import io.casehub.neocortex.memory.cbr.CbrQuery;
-import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 import io.casehub.neocortex.memory.cbr.FeatureField;
 import io.casehub.neocortex.memory.cbr.FeatureVectorCbrCase;
-import io.casehub.neocortex.memory.cbr.ScoredCbrCase;
 import io.casehub.neocortex.memory.cbr.TextualCbrCase;
 import io.casehub.neocortex.memory.cbr.testing.CbrCaseMemoryStoreContractTest;
 import io.qdrant.client.QdrantClient;
@@ -45,23 +39,23 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
     /** Counter for unique collection prefixes per test to avoid cross-test pollution. */
     private static final AtomicInteger TEST_COUNTER = new AtomicInteger();
 
-    private ReactiveQdrantCbrCaseMemoryStore reactiveStore;
+    private QdrantCbrCaseMemoryStore cachedStore;
 
     @Override
     protected CbrCaseMemoryStore store() {
-        if (reactiveStore == null) {
-            reactiveStore = createReactiveStore(null, false);
+        if (cachedStore == null) {
+            cachedStore = createStore(null, false);
         }
-        return new BlockingQdrantWrapper(reactiveStore);
+        return cachedStore;
     }
 
-    private ReactiveQdrantCbrCaseMemoryStore createReactiveStore(EmbeddingModel embeddingModel, boolean allowMigration) {
+    private QdrantCbrCaseMemoryStore createStore(EmbeddingModel embeddingModel, boolean allowMigration) {
         int testId = TEST_COUNTER.incrementAndGet();
         QdrantCbrConfig config = testConfig(testId, allowMigration);
         QdrantClient client = new QdrantClient(
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         var collectionManager = new CbrCollectionManager(client, config);
-        return new ReactiveQdrantCbrCaseMemoryStore(collectionManager, embeddingModel, config, null, null);
+        return new QdrantCbrCaseMemoryStore(collectionManager, embeddingModel, config, null, null);
     }
 
     private QdrantCbrConfig testConfig(int testId, boolean allowMigration) {
@@ -88,9 +82,9 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         QdrantClient client = new QdrantClient(
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         var collectionManager1 = new CbrCollectionManager(client, config1);
-        var store1 = new BlockingQdrantWrapper(new ReactiveQdrantCbrCaseMemoryStore(collectionManager1,
+        var store1 = new QdrantCbrCaseMemoryStore(collectionManager1,
             (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
-            (io.casehub.neocortex.memory.CaseMemoryStore) null, null));
+            (io.casehub.neocortex.memory.CaseMemoryStore) null, null);
 
         store1.registerSchema(CbrFeatureSchema.of("dim-test",
             FeatureField.categorical("cat")));
@@ -101,7 +95,7 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         // Use same collection prefix to trigger dimension mismatch
         var config2 = testConfig(sharedTestId, false);
         var collectionManager2 = new CbrCollectionManager(client, config2);
-        var store2 = new BlockingQdrantWrapper(new ReactiveQdrantCbrCaseMemoryStore(collectionManager2, new StubEmbeddingModel(4), config2, null, null));
+        var store2 = new QdrantCbrCaseMemoryStore(collectionManager2, new StubEmbeddingModel(4), config2, null, null);
 
         assertThatThrownBy(() ->
             store2.store(new TextualCbrCase("p2", "s2", null, null),
@@ -117,9 +111,9 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         QdrantClient client = new QdrantClient(
             QdrantGrpcClient.newBuilder(qdrant.getHost(), qdrant.getMappedPort(6334), false).build());
         var collectionManager1 = new CbrCollectionManager(client, config1);
-        var store1 = new BlockingQdrantWrapper(new ReactiveQdrantCbrCaseMemoryStore(collectionManager1,
+        var store1 = new QdrantCbrCaseMemoryStore(collectionManager1,
             (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
-            (io.casehub.neocortex.memory.CaseMemoryStore) null, null));
+            (io.casehub.neocortex.memory.CaseMemoryStore) null, null);
 
         store1.registerSchema(CbrFeatureSchema.of("dim-migrate",
             FeatureField.categorical("cat")));
@@ -129,7 +123,7 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         // Enabling migration allows recreation
         var config2 = testConfig(sharedTestId, true);
         var collectionManager2 = new CbrCollectionManager(client, config2);
-        var store2 = new BlockingQdrantWrapper(new ReactiveQdrantCbrCaseMemoryStore(collectionManager2, new StubEmbeddingModel(4), config2, null, null));
+        var store2 = new QdrantCbrCaseMemoryStore(collectionManager2, new StubEmbeddingModel(4), config2, null, null);
 
         store2.registerSchema(CbrFeatureSchema.of("dim-migrate",
             FeatureField.categorical("cat")));
@@ -149,7 +143,7 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
             @Override public void close() {}
         };
         var logger = java.util.logging.Logger.getLogger(
-            "io.casehub.neocortex.memory.cbr.qdrant.ReactiveQdrantCbrCaseMemoryStore");
+            "io.casehub.neocortex.memory.cbr.qdrant.QdrantCbrCaseMemoryStore");
         logger.addHandler(handler);
         try {
             var s = store(); // uses null embeddingModel
@@ -173,7 +167,7 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
     void retrieveSimilar_semanticTextSimilarityRanking() {
         // Create store with embedding model that produces semantically different vectors
         var embeddingModel = new SemanticStubEmbeddingModel(4);
-        var semanticStore = new BlockingQdrantWrapper(createReactiveStore(embeddingModel, false));
+        var semanticStore = createStore(embeddingModel, false);
 
         // Register schema with semantic text field
         semanticStore.registerSchema(CbrFeatureSchema.of("semantic-text-test",
@@ -233,9 +227,9 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         // Phase 1: Create collection with default config (SPLADE disabled)
         var config1  = testConfig(sharedTestId, false);
         var manager1 = new CbrCollectionManager(client, config1);
-        var store1   = new BlockingQdrantWrapper(new ReactiveQdrantCbrCaseMemoryStore(manager1,
+        var store1   = new QdrantCbrCaseMemoryStore(manager1,
             (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
-            (io.casehub.neocortex.memory.CaseMemoryStore) null, null));
+            (io.casehub.neocortex.memory.CaseMemoryStore) null, null);
         store1.registerSchema(CbrFeatureSchema.of("splade-evolve",
                                                   FeatureField.categorical("cat")));
         store1.store(new TextualCbrCase("p", "s", null, null),
@@ -302,9 +296,9 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         // Phase 1: Create collection with default config (BM25 disabled)
         var config1  = testConfig(sharedTestId, false);
         var manager1 = new CbrCollectionManager(client, config1);
-        var store1   = new BlockingQdrantWrapper(new ReactiveQdrantCbrCaseMemoryStore(manager1,
+        var store1   = new QdrantCbrCaseMemoryStore(manager1,
             (dev.langchain4j.model.embedding.EmbeddingModel) null, config1,
-            (io.casehub.neocortex.memory.CaseMemoryStore) null, null));
+            (io.casehub.neocortex.memory.CaseMemoryStore) null, null);
         store1.registerSchema(CbrFeatureSchema.of("bm25-evolve",
                                                   FeatureField.categorical("cat")));
         store1.store(new TextualCbrCase("p", "s", null, null),
@@ -444,42 +438,4 @@ class QdrantCbrCaseMemoryStoreTest extends CbrCaseMemoryStoreContractTest {
         }
     }
 
-    private static class BlockingQdrantWrapper implements CbrCaseMemoryStore {
-        private final ReactiveQdrantCbrCaseMemoryStore delegate;
-
-        BlockingQdrantWrapper(ReactiveQdrantCbrCaseMemoryStore delegate)                                                                  {this.delegate = delegate;}
-
-        @Override
-        public void registerSchema(CbrFeatureSchema schema)                                                                               {delegate.registerSchema(schema).await().indefinitely();}
-
-        @Override
-        public String store(CbrCase c, String ct, String e, MemoryDomain d, String t, String ci, io.casehub.platform.api.path.Path scope) {return delegate.store(c, ct, e, d, t, ci, scope).await().indefinitely();}
-
-        @Override
-        public <C extends CbrCase> java.util.List<ScoredCbrCase<C>> retrieveSimilar(CbrQuery q, Class<C> ct)                              {return delegate.retrieveSimilar(q, ct).await().indefinitely();}
-
-        @Override
-        public Integer erase(EraseRequest r)                                                                                              {return delegate.erase(r).await().indefinitely();}
-
-        @Override
-        public Integer eraseEntity(String e, String t)                                                                                    {return delegate.eraseEntity(e, t).await().indefinitely();}
-
-        @Override
-        public Integer eraseByScope(io.casehub.platform.api.path.Path scope, String t)                                                    {return delegate.eraseByScope(scope, t).await().indefinitely();}
-
-        @Override
-        public void recordOutcome(String ci, String t, CbrOutcome o)                                                                      {delegate.recordOutcome(ci, t, o).await().indefinitely();}
-
-        @Override
-        public Integer purge(CbrRetentionPolicy p)                                                                                        {return delegate.purge(p).await().indefinitely();}
-
-        @Override
-        public void supersede(String ci, String t, String sci, String r)                                                                  {delegate.supersede(ci, t, sci, r).await().indefinitely();}
-
-        @Override
-        public void reinstate(String ci, String t)                                                                                        {delegate.reinstate(ci, t).await().indefinitely();}
-        public io.casehub.neocortex.memory.cbr.SupersessionStatus getSupersessionStatus(String caseId, String tenantId) { return delegate.getSupersessionStatus(caseId, tenantId).await().indefinitely(); }
-        public java.util.List<io.casehub.neocortex.memory.cbr.SupersessionStatus> findSupersededCases(String tenantId, io.casehub.neocortex.memory.MemoryDomain domain) { return delegate.findSupersededCases(tenantId, domain).await().indefinitely(); }
-
-    }
 }
