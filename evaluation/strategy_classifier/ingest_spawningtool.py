@@ -133,6 +133,44 @@ def _save_split(samples, path: Path):
     np.savez_compressed(path, temporal=temporal, map_features=map_feat, labels=labels)
 
 
+def _build_order_to_features(
+    build_order: List[Dict],
+    duration: int = 300,
+) -> np.ndarray:
+    """Convert a build order into per-second feature arrays.
+
+    Populates building counts and unit counts at each second based on
+    when items appear in the build order.
+    """
+    from evaluation.strategy_classifier.sc2egset_extractor import (
+        BUILDING_IDX, UNIT_IDX, N_BUILDINGS, N_UNITS, N_STATS,
+        N_FEATURES_PER_PLAYER,
+    )
+    features = np.zeros((duration, N_FEATURES_PER_PLAYER), dtype=np.float32)
+
+    building_counts = np.zeros(N_BUILDINGS, dtype=np.float32)
+    unit_counts = np.zeros(N_UNITS, dtype=np.float32)
+
+    sorted_bo = sorted(build_order, key=lambda x: x["minute"])
+    bo_idx = 0
+
+    for sec in range(duration):
+        current_minute = sec / 60.0
+        while bo_idx < len(sorted_bo) and sorted_bo[bo_idx]["minute"] <= current_minute:
+            entry = sorted_bo[bo_idx]
+            name = entry["name"]
+            if entry["type"] == "building" and name in BUILDING_IDX:
+                building_counts[BUILDING_IDX[name]] += 1
+            elif entry["type"] == "unit" and name in UNIT_IDX:
+                unit_counts[UNIT_IDX[name]] += 1
+            bo_idx += 1
+
+        features[sec, :N_BUILDINGS] = building_counts
+        features[sec, N_BUILDINGS:N_BUILDINGS + N_UNITS] = unit_counts
+
+    return features
+
+
 def ingest_spawningtool(
     replay_dir: Path,
     hp: HyperParams = HyperParams(),
@@ -173,10 +211,9 @@ def ingest_spawningtool(
                 continue
             label_idx = arch_to_idx[label]
 
-            n_features = 239
             duration = 300
-            own_feat = np.zeros((duration, n_features // 2), dtype=np.float32)
-            opp_feat = np.zeros((duration, n_features // 2), dtype=np.float32)
+            opp_feat = _build_order_to_features(build_order, duration)
+            own_feat = np.zeros_like(opp_feat)
 
             map_tensor = build_map_tensor("Unknown")
             mask = generate_scouting_mask(duration, rng)
