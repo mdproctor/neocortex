@@ -135,13 +135,13 @@ def _save_split(samples, path: Path):
 def load_split(path: Path) -> List[Tuple[np.ndarray, np.ndarray, int]]:
     """Load a saved split back into sample tuples."""
     data = np.load(path)
-    samples = []
-    for i in range(len(data["labels"])):
-        samples.append((
-            data["temporal"][i],
-            data["map_features"][i],
-            int(data["labels"][i]),
-        ))
+    temporal = data["temporal"]
+    map_features = data["map_features"]
+    labels = data["labels"]
+    samples = [
+        (temporal[i], map_features[i], int(labels[i]))
+        for i in range(len(labels))
+    ]
     return samples
 
 
