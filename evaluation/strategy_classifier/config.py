@@ -36,6 +36,27 @@ def all_archetype_names() -> List[str]:
     return seen
 
 
+COARSE_HIERARCHY: Dict[str, Dict[str, List[str]]] = {
+    "vs_terran": {
+        "AGGRESSIVE": ["RUSH"],
+        "TECH_AIR": ["BANSHEE_HARASS", "AIR_SUPERIORITY"],
+        "GROUND": ["MECH_PUSH", "BIO_TIMING"],
+    },
+}
+
+
+def coarse_label_map(matchup: str, fine_classes: List[str]) -> List[int]:
+    hierarchy = COARSE_HIERARCHY.get(matchup)
+    if hierarchy is None:
+        return []
+    coarse_names = list(hierarchy.keys())
+    fine_to_coarse = {}
+    for coarse_idx, coarse_name in enumerate(coarse_names):
+        for fine_name in hierarchy[coarse_name]:
+            fine_to_coarse[fine_name] = coarse_idx
+    return [fine_to_coarse[name] for name in fine_classes]
+
+
 @dataclass(frozen=True)
 class HyperParams:
     lr: float = 1e-3

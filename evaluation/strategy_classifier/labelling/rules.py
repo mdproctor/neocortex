@@ -96,6 +96,16 @@ def _count_units(units: List[Dict], name: str) -> int:
     return sum(1 for u in units if u["name"] == name)
 
 
+def _is_bio_dominant(n_rax: int, bio_count: int, mech_count: int,
+                     has_medivac: bool) -> bool:
+    """True when the army composition is clearly bio, even with mech support."""
+    if n_rax >= 3 and has_medivac and bio_count > mech_count * 3:
+        return True
+    if bio_count >= 15 and bio_count > mech_count * 4:
+        return True
+    return False
+
+
 def _label_terran(buildings: List[Dict], units: List[Dict]) -> Optional[str]:
     rax_time = _first_time(buildings, "Barracks")
     factory_time = _first_time(buildings, "Factory")
@@ -118,13 +128,12 @@ def _label_terran(buildings: List[Dict], units: List[Dict]) -> Optional[str]:
     n_marine = _count_units(units, "Marine")
     n_marauder = _count_units(units, "Marauder")
 
+    mech_count = _count_units(units, "SiegeTank") + _count_units(units, "Thor") + _count_units(units, "Hellion") + _count_units(units, "HellionTank") + _count_units(units, "Cyclone")
+    bio_count = n_marine + n_marauder
+
     # RUSH: multiple barracks early, no expansion, no factory
     if n_rax >= 2 and _count_before(buildings, "Barracks", 3.0) >= 2 and factory_time > 4.0 and second_cc > 4.0:
         return "RUSH"
-
-    # MACRO_ECONOMY: CC-first (2nd CC before factory)
-    if second_cc < factory_time and second_cc < 3.0:
-        return "MACRO_ECONOMY"
 
     # BANSHEE_HARASS: Banshee unit produced, OR Starport+TechLab without bio army
     if has_banshee:
@@ -136,12 +145,17 @@ def _label_terran(buildings: List[Dict], units: List[Dict]) -> Optional[str]:
     if air_count >= 3 and air_count > ground_army:
         return "AIR_SUPERIORITY"
 
-    # MECH_PUSH: tanks/thors/hellions dominate over bio
-    mech_count = _count_units(units, "SiegeTank") + _count_units(units, "Thor") + _count_units(units, "Hellion") + _count_units(units, "HellionTank") + _count_units(units, "Cyclone")
-    bio_count = n_marine + n_marauder
-    if n_factory >= 2 or (mech_count >= 3 and mech_count >= bio_count):
+    # BIO_TIMING: bio-dominant army — check BEFORE mech rules so that
+    # bio players with Armory/2nd Factory for support units aren't misclassified
+    if _is_bio_dominant(n_rax, bio_count, mech_count, has_medivac):
+        return "BIO_TIMING"
+
+    # MECH_PUSH: mech units dominate over bio
+    if mech_count >= 3 and mech_count >= bio_count:
         return "MECH_PUSH"
-    if armory_time < 10.0 and factory_time < 3.0:
+    if n_factory >= 2 and not has_medivac and mech_count >= bio_count:
+        return "MECH_PUSH"
+    if armory_time < 10.0 and factory_time < 3.0 and not _is_bio_dominant(n_rax, bio_count, mech_count, has_medivac):
         return "MECH_PUSH"
 
     # BIO_TIMING: marine/marauder/medivac composition
@@ -152,7 +166,7 @@ def _label_terran(buildings: List[Dict], units: List[Dict]) -> Optional[str]:
     if factory_time < 3.0 and starport_time < 5.0:
         if has_starport_tl and not has_medivac and not (bio_count > mech_count):
             return "BANSHEE_HARASS"
-        if has_siege_tank or has_thor or has_hellion:
+        if (has_siege_tank or has_thor) and mech_count >= bio_count:
             return "MECH_PUSH"
         if has_medivac or bio_count >= 5:
             return "BIO_TIMING"
@@ -166,6 +180,10 @@ def _label_terran(buildings: List[Dict], units: List[Dict]) -> Optional[str]:
         return "MECH_PUSH"
     if bio_count >= 3:
         return "BIO_TIMING"
+
+    # MACRO_ECONOMY: CC-first with no aggressive tech detected above
+    if second_cc < factory_time and second_cc < 3.0:
+        return "MACRO_ECONOMY"
 
     # Default
     if n_rax >= 1:

@@ -8,8 +8,9 @@ import numpy as np
 from pathlib import Path
 from evaluation.strategy_classifier.config import (
     MATCHUPS, HyperParams, Paths, archetypes_for_matchup,
+    COARSE_HIERARCHY, coarse_label_map,
 )
-from evaluation.strategy_classifier.model import StrategyClassifier
+from evaluation.strategy_classifier.model import StrategyClassifier, HierarchicalStrategyClassifier
 from evaluation.strategy_classifier.train import (
     train_model, evaluate, find_optimal_temperature, bake_temperature,
     compute_class_weights,
@@ -19,11 +20,12 @@ from evaluation.strategy_classifier.evaluate import (
     compute_metrics, benchmark_latency,
 )
 from evaluation.strategy_classifier.generate_synthetic import load_split
-from evaluation.strategy_classifier.dataset import create_dataloaders
+from evaluation.strategy_classifier.dataset import create_dataloaders, ModalityDropoutDataset, StrategyDataset
+from torch.utils.data import DataLoader
 from evaluation.strategy_classifier.feature_engineering import F_MAP
 
 
-def run(data_source: str = "synthetic", hp: HyperParams = HyperParams(), paths: Paths = Paths()):
+def run(data_source: str = "synthetic", hp: HyperParams = HyperParams(), paths: Paths = Paths(), coarse_weight: float = 0.3):
     data_dir = paths.data / data_source
     output_dir = paths.output
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -35,25 +37,52 @@ def run(data_source: str = "synthetic", hp: HyperParams = HyperParams(), paths: 
         print(f"  {matchup}")
         print(f"{'='*60}")
 
-        archetypes = archetypes_for_matchup(matchup)
-        num_classes = len(archetypes)
-
         matchup_dir = data_dir / matchup
+        classes_path = matchup_dir / "classes.json"
+        if classes_path.exists():
+            import json
+            with open(classes_path) as f:
+                archetypes = json.load(f)
+        else:
+            archetypes = archetypes_for_matchup(matchup)
+        num_classes = len(archetypes)
         train_samples = load_split(matchup_dir / "train.npz")
         val_samples = load_split(matchup_dir / "val.npz")
         test_samples = load_split(matchup_dir / "test.npz")
 
         f_temporal = train_samples[0][0].shape[1]
-        print(f"  Features: {f_temporal} temporal, {F_MAP} map, {num_classes} classes")
+        f_map = train_samples[0][1].shape[0]
+        has_availability_flags = f_map > F_MAP
+        print(f"  Features: {f_temporal} temporal, {f_map} map, {num_classes} classes")
         print(f"  Samples: {len(train_samples)} train, {len(val_samples)} val, {len(test_samples)} test")
+        if has_availability_flags:
+            print(f"  Modality dropout: enabled (availability flags detected)")
 
-        train_loader, val_loader, test_loader = create_dataloaders(
-            train_samples, val_samples, test_samples, hp
+        if has_availability_flags:
+            train_ds = ModalityDropoutDataset(train_samples, drop_prob=0.4)
+        else:
+            train_ds = StrategyDataset(train_samples)
+        val_ds = StrategyDataset(val_samples)
+        test_ds = StrategyDataset(test_samples)
+        train_loader = DataLoader(train_ds, batch_size=hp.batch_size, shuffle=True)
+        val_loader = DataLoader(val_ds, batch_size=hp.batch_size, shuffle=False)
+        test_loader = DataLoader(test_ds, batch_size=hp.batch_size, shuffle=False)
+
+        base_model = StrategyClassifier(
+            f_temporal=f_temporal, f_map=f_map, num_classes=num_classes, hp=hp
         )
 
-        model = StrategyClassifier(
-            f_temporal=f_temporal, f_map=F_MAP, num_classes=num_classes, hp=hp
-        )
+        hierarchy = COARSE_HIERARCHY.get(matchup)
+        if hierarchy:
+            label_map = coarse_label_map(matchup, archetypes)
+            fine_to_coarse = torch.tensor(label_map, dtype=torch.long)
+            num_coarse = len(hierarchy)
+            model = HierarchicalStrategyClassifier(base_model, num_coarse, fine_to_coarse)
+            coarse_names = list(hierarchy.keys())
+            print(f"  Hierarchical: {num_coarse} coarse groups ({', '.join(coarse_names)})")
+        else:
+            model = base_model
+
         n_params = sum(p.numel() for p in model.parameters())
         print(f"  Parameters: {n_params:,}")
 
@@ -67,13 +96,16 @@ def run(data_source: str = "synthetic", hp: HyperParams = HyperParams(), paths: 
             weights = None
 
         print(f"\n  Training...")
-        history = train_model(model, train_loader, val_loader, hp, class_weights=weights)
+        history = train_model(model, train_loader, val_loader, hp, class_weights=weights,
+                              coarse_weight=coarse_weight)
+
+        export_model = model.base if hierarchy else model
 
         print(f"\n  Calibrating temperature...")
         _, _, val_logits, val_labels = evaluate(model, val_loader)
         temperature = find_optimal_temperature(val_logits, val_labels)
         print(f"  Optimal temperature: {temperature:.3f}")
-        bake_temperature(model, temperature)
+        bake_temperature(export_model, temperature)
 
         print(f"\n  Evaluating on test set...")
         _, test_acc, test_logits, test_labels = evaluate(model, test_loader)
@@ -86,24 +118,24 @@ def run(data_source: str = "synthetic", hp: HyperParams = HyperParams(), paths: 
 
         print(f"\n  Exporting to ONNX...")
         onnx_path = export_to_onnx(
-            model, f_temporal=f_temporal, f_map=F_MAP,
+            export_model, f_temporal=f_temporal, f_map=f_map,
             matchup=matchup, output_dir=output_dir,
             max_windows=hp.max_windows,
         )
         print(f"  Exported: {onnx_path} ({onnx_path.stat().st_size / 1024:.1f} KB)")
 
         print(f"\n  Benchmarking latency...")
-        latency = benchmark_latency(onnx_path, f_temporal, F_MAP, hp.max_windows)
+        latency = benchmark_latency(onnx_path, f_temporal, f_map, hp.max_windows)
         print(f"  p50: {latency['p50_ms']:.2f}ms  p95: {latency['p95_ms']:.2f}ms  p99: {latency['p99_ms']:.2f}ms")
 
         write_manifest(
             output_dir, matchup, hp,
-            f_temporal=f_temporal, f_map=F_MAP, num_classes=num_classes,
+            f_temporal=f_temporal, f_map=f_map, num_classes=num_classes,
             accuracy=metrics, temperature=temperature,
         )
 
         checkpoint_path = models_dir / f"{matchup}.pt"
-        torch.save(model.state_dict(), checkpoint_path)
+        torch.save(export_model.state_dict(), checkpoint_path)
 
     print(f"\n{'='*60}")
     print(f"  Pipeline complete. Output: {output_dir}")
@@ -112,6 +144,15 @@ def run(data_source: str = "synthetic", hp: HyperParams = HyperParams(), paths: 
 
 if __name__ == "__main__":
     data_source = "synthetic"
-    if len(sys.argv) > 1 and sys.argv[1] == "--data":
-        data_source = sys.argv[2]
-    run(data_source=data_source)
+    cw = 0.3
+    args = sys.argv[1:]
+    while args:
+        if args[0] == "--data":
+            data_source = args[1]
+            args = args[2:]
+        elif args[0] == "--coarse-weight":
+            cw = float(args[1])
+            args = args[2:]
+        else:
+            args = args[1:]
+    run(data_source=data_source, coarse_weight=cw)

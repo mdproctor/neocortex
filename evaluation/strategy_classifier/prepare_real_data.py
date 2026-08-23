@@ -1,13 +1,16 @@
 """Prepare real SC2EGSet data for training: extract → label → save.
 
-Extracts replays from SC2EGSet ZIPs, derives build orders for labelling,
-runs hybrid labelling (rule-based + LLM), builds windowed samples, and
-saves as .npz files compatible with run_pipeline.py.
+Processes each SC2EGSet ZIP independently into a per-tournament subdirectory
+under data/sc2egset/<tournament_name>/. Provides resume support — ZIPs whose
+output directory already exists are skipped. Never holds more than one
+tournament in memory (OOM safety for 70+ ZIPs).
 
 Usage: python3 -m evaluation.strategy_classifier.prepare_real_data \
          --zips <path1.zip> [<path2.zip> ...] \
-         [--llm]  # enable LLM labelling for ambiguous replays
+         [--llm]      # enable LLM labelling for ambiguous replays
+         [--force]    # reprocess even if output dir exists
 """
+import gc
 import json
 import sys
 import numpy as np
@@ -18,7 +21,7 @@ from evaluation.strategy_classifier.config import (
 )
 from evaluation.strategy_classifier.sc2egset_extractor import (
     extract_from_zip, ReplayData, LOOPS_PER_SECOND, BUILDING_IDX, BUILDINGS,
-    build_samples_from_replays,
+    build_samples_from_replays, extract_replay,
 )
 from evaluation.strategy_classifier.feature_engineering import (
     build_temporal_features, build_map_tensor, F_MAP,
@@ -29,6 +32,11 @@ from evaluation.strategy_classifier.labelling.rules import rule_based_label
 from evaluation.strategy_classifier.labelling.label_pipeline import label_replay
 
 MINUTES = [2, 3, 4, 5]
+
+
+def tournament_name(zip_path: Path) -> str:
+    """Derive tournament name from ZIP filename (strip .zip extension)."""
+    return zip_path.stem
 
 
 def extract_build_order(game_json: dict, player_id: int) -> List[Dict]:
@@ -102,24 +110,13 @@ def extract_build_orders_from_zip(zip_path: Path) -> List[Tuple[dict, Dict]]:
     return games
 
 
-def label_all_replays(
-    zip_paths: List[Path], use_llm: bool = False,
-) -> Dict[str, List[Tuple[List[Dict], str, int]]]:
-    """Label all replays across ZIPs.
+def label_replays_from_zip(
+    zip_path: Path, use_llm: bool = False, llm_client=None,
+) -> Dict[str, list]:
+    """Label all replays from a single ZIP.
 
-    Returns dict[matchup] -> list of (build_order_for_labeller, label, opponent_player_id_in_game)
-    Each game produces TWO entries (one per player's perspective as the opponent).
+    Returns dict[matchup] -> list of (game_json, label, observer_id, opponent_id).
     """
-    llm_client = None
-    if use_llm:
-        try:
-            from evaluation.strategy_classifier.labelling.llm_labeller import create_client
-            llm_client = create_client()
-            print("LLM labelling enabled")
-        except Exception as e:
-            print(f"Warning: LLM labelling requested but client failed: {e}")
-            print("Falling back to rule-based only")
-
     matchup_map = {
         ("Terran", "Terran"): "vs_terran",
         ("Terran", "Zerg"): "vs_zerg",
@@ -135,56 +132,57 @@ def label_all_replays(
     labelled: Dict[str, list] = {m: [] for m in MATCHUPS}
     stats = {"rule": 0, "llm": 0, "excluded": 0, "total": 0}
 
-    for zip_path in zip_paths:
-        print(f"\nLabelling {zip_path.name}...")
-        games = extract_build_orders_from_zip(zip_path)
+    games = extract_build_orders_from_zip(zip_path)
 
-        for game_json, players in games:
-            for observer_id, opponent_id in [(1, 2), (2, 1)]:
-                observer_race = players[observer_id]["race"]
-                opponent_race = players[opponent_id]["race"]
-                matchup_key = (observer_race, opponent_race)
-                if matchup_key not in matchup_map:
-                    continue
-                matchup = matchup_map[matchup_key]
+    for game_json, players in games:
+        for observer_id, opponent_id in [(1, 2), (2, 1)]:
+            observer_race = players[observer_id]["race"]
+            opponent_race = players[opponent_id]["race"]
+            matchup_key = (observer_race, opponent_race)
+            if matchup_key not in matchup_map:
+                continue
+            matchup = matchup_map[matchup_key]
 
-                opponent_build = extract_build_order(game_json, opponent_id)
-                label, source = label_replay(opponent_build, opponent_race, llm_client)
+            opponent_build = extract_build_order(game_json, opponent_id)
+            label, source = label_replay(opponent_build, opponent_race, llm_client)
 
-                stats["total"] += 1
-                stats[source] += 1
+            stats["total"] += 1
+            stats[source] += 1
 
-                if label is not None:
-                    labelled[matchup].append((game_json, label, observer_id, opponent_id))
+            if label is not None:
+                labelled[matchup].append((game_json, label, observer_id, opponent_id))
 
-    print(f"\nLabelling stats: {stats['total']} total, "
+    return labelled, stats
+
+
+def process_single_zip(
+    zip_path: Path,
+    output_base: Path,
+    use_llm: bool = False,
+    llm_client=None,
+    hp: HyperParams = HyperParams(),
+    seed: int = 42,
+) -> Dict[str, int]:
+    """Process a single SC2EGSet ZIP into per-tournament output.
+
+    Writes to output_base/<tournament_name>/vs_terran/*.npz etc.
+    Returns dict of matchup -> sample count for reporting.
+    """
+    name = tournament_name(zip_path)
+    tournament_dir = output_base / name
+    rng = np.random.default_rng(seed)
+
+    print(f"\n{'='*60}")
+    print(f"Processing {zip_path.name}")
+    print(f"{'='*60}")
+
+    print("  Labelling replays...")
+    labelled, stats = label_replays_from_zip(zip_path, use_llm, llm_client)
+    print(f"  Labelling: {stats['total']} total, "
           f"{stats['rule']} rule-based, {stats['llm']} LLM, "
           f"{stats['excluded']} excluded")
-    for m in MATCHUPS:
-        print(f"  {m}: {len(labelled[m])} labelled replays")
 
-    return labelled
-
-
-def build_and_save_dataset(
-    labelled: Dict[str, list],
-    zip_paths: List[Path],
-    hp: HyperParams = HyperParams(),
-    paths: Paths = Paths(),
-    seed: int = 42,
-):
-    """Build windowed samples from labelled replays and save as .npz."""
-    rng = np.random.default_rng(seed)
-    output = paths.data / "sc2egset"
-    output.mkdir(parents=True, exist_ok=True)
-
-    all_replays = {}
-    for zip_path in zip_paths:
-        results = extract_from_zip(zip_path, hp)
-        for matchup, replays in results.items():
-            if matchup not in all_replays:
-                all_replays[matchup] = []
-            all_replays[matchup].extend(replays)
+    sample_counts = {}
 
     for matchup in MATCHUPS:
         archetypes = archetypes_for_matchup(matchup)
@@ -192,12 +190,6 @@ def build_and_save_dataset(
 
         labelled_games = labelled.get(matchup, [])
         if not labelled_games:
-            print(f"  {matchup}: no labelled replays, skipping")
-            continue
-
-        replay_features = all_replays.get(matchup, [])
-        if not replay_features:
-            print(f"  {matchup}: no extracted features, skipping")
             continue
 
         samples = []
@@ -214,7 +206,6 @@ def build_and_save_dataset(
             total_loops = header.get("elapsedGameLoops", 0)
             duration = min(int(total_loops / LOOPS_PER_SECOND), 600)
 
-            from evaluation.strategy_classifier.sc2egset_extractor import extract_replay
             replay = extract_replay(game_json)
             if replay is None:
                 continue
@@ -243,7 +234,6 @@ def build_and_save_dataset(
                 replay_id += 1
 
         if not samples:
-            print(f"  {matchup}: no valid samples after processing")
             continue
 
         train_ids, val_ids, test_ids = per_replay_split(replay_ids, replay_labels, seed=seed)
@@ -251,7 +241,6 @@ def build_and_save_dataset(
         val_set = set(val_ids)
 
         train_samples, val_samples, test_samples = [], [], []
-        samples_per_replay = {}
         idx = 0
         for rid in replay_ids:
             count = 0
@@ -265,15 +254,21 @@ def build_and_save_dataset(
                 idx += 1
                 count += 1
 
-        matchup_dir = output / matchup
+        matchup_dir = tournament_dir / matchup
         matchup_dir.mkdir(parents=True, exist_ok=True)
         _save_split(train_samples, matchup_dir / "train.npz")
         _save_split(val_samples, matchup_dir / "val.npz")
         _save_split(test_samples, matchup_dir / "test.npz")
 
+        total = len(train_samples) + len(val_samples) + len(test_samples)
+        sample_counts[matchup] = total
         print(f"  {matchup}: {len(train_samples)} train, {len(val_samples)} val, "
-              f"{len(test_samples)} test ({len(archetypes)} classes, "
-              f"{len(replay_ids)} replays)")
+              f"{len(test_samples)} test ({len(replay_ids)} replays)")
+
+    del labelled
+    gc.collect()
+
+    return sample_counts
 
 
 def _save_split(samples, path: Path):
@@ -290,13 +285,50 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--zips", nargs="+", required=True, type=Path)
     parser.add_argument("--llm", action="store_true", help="Enable LLM labelling for ambiguous replays")
+    parser.add_argument("--force", action="store_true", help="Reprocess even if output dir exists")
     args = parser.parse_args()
 
-    print("Step 1: Labelling replays...")
-    labelled = label_all_replays(args.zips, use_llm=args.llm)
+    paths = Paths()
+    output_base = paths.data / "sc2egset"
 
-    print("\nStep 2: Building windowed samples and saving...")
-    build_and_save_dataset(labelled, args.zips)
+    llm_client = None
+    if args.llm:
+        try:
+            from evaluation.strategy_classifier.labelling.llm_labeller import create_client
+            llm_client = create_client()
+            print("LLM labelling enabled")
+        except Exception as e:
+            print(f"Warning: LLM labelling requested but client failed: {e}")
+            print("Falling back to rule-based only")
 
-    print("\nDone. Run the training pipeline with:")
-    print("  python3 -m evaluation.strategy_classifier.run_pipeline --data sc2egset")
+    total_zips = len(args.zips)
+    skipped = 0
+    processed = 0
+    grand_totals = {m: 0 for m in MATCHUPS}
+
+    for i, zip_path in enumerate(args.zips, 1):
+        name = tournament_name(zip_path)
+        tournament_dir = output_base / name
+
+        if tournament_dir.exists() and not args.force:
+            print(f"[{i}/{total_zips}] Skipping {name} (output exists)")
+            skipped += 1
+            continue
+
+        print(f"[{i}/{total_zips}]", end="")
+        counts = process_single_zip(
+            zip_path, output_base, args.llm, llm_client,
+        )
+        for m, c in counts.items():
+            grand_totals[m] += c
+        processed += 1
+        gc.collect()
+
+    print(f"\n{'='*60}")
+    print(f"Summary: {processed} processed, {skipped} skipped (of {total_zips} ZIPs)")
+    if processed > 0:
+        for m in MATCHUPS:
+            if grand_totals[m] > 0:
+                print(f"  {m}: {grand_totals[m]} new samples")
+    print(f"\nNext: python3 -m evaluation.strategy_classifier.normalize "
+          f"--sources sc2egset spawningtool msc")

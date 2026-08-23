@@ -2,6 +2,7 @@ import pytest
 from evaluation.strategy_classifier.config import (
     ARCHETYPES, MATCHUPS, HyperParams, Paths,
     archetypes_for_matchup, all_archetype_names,
+    COARSE_HIERARCHY, coarse_label_map,
 )
 
 
@@ -36,6 +37,26 @@ class TestArchetypeTaxonomy:
     def test_all_archetypes_unique(self):
         names = all_archetype_names()
         assert len(names) == len(set(names))
+
+
+class TestCoarseHierarchy:
+    def test_vs_terran_hierarchy_covers_all_archetypes(self):
+        hierarchy = COARSE_HIERARCHY["vs_terran"]
+        all_fine = []
+        for fine_list in hierarchy.values():
+            all_fine.extend(fine_list)
+        terran_archetypes = archetypes_for_matchup("vs_terran")
+        for arch in all_fine:
+            assert arch in terran_archetypes, f"{arch} not in vs_terran archetypes"
+
+    def test_coarse_label_map_vs_terran(self):
+        fine_classes = ["RUSH", "BANSHEE_HARASS", "AIR_SUPERIORITY", "MECH_PUSH", "BIO_TIMING"]
+        mapping = coarse_label_map("vs_terran", fine_classes)
+        assert mapping == [0, 1, 1, 2, 2]
+
+    def test_coarse_label_map_no_hierarchy(self):
+        mapping = coarse_label_map("vs_zerg", ["RUSH", "ROACH_RUSH"])
+        assert mapping == []
 
 
 class TestHyperParams:

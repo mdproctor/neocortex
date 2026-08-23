@@ -49,6 +49,50 @@ class StrategyDataset(Dataset):
         )
 
 
+class ModalityDropoutDataset(Dataset):
+    """Wraps samples with random modality dropout during training.
+
+    With probability `drop_prob`, zeros out the player feature block
+    (features 0:119) OR the opponent feature block (features 119:238)
+    and sets the corresponding availability flag in map_feat to 0.
+
+    Expects map_feat to have 6 elements: [map1..4, has_player, has_opponent].
+    """
+    def __init__(
+        self, samples: List[Tuple[np.ndarray, np.ndarray, int]],
+        drop_prob: float = 0.2,
+    ):
+        from evaluation.strategy_classifier.sc2egset_extractor import N_FEATURES_PER_PLAYER
+        self.samples = samples
+        self.drop_prob = drop_prob
+        self._n_player = N_FEATURES_PER_PLAYER
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        temporal, map_feat, label = self.samples[idx]
+        temporal = temporal.copy()
+        map_feat = map_feat.copy()
+        n = self._n_player
+
+        if np.random.random() < self.drop_prob:
+            if np.random.random() < 0.5:
+                temporal[:, :n] = 0.0
+                if len(map_feat) > 4:
+                    map_feat[4] = 0.0
+            else:
+                temporal[:, n:2*n] = 0.0
+                if len(map_feat) > 5:
+                    map_feat[5] = 0.0
+
+        return (
+            torch.from_numpy(temporal),
+            torch.from_numpy(map_feat),
+            label,
+        )
+
+
 def create_dataloaders(
     train_samples, val_samples, test_samples, hp: HyperParams,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:

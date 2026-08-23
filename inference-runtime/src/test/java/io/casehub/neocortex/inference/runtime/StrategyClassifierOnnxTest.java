@@ -18,23 +18,22 @@ import static org.assertj.core.api.Assertions.within;
 class StrategyClassifierOnnxTest {
 
     private static final int MAX_WINDOWS = 10;
-    private static final int F_TEMPORAL = 239;
-    private static final int F_MAP = 4;
+    private static final int F_TEMPORAL = 269;
+    private static final int F_MAP = 6;
 
     private static final List<String> VS_TERRAN_LABELS = List.of(
-        "RUSH", "PROXY", "BANSHEE_HARASS", "AIR_SUPERIORITY",
-        "MECH_PUSH", "BIO_TIMING", "MACRO_ECONOMY", "TECH_RUSH"
+        "RUSH", "BANSHEE_HARASS", "AIR_SUPERIORITY",
+        "MECH_PUSH", "BIO_TIMING"
     );
 
     private static final List<String> VS_ZERG_LABELS = List.of(
         "RUSH", "ROACH_RUSH", "LING_BANE", "MUTA_HARASS",
-        "HYDRA_PUSH", "MACRO_ECONOMY", "TECH_RUSH"
+        "HYDRA_PUSH", "MACRO_ECONOMY"
     );
 
     private static final List<String> VS_PROTOSS_LABELS = List.of(
         "RUSH", "PROXY", "CANNON_RUSH", "DT_RUSH",
-        "BLINK_STALKER", "COLOSSUS_PUSH", "AIR_SUPERIORITY",
-        "MACRO_ECONOMY", "TECH_RUSH"
+        "BLINK_STALKER", "COLOSSUS_PUSH", "AIR_SUPERIORITY"
     );
 
     @Test

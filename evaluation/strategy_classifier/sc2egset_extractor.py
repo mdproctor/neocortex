@@ -69,13 +69,23 @@ STAT_KEYS = [
     "scoreValueVespeneUsedCurrentTechnology",
 ]
 
+UPGRADES = [
+    "Stimpack", "ShieldWall", "PunisherGrenades", "BansheeCloak",
+    "TerranVehicleWeaponsLevel1", "PersonalCloaking", "DrillClaws",
+    "zerglingmovementspeed", "GlialReconstitution", "CentrificalHooks",
+    "Burrow", "WarpGateResearch", "BlinkTech", "Charge",
+    "AdeptPiercingAttack",
+]
+
 BUILDING_IDX = {b: i for i, b in enumerate(BUILDINGS)}
 UNIT_IDX = {u: i for i, u in enumerate(UNITS)}
+UPGRADE_IDX = {u: i for i, u in enumerate(UPGRADES)}
 
 N_BUILDINGS = len(BUILDINGS)
 N_UNITS = len(UNITS)
 N_STATS = len(STAT_KEYS)
-N_FEATURES_PER_PLAYER = N_BUILDINGS + N_UNITS + N_STATS
+N_UPGRADES = len(UPGRADES)
+N_FEATURES_PER_PLAYER = N_BUILDINGS + N_UNITS + N_STATS + N_UPGRADES
 
 RACE_MAP = {"Terr": "Terran", "Prot": "Protoss", "Zerg": "Zerg"}
 MATCHUP_MAP = {
@@ -149,6 +159,8 @@ def extract_replay(game_json: dict) -> Optional[ReplayData]:
                    2: np.zeros(N_UNITS, dtype=np.float32)}
     last_stats = {1: np.zeros(N_STATS, dtype=np.float32),
                   2: np.zeros(N_STATS, dtype=np.float32)}
+    upgrade_flags = {1: np.zeros(N_UPGRADES, dtype=np.float32),
+                     2: np.zeros(N_UPGRADES, dtype=np.float32)}
 
     unit_tag_to_type = {}
 
@@ -196,6 +208,11 @@ def extract_replay(game_json: dict) -> Optional[ReplayData]:
                         unit_counts[owner][UNIT_IDX[unit_name]] = max(
                             0, unit_counts[owner][UNIT_IDX[unit_name]] - 1)
 
+            elif etype == "Upgrade":
+                upgrade_name = e.get("upgradeTypeName", "")
+                if upgrade_name in UPGRADE_IDX:
+                    upgrade_flags[pid][UPGRADE_IDX[upgrade_name]] = 1.0
+
             elif etype == "PlayerStats":
                 stats = e.get("stats", {})
                 for i, key in enumerate(STAT_KEYS):
@@ -205,7 +222,8 @@ def extract_replay(game_json: dict) -> Optional[ReplayData]:
         for pid, features in [(1, p1_features), (2, p2_features)]:
             features[sec, :N_BUILDINGS] = building_counts[pid]
             features[sec, N_BUILDINGS:N_BUILDINGS + N_UNITS] = unit_counts[pid]
-            features[sec, N_BUILDINGS + N_UNITS:] = last_stats[pid]
+            features[sec, N_BUILDINGS + N_UNITS:N_BUILDINGS + N_UNITS + N_STATS] = last_stats[pid]
+            features[sec, N_BUILDINGS + N_UNITS + N_STATS:] = upgrade_flags[pid]
 
     return ReplayData(
         map_name=map_name, matchup=matchup,

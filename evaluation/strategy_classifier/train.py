@@ -9,13 +9,16 @@ from evaluation.strategy_classifier.config import HyperParams
 
 
 class FocalLoss(nn.Module):
-    def __init__(self, gamma: float = 2.0, weight: torch.Tensor = None):
+    def __init__(self, gamma: float = 2.0, weight: torch.Tensor = None,
+                 label_smoothing: float = 0.0):
         super().__init__()
         self.gamma = gamma
+        self.label_smoothing = label_smoothing
         self.register_buffer("weight", weight)
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        ce = F.cross_entropy(logits, targets, weight=self.weight, reduction="none")
+        ce = F.cross_entropy(logits, targets, weight=self.weight,
+                             reduction="none", label_smoothing=self.label_smoothing)
         pt = torch.exp(-ce)
         return ((1 - pt) ** self.gamma * ce).mean()
 
@@ -30,14 +33,23 @@ def compute_class_weights(labels: np.ndarray, num_classes: int) -> torch.Tensor:
 
 def train_one_epoch(
     model: nn.Module, loader: DataLoader, optimizer, criterion,
+    coarse_criterion=None, coarse_weight: float = 0.3,
 ) -> float:
     model.train()
     total_loss = 0.0
     n_batches = 0
+    is_hierarchical = hasattr(model, "coarse_head")
     for temporal, map_feat, labels in loader:
         optimizer.zero_grad()
-        logits = model(temporal, map_feat)
-        loss = criterion(logits, labels)
+        if is_hierarchical:
+            fine_logits, coarse_logits = model(temporal, map_feat)
+            fine_loss = criterion(fine_logits, labels)
+            coarse_labels = model.map_labels_to_coarse(labels)
+            coarse_loss = coarse_criterion(coarse_logits, coarse_labels)
+            loss = fine_loss + coarse_weight * coarse_loss
+        else:
+            logits = model(temporal, map_feat)
+            loss = criterion(logits, labels)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -49,8 +61,10 @@ def train_one_epoch(
 def evaluate(model: nn.Module, loader: DataLoader) -> tuple:
     model.eval()
     all_logits, all_labels = [], []
+    is_hierarchical = hasattr(model, "coarse_head")
     for temporal, map_feat, labels in loader:
-        logits = model(temporal, map_feat)
+        output = model(temporal, map_feat)
+        logits = output[0] if is_hierarchical else output
         all_logits.append(logits)
         all_labels.append(labels)
     logits = torch.cat(all_logits)
@@ -83,16 +97,20 @@ def bake_temperature(model: nn.Module, temperature: float):
 
 
 def train_model(
-    model: StrategyClassifier,
+    model,
     train_loader: DataLoader,
     val_loader: DataLoader,
     hp: HyperParams,
     class_weights: torch.Tensor = None,
+    coarse_weight: float = 0.3,
 ) -> dict:
     torch.manual_seed(hp.seed)
     optimizer = torch.optim.AdamW(model.parameters(), lr=hp.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=hp.max_epochs)
-    criterion = FocalLoss(gamma=hp.focal_gamma, weight=class_weights)
+    criterion = FocalLoss(gamma=hp.focal_gamma, weight=class_weights,
+                          label_smoothing=0.1)
+    is_hierarchical = hasattr(model, "coarse_head")
+    coarse_criterion = FocalLoss(gamma=hp.focal_gamma) if is_hierarchical else None
 
     best_val_loss = float("inf")
     patience_counter = 0
@@ -100,7 +118,10 @@ def train_model(
     history = {"train_loss": [], "val_loss": [], "val_acc": []}
 
     for epoch in range(hp.max_epochs):
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion)
+        train_loss = train_one_epoch(
+            model, train_loader, optimizer, criterion,
+            coarse_criterion=coarse_criterion, coarse_weight=coarse_weight,
+        )
         val_loss, val_acc, _, _ = evaluate(model, val_loader)
         scheduler.step()
 

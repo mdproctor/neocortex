@@ -58,6 +58,29 @@ class TestTerranLabelling:
         ]
         assert rule_based_label(build, "Terran") == "MACRO_ECONOMY"
 
+    def test_cc_first_into_mech_is_not_macro(self):
+        build = [
+            {"type": "building", "name": "CommandCenter", "minute": 0.0},
+            {"type": "building", "name": "Barracks", "minute": 1.0},
+            {"type": "building", "name": "CommandCenter", "minute": 2.0},
+            {"type": "building", "name": "Factory", "minute": 2.5},
+            {"type": "building", "name": "Factory", "minute": 4.0},
+            {"type": "unit", "name": "SiegeTank", "minute": 4.5},
+        ]
+        assert rule_based_label(build, "Terran") == "MECH_PUSH"
+
+    def test_cc_first_into_bio_is_not_macro(self):
+        build = [
+            {"type": "building", "name": "CommandCenter", "minute": 0.0},
+            {"type": "building", "name": "Barracks", "minute": 0.8},
+            {"type": "building", "name": "CommandCenter", "minute": 2.0},
+            {"type": "building", "name": "Barracks", "minute": 2.5},
+            {"type": "building", "name": "Barracks", "minute": 3.0},
+            {"type": "building", "name": "Factory", "minute": 3.5},
+            {"type": "unit", "name": "Marine", "minute": 2.0},
+        ]
+        assert rule_based_label(build, "Terran") == "BIO_TIMING"
+
     def test_standard_111_with_factory(self):
         build = [
             {"type": "building", "name": "Barracks", "minute": 0.8},

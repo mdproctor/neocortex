@@ -7,17 +7,18 @@ from pathlib import Path
 from evaluation.strategy_classifier.model import StrategyClassifier
 from evaluation.strategy_classifier.export_onnx import export_to_onnx
 from evaluation.strategy_classifier.config import HyperParams
+from evaluation.strategy_classifier.sc2egset_extractor import N_FEATURES_PER_PLAYER as N_PLAYER
 
 
 class TestOnnxExport:
     def test_export_and_load(self):
         hp = HyperParams()
-        model = StrategyClassifier(f_temporal=101, f_map=4, num_classes=8, hp=hp)
+        model = StrategyClassifier(f_temporal=2*N_PLAYER+1, f_map=6, num_classes=8, hp=hp)
         model.eval()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = export_to_onnx(
-                model, f_temporal=101, f_map=4,
+                model, f_temporal=2*N_PLAYER+1, f_map=6,
                 matchup="vs_terran", output_dir=Path(tmpdir),
                 max_windows=hp.max_windows,
             )
@@ -32,18 +33,18 @@ class TestOnnxExport:
 
     def test_onnx_output_matches_pytorch(self):
         hp = HyperParams()
-        model = StrategyClassifier(f_temporal=101, f_map=4, num_classes=8, hp=hp)
+        model = StrategyClassifier(f_temporal=2*N_PLAYER+1, f_map=6, num_classes=8, hp=hp)
         model.eval()
 
-        temporal = torch.randn(1, hp.max_windows, 101)
-        map_feat = torch.randn(1, 4)
+        temporal = torch.randn(1, hp.max_windows, 2*N_PLAYER+1)
+        map_feat = torch.randn(1, 6)
 
         with torch.no_grad():
             pt_out = model(temporal, map_feat).numpy()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = export_to_onnx(
-                model, f_temporal=101, f_map=4,
+                model, f_temporal=2*N_PLAYER+1, f_map=6,
                 matchup="vs_terran", output_dir=Path(tmpdir),
                 max_windows=hp.max_windows,
             )
