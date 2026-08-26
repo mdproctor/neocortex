@@ -374,6 +374,11 @@ public class InMemoryMindMapStore implements MindMapStore {
             edgesRepointed++;
         }
 
+        edges.values().removeIf(e ->
+            e.tenantId.equals(tenantId)
+            && e.sourceNodeId.equals(keepNodeId)
+            && e.targetNodeId.equals(keepNodeId));
+
         Map<String, StoredEdge> edgeSignatures = new HashMap<>();
         for (StoredEdge e : new ArrayList<>(edges.values())) {
             if (!e.tenantId.equals(tenantId)) continue;

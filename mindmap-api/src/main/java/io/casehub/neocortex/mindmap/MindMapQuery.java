@@ -18,5 +18,6 @@ public record MindMapQuery(
     public MindMapQuery {
         Objects.requireNonNull(tenantId, "tenantId");
         if (limit <= 0) throw new IllegalArgumentException("limit must be positive");
+        traits = traits == null ? null : Set.copyOf(traits);
     }
 }
