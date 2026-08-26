@@ -46,6 +46,10 @@
     <module>memory-sqlite</module>
     <module>memory-mem0</module>
     <module>memory-graphiti</module>
+    <module>mindmap-api</module>
+    <module>mindmap</module>
+    <module>mindmap-testing</module>
+    <module>mindmap-inmem</module>
     <module>examples/example-text-analysis</module>
     <module>examples/example-rag-pipeline</module>
     <module>examples/example-cbr</module>
@@ -254,6 +258,26 @@
       <dependency>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-neocortex-memory-qdrant</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-mindmap-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-mindmap</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-mindmap-testing</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-mindmap-inmem</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

@@ -1,0 +1,7 @@
+package io.casehub.neocortex.mindmap;
+
+public enum MindMapCapability {
+    TRAVERSAL, MERGE, VOCABULARY, ALIAS, SUBGRAPH, SEARCH,
+    SUPERSESSION, ERASE_NODE, ERASE_SUBGRAPH, ERASE_ENTITY,
+    CROSS_TENANT_ERASE, GRAPH_ANALYSIS
+}
