@@ -328,7 +328,7 @@ public class SqliteMindMapStore implements MindMapStore {
     public List<MindMapNode> nodesIn(String subgraphId, String tenantId) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                 "SELECT * FROM mindmap_node WHERE tenant_id = ? AND subgraph_id = ? AND superseded_at IS NULL")) {
+                 "SELECT * FROM mindmap_node WHERE tenant_id = ? AND subgraph_id = ? AND (superseded_at IS NULL OR reinstated_at IS NOT NULL)")) {
             ps.setString(1, tenantId);
             ps.setString(2, subgraphId);
             return collectNodes(ps);
@@ -547,9 +547,7 @@ public class SqliteMindMapStore implements MindMapStore {
         params.add(query.tenantId());
 
         if (!query.includeSuperseded()) {
-            sql.append(" AND n.superseded_at IS NULL");
-        } else {
-            sql.append(" AND (n.superseded_at IS NULL OR n.reinstated_at IS NOT NULL OR 1=1)");
+            sql.append(" AND (n.superseded_at IS NULL OR n.reinstated_at IS NOT NULL)");
         }
 
         if (query.subgraphId() != null) {
