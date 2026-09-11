@@ -17,7 +17,7 @@ I wasn't sure this was a single-session job.
 
 ## The discriminator fix
 
-Before touching the migration, we fixed a design flaw in `reconstructCase` (#59). The method used `_features_json` presence as a type discriminator — checking whether a JSON blob existed to decide between `FeatureVectorCbrCase` and `ResolutionGuide`. Five failure modes fell out of the analysis: empty features caused data loss, future subtypes would return null or the wrong type, JSON corruption silently downgraded types.
+Before touching the migration, we fixed a design flaw in `reconstructCase` (#59). The method used `_features_json` presence as a type discriminator — checking whether a JSON blob existed to decide between `FeatureVectorCbrCase` and `TextualCbrCase`. Five failure modes fell out of the analysis: empty features caused data loss, future subtypes would return null or the wrong type, JSON corruption silently downgraded types.
 
 The fix was clean. Added `cbrType()` to the `CbrCase` interface — each subtype declares a stable string constant. `CbrPointBuilder` writes `_cbr_type` to the Qdrant payload. `reconstructCase` dispatches by switch on the discriminator, with explicit failure for unknown types. The old `_case_class` field (which stored the Java FQCN but was never read) got removed.
 
@@ -45,6 +45,6 @@ Everything compiles. soc and fsitrading build clean end-to-end. The other consum
 
 ## What moved
 
-Seventeen SPI types from `io.casehub.platform.api.memory` to `io.casehub.memory`. Five backend modules with their Flyway migrations, REST clients, DTOs, and WireMock test infrastructure. Two CDI wiring classes. One contract test with thirty-five test methods. `CbrCaseEntry` was deleted — `ResolutionGuide` supersedes it, and IntelliJ confirmed zero external consumers.
+Seventeen SPI types from `io.casehub.platform.api.memory` to `io.casehub.memory`. Five backend modules with their Flyway migrations, REST clients, DTOs, and WireMock test infrastructure. Two CDI wiring classes. One contract test with thirty-five test methods. `CbrCaseEntry` was deleted — `TextualCbrCase` supersedes it, and IntelliJ confirmed zero external consumers.
 
 The package rename is the breaking change that matters. Every consumer updates one import prefix. The breakage is the point — it forces every caller to be explicit about where memory types come from.

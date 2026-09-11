@@ -363,7 +363,7 @@ false-positive suppression by weighting time_of_day and device_class.
 ### 6. QuarkMind Battle (`QuarkmindBattleDemo`)
 
 **Paradigm:** Plan-Based
-**Case type:** `ResolvedCase`
+**Case type:** `PlanCbrCase`
 **App epic:** parent#227 (Wave 4: quarkmind)
 
 **Schema:**

@@ -174,7 +174,7 @@ Static utility `CbrMemoryDeserializer` in `memory-qdrant`. Inverse of `QdrantCbr
 | `attributes["confidence"]` | `origin` (via `MemoryAttributeKeys.parseConfidence`) |
 | `attributes["cbr.type"]` | discriminator → FeatureVectorCbrCase / PlanCbrCase / TextualCbrCase |
 | `attributes["cbr.features"]` | `features` (JSON deserialization) |
-| `attributes["cbr.planTrace"]` | `resolutionStep` (JSON deserialization, PlanCbrCase only) |
+| `attributes["cbr.planTrace"]` | `planTrace` (JSON deserialization, PlanCbrCase only) |
 
 Extraction of `entityId`, `domain`, `caseId` comes from the `Memory` record fields directly (not attributes).
 

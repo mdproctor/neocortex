@@ -113,7 +113,7 @@ public record PlanTrace(
 ) {}
 ```
 
-`ResolutionStep` uses only `String` and `Map` — no dependency on engine runtime types.
+`PlanTrace` uses only `String` and `Map` — no dependency on engine runtime types.
 
 ### 3.4 Serialization
 
@@ -126,10 +126,10 @@ All subtypes serialize to `MemoryInput` for `CaseMemoryStore`:
 | `outcome()` | `attributes["outcome"]` |
 | `confidence()` | `attributes["confidence"]` |
 | `features` | `attributes["cbr.features"]` (JSON) |
-| `resolutionStep` | `attributes["cbr.planTrace"]` (JSON) |
+| `planTrace` | `attributes["cbr.planTrace"]` (JSON) |
 | discriminator | `attributes["cbr.type"]` — `"textual"`, `"feature-vector"`, `"plan"` |
 
-Deserialization is backend-internal — each `CbrCaseMemoryStore` implementation reconstructs the correct subtype from its native storage format. The `Class<C>` parameter on `retrieveSimilar()` guides type selection. The `cbr.type` discriminator attribute enables JSON-based backends (Qdrant) to use Jackson polymorphic deserialization at runtime without compile-time coupling to specific subtypes. No centralized `from(Memory)` factory — avoids circular dependencies between `memory-api` and modules that define paradigm-specific subtypes (e.g., `ResolvedCase` in `engine-api`).
+Deserialization is backend-internal — each `CbrCaseMemoryStore` implementation reconstructs the correct subtype from its native storage format. The `Class<C>` parameter on `retrieveSimilar()` guides type selection. The `cbr.type` discriminator attribute enables JSON-based backends (Qdrant) to use Jackson polymorphic deserialization at runtime without compile-time coupling to specific subtypes. No centralized `from(Memory)` factory — avoids circular dependencies between `memory-api` and modules that define paradigm-specific subtypes (e.g., `PlanCbrCase` in `engine-api`).
 
 ---
 
@@ -245,7 +245,7 @@ public interface ReactiveCbrCaseMemoryStore {
 ### 6.1 Typed Store Path
 
 `store(CbrCase, ...)` is the single entry point for CBR case storage. Implementations:
-1. Serialize the `CbrCase` to `MemoryInput` internally (the implementation has access to Jackson for `features`/`resolutionStep` JSON serialization — the SPI interface does not, since `memory-api` is Tier 1 pure Java)
+1. Serialize the `CbrCase` to `MemoryInput` internally (the implementation has access to Jackson for `features`/`planTrace` JSON serialization — the SPI interface does not, since `memory-api` is Tier 1 pure Java)
 2. Delegate to the injected `CaseMemoryStore` for durable memory storage (JPA, SQLite, etc.)
 3. Index in their own backend for CBR-specific retrieval (Qdrant payload indexes, in-memory maps)
 
@@ -362,7 +362,7 @@ Existing memory backends (JPA, SQLite, inmem, mem0, graphiti) remain in `casehub
 
 ### Tier 1 — Feature-Vector CBR (immediate)
 
-- `memory-api`: `CbrCase` interface, `ResolutionGuide`, `FeatureVectorCbrCase`, `CbrQuery`, `CbrFeatureSchema`, `CbrCaseMemoryStore` (standalone — does not extend `CaseMemoryStore`), `ReactiveCbrCaseMemoryStore`
+- `memory-api`: `CbrCase` interface, `TextualCbrCase`, `FeatureVectorCbrCase`, `CbrQuery`, `CbrFeatureSchema`, `CbrCaseMemoryStore` (standalone — does not extend `CaseMemoryStore`), `ReactiveCbrCaseMemoryStore`
 - `memory`: `NoOpCbrCaseMemoryStore @DefaultBean` (delegates to injected `CaseMemoryStore`), `BlockingToReactiveCbrBridge`
 - `memory-cbr-inmem`: `CbrCaseMemoryStore` implementation (in-memory field matching)
 - `memory-qdrant`: `CbrCaseMemoryStore` implementation (Approach 3)
@@ -373,7 +373,7 @@ Enables engine#478: `CbrFeatureVectorBuilder` → `CbrCaseMemoryStore.retrieveSi
 
 ### Tier 2 — Plan-Based CBR
 
-- `ResolvedCase` + `ResolutionStep` in engine-api
+- `PlanCbrCase` + `PlanTrace` in engine-api
 - `CaseOutcomeObserver` impl that serializes plan structure at case close
 - Plan trace stored in Qdrant payload, retrievable alongside features
 
@@ -409,7 +409,7 @@ Enables CHEF-style plan adaptation: retrieve similar plans, identify substitutab
 | neural-text | `memory-cbr-inmem` — in-memory `CbrCaseMemoryStore` for testing + dev | `memory-api` |
 | neural-text | `memory-testing` — `CbrCaseMemoryStoreContractTest` | `memory-api` |
 | neural-text | `memory` — `NoOpCbrCaseMemoryStore @DefaultBean` + `BlockingToReactiveCbrBridge` | `memory-api` |
-| engine | `ResolutionStep` type in engine-api | — |
+| engine | `PlanTrace` type in engine-api | — |
 | engine | Retain plan traces at case close (`CaseOutcomeObserver` impl) | PlanTrace |
 | engine | Update engine#478 — integration point is `CbrCaseMemoryStore.retrieveSimilar()`, not `CaseRetriever` | `memory-api` |
 | platform | JPA memory backend — add CBR feature-field matching support (extend later) | `memory-api` |

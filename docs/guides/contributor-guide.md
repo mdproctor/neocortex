@@ -469,6 +469,564 @@ CREATE UNIQUE INDEX IF NOT EXISTS mindmap_subgraph_tenant_type_idx
 
 **File location convention:** `<module>/src/main/resources/db/<module-slug>/migration/V<N>__<description>.sql`.
 
+### MindMap Decorators
+
+The MindMapStore decorator chain applies cross-cutting concerns to all store operations. Decorators are CDI `@Decorator` beans ordered by `@Priority` — highest priority executes first (outermost). See the [CDI Decorator Priority Chain Summary](#cdi-decorator-priority-chain-summary) for the full chain.
+
+#### DerivedEdgeDecorator (Priority 80)
+
+Forward-chaining rule engine for automatic edge derivation. Intercepts `addEdge`, `removeEdge`, `eraseNode`, `eraseSubgraph`.
+
+**On addEdge:** After the delegate stores the trigger edge, evaluates all `DerivedEdgeRule` implementations (programmatic CDI beans + declarative from `DeclarativeRuleRegistry`). Each rule returns zero or more `EdgeInput`s. Derived edges carry provenance properties (`mindmap.derived=true`, `mindmap.derived.trigger-edge-id`, `mindmap.derived.rule-name`). Derived edges are added via recursive `this.addEdge()` — forward chaining through the full decorator chain.
+
+**Cycle prevention:** `ThreadLocal<Integer>` derivation depth counter, stops at `DEFAULT_MAX_DEPTH = 3`.
+
+**Truth maintenance on removeEdge:** `ConcurrentHashMap<String, Set<String>>` maps trigger edge IDs to derived edge IDs. When a trigger edge is removed, all derived edges are recursively removed first.
+
+**Per-principal rule resolution:** With a `PrincipalId`, resolves per-agent declarative rules via `DeclarativeRuleRegistry.derivedEdgeRules(principalId)`. Without, all rules fire.
+
+**DerivedEdgeRule SPI:** Implement `name()` + `derive(sourceNode, trigger, store) → List<EdgeInput>`. Register as `@ApplicationScoped` CDI bean. `DeclarativeDerivedEdgeRule` provides a YAML-driven alternative with `triggerEdgeTypes` filter, optional `TraversalSpec` (follow edges with depth limit + cycle guard), and `EdgeDerivation` templates.
+
+**Key interaction:** Recursive `this.addEdge()` traverses the full chain — derived edges also trigger trait evaluation (Priority 70) and idle tracking (Priority 30).
+
+#### ConfidenceDecayDecorator
+
+Read-side decorator (not in the CDI `@Decorator` chain — wired manually). Intercepts `getNode`, `nodesIn`, `search`, `neighbors`, `bridgeEdges`.
+
+**Decay formula:** `confidence × 2^(-hoursSince / halfLifeHours)`. Uses `Confidence.decayReference()` as the anchor timestamp. No-op when `decayReference` is null or elapsed time ≤ 0.
+
+**Post-search filtering:** After decay, `search()` re-applies `MindMapQuery.minConfidence()` — nodes that decayed below threshold are removed from results. Returns `DecayedNode`/`DecayedEdge` wrapper records that delegate all methods except `confidence()`.
+
+#### VocabularyNormalizationDecorator
+
+Edge type alias resolution via `MindMapVocabulary`. `EdgeTypeDefinition` declares a canonical name, a set of aliases, and an optional decay half-life. `MindMapStore.registerVocabulary()` registers edge type definitions. Edges whose type matches a registered vocabulary entry receive `ValidationTier.REGISTERED`; others get `UNVALIDATED`.
+
+#### AffectTrajectoryDecorator (Priority 65)
+
+Intercepts `updateNode` only. Write-through — delegates to the underlying store, then records PAD changes. Compares before/after PAD values (pleasure/arousal/dominance). If any dimension changed, stores a `domain="affect"` memory via `CaseMemoryStore` and fires `AffectRecorded` CDI event.
+
+**Graceful degradation:** `Instance<CaseMemoryStore>` — if no memory store on classpath, PAD changes silently skip. Early-exit optimization: checks whether `NodeUpdate` contains PAD fields before reading the "before" node.
+
+#### MindMapStoreIdleTracker (Priority 30)
+
+Intercepts all 16 mutation operations (`addNode`, `updateNode`, `addEdge`, `removeEdge`, `mergeNodes`, `supersede`, `reinstate`, etc.). Each stamps the current time on `IdleTracker` (`@ApplicationScoped`, single `volatile Instant`), then delegates.
+
+**Consumer:** `ConsolidationScheduler` checks `idleTracker.isIdle(Duration.ofMinutes(1))` before running consolidation phases — avoids competing with active user writes.
+
+### MindMap Graph Operations
+
+#### MindMapQuery
+
+Record with 13 fields for store queries. Required: `tenantId`, `limit` (positive). Optional filters: `subgraphId`, `text` (FTS), `edgeType` (nodes having an edge of this type), `traits` (Set), `minConfidence`, `confidenceOrigin` (STATED/INFERRED/SPECULATED), `includeSuperseded` (default false), `validAfter`/`validBefore`/`updatedAfter` (temporal), `callerPrincipal` (visibility filtering). Factory `of(tenantId, limit)` + immutable `with*()` builder methods.
+
+#### MindMapCapability
+
+Enum with 12 values gating store operations: `TRAVERSAL`, `MERGE`, `VOCABULARY`, `ALIAS`, `SUBGRAPH`, `SEARCH`, `SUPERSESSION`, `ERASE_NODE`, `ERASE_SUBGRAPH`, `ERASE_ENTITY`, `CROSS_TENANT_ERASE`, `GRAPH_ANALYSIS`. Each store declares its supported set via `capabilities()`. `requireCapability()` throws `MindMapCapabilityException` if missing. Not all backends support all operations — capability checking enables safe feature detection.
+
+#### Merge
+
+`mergeNodes(keepNodeId, removeNodeId, tenantId)` returns `MergeResult` with audit metadata: `survivingNodeId`, `edgesRepointed`, `aliasesMerged`, `duplicateEdgesRemoved`, `traitsMerged`, and `List<MergeConflict>` (property key, kept value, discarded value). Requires `MERGE` capability. The "keep" node survives; the "remove" node's edges are repointed, aliases transferred, and the node erased.
+
+#### Supersession and Reinstatement
+
+`supersede(targetId, supersedingId, reason, tenantId)` / `reinstate(targetId, tenantId)` — return true only on state transition. `SupersessionStatus` record carries audit metadata: `supersededAt`, `supersedingId`, `reason`, `reinstatedAt`, with `wasReinstated()` convenience and `NOT_SUPERSEDED` constant.
+
+Superseded nodes are excluded from `search()` by default; `MindMapQuery.withIncludeSuperseded(true)` re-includes them. Requires `SUPERSESSION` capability.
+
+#### NodeRef and OverlayRef
+
+`NodeRef` — `record(scheme, id, qualifier)` for external references. Scheme + id required, qualifier optional. Attached to nodes via `NodeInput.refs()`.
+
+`OverlayRef` — convention for perspectival affect overlays built on NodeRef. `SCHEME = "overlay"`. `of(sharedNodeId)` creates a NodeRef linking an overlay to its shared counterpart. `sharedNodeId(MindMapNode)` extracts the link. Combined with the `"overlay"` trait and `agentId` property for per-agent identification. `PerspectivalResolver` uses this convention to find and merge overlays.
+
+#### MindMapAnalyzer
+
+Static utility in `mindmap/` — pure Java graph analysis. All methods require `GRAPH_ANALYSIS` capability.
+
+| Category | Methods |
+|----------|---------|
+| Structural | `orphanNodes` (zero neighbors), `degreeCentrality` (sorted), `subgraphDensity` (edges / n(n-1)) |
+| Quality | `unvalidatedEdgeRatio`, `contradictions` (multiple outgoing edges of same type), `lowConfidenceCluster` (fraction below threshold) |
+| Temporal | `staleNodes` (decayReference/updatedAt exceeds threshold, sorted by age) |
+| Centrality | `betweennessCentrality` (Brandes' BFS algorithm, normalized by (n-1)(n-2)) |
+| Community | `kCores(k)` — O(V+E) iterative removal: prune nodes with degree < k, find connected components in survivors. Each `KCore` has `nodeIds` + `density`. Used by `CommunitySummaryPhase` in the consolidation pipeline |
+
+### MindMap Intelligence
+
+#### MindMapExtractor
+
+`@Singleton` CDI bean in `mindmap-intelligence/`. LLM-driven entity and relationship extraction from conversation text. Depends on `MindMapStore` and `Instance<AgentProvider>` (graceful degradation — returns empty when no LLM available).
+
+**Flow:**
+1. Gathers up to 20 existing graph nodes as context — resolves recent entity names via `store.resolveNode()`, then searches for capitalized multi-word terms via rule-based `extractCandidateTerms()` heuristic (joins consecutive capitalized words, filters common pronouns/articles)
+2. Builds a structured prompt with conversation text + graph context (nodes with confidence, traits, edges) + recently mentioned entities
+3. Parses JSON response (`ExtractionJsonParser`) for entities, relationships, and contradictions
+4. For each entity: resolves via `store.resolveNode()` (updates existing or creates new), with `MindMapConfidenceDefaults.forOrigin()` and `"llm-extraction"` provenance
+
+**Type normalization:** `normalizeType()` → `strip().toLowerCase()`, defaults to `SubgraphTypes.GENERAL`.
+
+**Extension:** Swap the `AgentProvider` SPI to change the LLM backend. The system prompt and entity type vocabulary are hardcoded.
+
+#### ConversationBridge and Async Enrichment Pipeline
+
+`ConversationBridge` (`@ApplicationScoped`) provides immediate node availability from text, with deferred LLM enrichment.
+
+**Pipeline:**
+1. `process(cleanedText, tenantId, recentEntityNames, principalId)` — segments text by paragraph boundaries (`\n\n+`). Each segment → one MindMapNode in the GENERAL subgraph with STATED confidence and `"conversation-bridge"` provenance
+2. Records access for created nodes via `RetrievalAccessTracker` (if available via `Instance<>`)
+3. Fires `ExtractionRequested` CDI event asynchronously (`fireAsync`)
+4. `ExtractionRequestedObserver` (`@ApplicationScoped`, `@ObservesAsync`) receives the event, calls `MindMapExtractor.extract()`, records access for extracted entities, then supersedes each segment node with the first extracted entity — replacing raw text with structured knowledge
+
+**Design:** ConversationBridge is fast (rule-based, no LLM). LLM enrichment is async — nodes are available immediately for retrieval, then upgraded when extraction completes.
+
+#### CognitiveLoader
+
+`@ApplicationScoped` with `@PostConstruct`. Bridges YAML cognitive profiles into the MindMap vocabulary system. Iterates all `CognitiveDefaults` from `CognitiveDefaultsRegistry`; for each with a non-null `vocabulary()`, calls `store.registerVocabulary()`. `Instance<MindMapStore>` + `Instance<CognitiveDefaultsRegistry>` for graceful degradation.
+
+**Extension:** Add a YAML cognitive profile with a `vocabulary:` section — CognitiveLoader picks it up automatically via classpath scanning.
+
+#### CuriositySignalGenerator
+
+`@ApplicationScoped`, implements `CuriositySignalProvider` SPI. Generates curiosity signals per subgraph from five categories:
+
+| Category | Signals |
+|----------|---------|
+| STRUCTURAL | Orphan nodes, sparse subgraphs (density < 0.1) |
+| QUALITY | Contradictions, low-confidence clusters (>50% below threshold), high unvalidated edge ratio (>30%) |
+| TEMPORAL | Stale nodes (configurable threshold) |
+| CENTRALITY | Top-N by betweenness + degree centrality |
+| PROXIMITY | Approaching events (future `validFrom`), past events |
+
+**Three post-processing stages:**
+1. **Category weights** — per-category score multipliers from `CuriosityConfig.categoryWeight()`
+2. **Affect dampening** — queries affect trajectory via `AffectTrajectoryAnalyzer`. WORSENING trends boost signals (capped by `maxBoostFactor`); IMPROVING trends dampen (capped by `improvingDampenCap`); high arousal volatility adds boost (capped by `volatilityBoostCap`). Falls back to `snapshotFactor(node)` when memory store unavailable or < 2 samples
+3. **Topical distance** — BFS from signal target to recent entity IDs; score × `1/(1+distance)`, max depth from `CuriosityConfig.maxBfsDepth()`
+
+#### RecurrenceRule and RecurrenceGenerator
+
+`RecurrenceRule` — record in `mindmap-api`. RFC 5545 RRULE subset: `Frequency` enum (DAILY/WEEKLY/MONTHLY/YEARLY), interval (≥1), optional count, optional until, optional byDay. `parse(String)` / `toString()` for serialization. Compact constructor validates freq not null, interval ≥ 1.
+
+`RecurrenceGenerator` — static utility in `mindmap-intelligence`. `generateInstances(template, rule, horizon)` advances from `template.validFrom()` by the rule's interval, producing `NodeInput` instances with template properties (minus `rrule`), plus `template-node-id`, `recurrence-index`, and `status=planned`.
+
+### Cognitive Index Internals
+
+The `cognitive-index` module provides cross-store aggregation — derived views over MindMap, Memory, and CBR stores. All beans use `Instance<T>` for graceful degradation when backing stores are absent.
+
+#### TemporalIndex
+
+`@ApplicationScoped`. Stateless derived view — re-queries underlying stores on every call, no persistent state. All three stores (MindMap, Memory, CBR) injected via `Instance<T>`; missing stores silently skipped.
+
+**Query dispatch:** `TemporalQuery` selects which stores to include via `StoreKind` set (MINDMAP, MEMORY, CBR; defaults to all). Memory store requires non-empty `entityIds` — silently skipped when empty. MindMap supports two modes: historical (ordered by `updatedAt`) and upcoming (ordered by `validFrom` for future events).
+
+**Merge:** All entries sorted chronologically via `TemporalEntry.compareTo()` (oldest first), truncated to `query.limit()`.
+
+**Key types:** `TemporalEntry(timestamp, source, tenantId, confidence)`. `TemporalSource` sealed: `FromMindMap(MindMapNode)`, `FromMemory(Memory)`, `FromCbr(ScoredCbrCase<?>)`. `TemporalQuery` with factory methods `since()`, `window()`, `upcoming()` + `withSources()`, `withEntityIds()`, `withCallerPrincipal()` wither methods.
+
+**Extension:** `TemporalRanker` `@FunctionalInterface` — `double score(TemporalEntry, Instant)`. Static factory `recency()` provides inverse-seconds-elapsed scoring. `rank()` default method re-orders a list.
+
+#### AffectTrajectoryAnalyzer
+
+Pure static utility. Computes affect trajectory from `domain="affect"` memories sorted by `createdAt`.
+
+**Algorithms:** Least-squares regression for pleasure slope and dominance slope (time in hours). Population standard deviation for arousal volatility.
+
+**Output:** `AffectTrajectory` record — `pleasureSlope`, `arousalVolatility`, `dominanceSlope`, `TrendDirection` (IMPROVING/WORSENING/STABLE based on pleasure slope vs threshold), `rateOfChange`, `sampleCount`. Edge cases: 0–1 samples → all-zero STABLE. Null PAD values treated as 0.0.
+
+#### TemporalFocus
+
+Pure static utility. Scores `TemporalEntry` items by proximity/recency plus affect trajectory modifiers.
+
+**Scoring:** MindMap nodes with future `validFrom` get proximity scoring (inverse days-until × `proximityScale`); everything else gets recency scoring (inverse hours-since). Trajectory modifiers: WORSENING → boost (capped by `worseningBoostCap`), IMPROVING → dampen (fixed `improvingDampenFactor`), STABLE → 1.0. High arousal volatility (> 0.3) adds additional boost.
+
+**Output:** `List<AttentionItem>` sorted by salience descending. `AttentionItem(entry, salience, reason)` with human-readable reason strings. `TemporalFocusConfig` with tunable thresholds and `subgraphProximityWeights` map. `ranker()` returns a `TemporalRanker` — composable with TemporalIndex.
+
+#### CognitiveProfile
+
+`@ApplicationScoped`. Cross-store entity resolution — resolves a unified `EntityKnowledge` record for a single entity across MindMap + Memory stores.
+
+**Resolution:** `CognitiveProfileQuery` with `byId(nodeId, tenantId)` or `byName(entityName, tenantId)` factories (mutually exclusive). Configurable domain set (defaults: experience, relationship, reflection, mood, engagement, affect), edge inclusion toggle, memory limit.
+
+**Entity ID collection:** Gathers IDs from node ID, node name, and `NodeRef` entries with `scheme="memory"` — enabling cross-reference following between stores.
+
+**Output:** `EntityKnowledge(node, edges, memories, trajectory, unresolvedRefs, tenantId)`. `unresolvedRefs` = NodeRefs with scheme ≠ "memory" (external references the profile couldn't follow). Affect trajectory computed via `AffectTrajectoryAnalyzer`.
+
+#### PerspectivalMerge and PerspectivalResolver
+
+**PerspectivalMerge** — pure static utility. Merges a shared `MindMapNode` with a private overlay node. Overlay wins for PAD, confidence, and properties; shared wins for identity (id, name, subgraph, temporal bounds, traits, refs). Returns a `MergedNode` implementing `MindMapNode`.
+
+**PerspectivalResolver** — `@ApplicationScoped`. Finds overlay nodes by querying for the `"overlay"` trait in a tenant, filtering by `agentId` property matching the caller's `PrincipalId`. Maps overlays to shared nodes via `OverlayRef.sharedNodeId()`. `resolve(sharedNodes, principal, tenantId)` returns a new list with overlay merges applied where they exist; non-overlay nodes pass through unchanged.
+
+#### CognitiveDefaults and CognitiveDefaultsRegistry
+
+**CognitiveDefaults** — immutable config record (14 fields): agentId (required), personality (`PersonalityWeights`), moodBaseline, curiosity (`CuriosityConfig`), temporalFocus, cbrStrategy, socialCognition, graphStructure, extractionBias, vocabulary (`MindMapVocabulary`), services map (for `@Named` SPI selection), traitRules, derivedEdgeRules. Extensive `with*()` methods for immutable updates. `empty(agentId)` factory.
+
+**CognitiveDefaultsRegistry** — `@ApplicationScoped`. `@PostConstruct` classpath scan of `cognitive-profiles/*.yaml`. Custom Jackson `ObjectMapper` with YAML factory + four custom deserializers (PersonalityWeights, RuleCondition, DeclarativeTraitRule, DeclarativeDerivedEdgeRule). Lookup: `forAgent(agentId)` → Optional, `forAgentOrDefaults(agentId)` → defaults if absent. Duplicate agentId detection on load (throws `IllegalStateException`).
+
+#### CognitiveDerivationEngine
+
+Pure static utility. Derives `CognitiveDefaults` from `DescriptorView` (agentId, `DispositionAxes`, disposition profile as `List<WeightedTerm>`, goals) via 8 derivation pathways:
+
+| Pathway | Input | Output |
+|---------|-------|--------|
+| Personality | Jungian function weights | `PersonalityWeights` per memory domain |
+| Mood baseline | Disposition axes | PAD resting point |
+| Curiosity | Axes + goals | Category weights |
+| Temporal focus | Goal keywords | Subgraph proximity weights |
+| CBR strategy | Rule-following + risk | minSimilarity, decay, retrieval mode |
+| Social cognition | Social orient + conflict | Trust rate, conflict interpretation |
+| Graph structure | Disposition profile | CONNECTIVE/CATEGORICAL/BALANCED |
+| Extraction bias | Function weight ratios | Relationship bias, affect sensitivity |
+
+**`deriveAndMerge()`** overlays explicit `CognitiveDefaults` fields (from YAML profile) on the derived base. Explicit non-null fields win. Primary integration point — YAML profiles can override any derived value.
+
+#### DeclarativeRuleRegistry
+
+`@ApplicationScoped`. Two-layer rule loading: global `rules/*.yaml` at `@PostConstruct` + per-agent overrides from `CognitiveDefaultsRegistry`.
+
+**Merge semantics:** `LinkedHashMap` keyed by rule name. Global rules loaded first; per-agent rules overwrite by key — local rule with same name suppresses global. `traitRules(agentId)` and `derivedEdgeRules(agentId)` return merged lists. `allTraitRules()` / `allDerivedEdgeRules()` merge across all profiles.
+
+#### Modulation Framework
+
+**Foundation** (`cognitive-api`): `ModulationProfile<T>` maps items to confidence/PAD/timestamp via accessor functions. `ModulationFactor<T>` (`@FunctionalInterface`) — composable scoring multiplier. `RetrievalModulator` applies all factors via multiplication, sorts by composite score descending.
+
+**Pre-built profiles** (`cognitive-index`): `ModulationProfiles.MEMORY` (wired to `Memory` accessors), `ModulationProfiles.NODE` (wired to `MindMapNode` accessors).
+
+**Pre-built factors:** `recencyDecay(halfLife, now)` (exponential), `confidenceWeight()` (direct value, defaults 1.0 when null), `moodCongruence(mood, influence)` (PAD distance in 3D space, influence ∈ [0,1] scales effect), `domainWeight(PersonalityWeights)` (Memory-specific domain lookup).
+
+`ModulationContext` — convenience record: `MoodState` + `PersonalityWeights` + `Instant now`. Factory `of(now)` + wither methods.
+
+### Consolidation Pipeline
+
+Background knowledge graph maintenance in `mindmap-intelligence/consolidation/`. Runs phases sequentially per tenant on a scheduled interval, gated by idle detection and concurrency control.
+
+#### ConsolidationScheduler
+
+`@ApplicationScoped`. Single `ScheduledExecutorService` daemon thread, default 5-minute interval (`casehub.consolidation.interval-minutes`).
+
+**Tick gates (all must pass):**
+1. `ReentrantLock.tryLock()` — skips if previous tick still running
+2. `idleTracker.isIdle(Duration.ofMinutes(1))` — won't run during active graph writes
+3. `DISCOVER_TENANTS` capability check on memory store
+
+**Per-tick flow:** Calls `beginTick()` on `AccessFrequencyPhase`, enumerates tenants via `memoryStore.discoverTenants()`, computes curiosity-driven `subgraphPriority` per tenant (subgraph IDs ordered by signal score via `CuriositySignalGenerator`), then runs each phase in `@Priority` order. Error isolation per phase per tenant — one failure doesn't stop others.
+
+#### ConsolidationPhase SPI
+
+```java
+public interface ConsolidationPhase {
+    String name();
+    void run(String tenantId, List<String> subgraphPriority);
+}
+```
+
+Ordering via `@Priority` annotation (lower = earlier). `subgraphPriority` is a hint — phases that iterate subgraphs should process priority subgraphs first. **To add a new phase:** create `@ApplicationScoped @Priority(N)` implementing `ConsolidationPhase` — auto-discovered by CDI.
+
+#### AccessFrequencyPhase (Priority 10)
+
+Flushes write-behind `storageStrength` counters from `RetrievalAccessTracker` to MindMap node properties.
+
+**Tick-generation caching:** `beginTick()` increments a counter. `swapAndReset()` snapshot is taken once per tick (not per tenant) — ensures multi-tenant correctness: all tenants see the same snapshot, preventing double-counting.
+
+For each accessed node: reads existing `storageStrength` property (default 0), adds the increment, writes back with `lastAccessed` timestamp.
+
+#### MergeDetectionPhase (Priority 20)
+
+Two-layer similarity scoring for automatic node deduplication per subgraph.
+
+**Layer 1 — Name similarity:** Jaro-Winkler (threshold 0.85). Pairs below skip entirely.
+
+**Layer 2 — Neighbor overlap:** Jaccard similarity on neighbor node ID sets.
+
+**Combined score:** `0.6 × nameSim + 0.4 × neighborOverlap`. Actions:
+- ≥ 0.9 → auto-merge via `store.mergeNodes()`. Keep node chosen by higher `storageStrength` (depends on AccessFrequencyPhase running first)
+- [0.7, 0.9) → flag via `mergeCandidate` property for human review
+
+Nodes with `Summary` trait excluded. `maxPerPass = 10`.
+
+#### CommunitySummaryPhase (Priority 30)
+
+K-core clustering + summary generation with hash-based invalidation.
+
+**Flow per subgraph:**
+1. Compute k-cores via `MindMapAnalyzer.kCores()` (default k=3, `minClusterSize = 4`)
+2. Filter `Summary`-trait nodes from core membership
+3. Compute `coreHash` (SHA-256 of sorted node IDs) and `memberHash` (SHA-256 of sorted `id:name` pairs)
+4. **Stale cleanup:** erase Summary nodes whose `coreHash` no longer matches any current core
+5. **Existing check:** matching `coreHash` + `memberHash` → skip; matching `coreHash` but different `memberHash` → regenerate title
+6. **New summary:** create node with `Summary` trait, `summarizes` edges to core members, properties: `coreHash`, `memberHash`, `memberCount`, `generatedAt`
+
+`maxPerPass = 5`. `AgentProvider` injected for future LLM-based title generation.
+
+#### CuriosityRefreshPhase (Priority 40)
+
+Thin delegator to `CuriositySignalGenerator.computeSignals(tenantId, emptySet)`. The full signal generation pipeline (structural, quality, temporal, centrality, proximity + category weights + affect dampening + topical distance dampening) runs inside the generator — see [CuriositySignalGenerator](#curiositysignalgenerator) above.
+
+#### RetrievalAccessTracker
+
+`@ApplicationScoped`. In-memory write-behind counters: two `volatile ConcurrentHashMap` fields for counts (nodeId → `AtomicLong`) and last access times. `recordAccess(nodeId)` — called at retrieval boundaries by `ConversationBridge` and `ExtractionRequestedObserver`. `swapAndReset()` — atomic snapshot swap: replaces both maps with fresh instances, returns frozen `AccessSnapshot`.
+
+#### RetrievalStrength — Bjork's Dual-Strength Model
+
+Pure static utility. `compute(lastAccessed, storageStrength, baseHalfLifeDays)` → [0.0, 1.0].
+
+**Formula:** `2^(-hoursSince / effectiveHalfLifeHours)` where `effectiveHalfLifeHours = baseHalfLifeDays × 24 × (1 + log1p(storageStrength))`.
+
+Storage strength (how deeply encoded) modulates retrieval strength (how easy to recall). Higher `storageStrength` → slower decay. `log1p` provides diminishing returns — first few accesses extend half-life dramatically, subsequent ones less so.
+
+### Agent Memory Event Streams
+
+Five domain-specific event streams layer typed agent experience on top of `CaseMemoryStore`. Each converts typed events into `MemoryInput` with a domain tag, stores them, and fires CDI events.
+
+#### ExperienceStream and ExperienceEvent
+
+`ExperienceEvent` — sealed interface with three permits: `Observation` (required `subject`), `Action` (optional `capability`), `Outcome` (required `result`, optional `capability`). All share: `agentId`, `tenantId`, `caseId`, `turnId`, `timestamp`, `description`, `confidence`, `metadata`.
+
+`ExperienceEvents` — static converter. `toMemoryInput(ExperienceEvent)` → `MemoryInput` with `domain="experience"`, `Subject.of("agent", agentId)`. Maps event-type-specific fields to attributes via `ExperienceAttributeKeys`. Reserved key collision throws `IllegalArgumentException`.
+
+`ExperienceStream` — `@ApplicationScoped`. `record(ExperienceEvent)` → converts, stores, fires `ExperienceRecorded` CDI event synchronously, returns memoryId. `recordAll(List)` → batch via `store.storeAll()`, fires event per success, returns `ExperienceStoreResult` with index-correlated failures.
+
+`ExperienceQuery` — factory helpers: `forAgent` (CHRONOLOGICAL, limit 50), `forAgentInCase`, `forAgents`, `search` (RELEVANCE, limit 20), `salient` (SALIENCE, limit 20).
+
+#### RelationshipObserver
+
+`@ApplicationScoped`. Observes `@Observes ExperienceRecorded` (synchronous). Checks `metadata.get("target-agent")` — if present and not self-referential, creates `RelationshipEvent` with `QualitySignal.NEUTRAL`, stores with `domain="relationship"`, fires `RelationshipRecorded`.
+
+**Error isolation:** `SecurityException` propagates. All other store failures caught and logged — observer failure must not break the experience recording chain.
+
+`RelationshipEvent` — record with `agentId`, `otherAgentId` (must differ — validates at construction), `sourceEventType`, `QualitySignal` (POSITIVE/NEGATIVE/NEUTRAL).
+
+#### ReflectionService and ReflectionSynthesizer SPI
+
+`ReflectionService` — `@ApplicationScoped`. `reflect(agentId, tenantId, since, maxSourceMemories)` → queries experiences, passes to `ReflectionSynthesizer.synthesize()` (level 1 only in v1), stores each `ReflectionEvent` with `domain="reflection"`, fires `ReflectionRecorded` per reflection.
+
+`ReflectionSynthesizer` — `@FunctionalInterface` SPI: `synthesize(agentId, tenantId, sources, targetLevel) → List<ReflectionEvent>`. `NoOpReflectionSynthesizer` `@DefaultBean` returns empty — displaced by `@Alternative` LLM-backed implementation.
+
+`ReflectionEvent` — record with `insight`, `level` (≥1), `sourceMemoryIds` (for traceability). Confidence defaults from level: `Math.min(0.3 + level × 0.2, 1.0)`.
+
+#### MoodState, MoodBaseline, and MoodDecay
+
+`MoodState` — record: `agentId`, `tenantId`, PAD axes (pleasure/arousal/dominance ∈ [-1,1]), `cause`, `turnId`. Dynamic emotional state stored with `domain="mood"`. PAD values stored both as attributes and as first-class PAD fields on `MemoryInput`.
+
+`MoodBaseline` — per-agent emotional resting point for decay.
+
+`MoodDecay` — pure static utility. `decay(current, baseline, elapsed, timeConstant)` → new `MoodState`. Formula: `current + (baseline − current) × (1 − e^(-elapsed/τ))`. Returns current unchanged when elapsed=0 or τ=0.
+
+#### EngagementStream and EngagementEvent
+
+`EngagementEvent` — per-interaction social outcome measurement: `agentId`, `otherAgentId` (must differ), `turnId` linking to evaluated action, nullable signals: `responded`, `responseTimeMs`, `responseLength`, `affectShift` ([-1,1]), `reactionCount`, `continued`. Self-referential rejection at construction.
+
+`EngagementStream` — `@ApplicationScoped`. Same pattern as ExperienceStream: `record()`/`recordAll()`, converts via `EngagementEvents.toMemoryInput()` with `domain="engagement"`, fires `EngagementRecorded`. Only non-null signal fields added as attributes.
+
+#### MemoryEmitter
+
+`@ApplicationScoped`. Fire-and-forget `CaseMemoryStore` wrapper. `emit(MemoryInput)` catches all exceptions except `SecurityException` (tenant mismatch is a hard error), logs at WARN. `emitAll(List)` uses `store.storeAll()`, logs partial-failure count. This error isolation pattern is shared across MemoryEmitter, RelationshipObserver, and CDI observers that store memories.
+
+#### CaseEnrichmentStep SPI
+
+`CaseEnrichmentStep` — SPI: `appliesTo(MemoryInput)` + `enrich(MemoryInput)`. Optional `priority()` (default 0, lower runs first) and `required()` (default false).
+
+`CaseEnrichmentDecorator` — `@Decorator` on `CaseMemoryStore`. Intercepts `store()` and `storeAll()`. Discovers steps via `Instance<CaseEnrichmentStep>`, sorts by priority. Progressive routing — each step receives the result of all prior steps. Required steps re-throw on failure; optional steps log and continue.
+
+#### ErasureNotificationCaseMemoryStore
+
+`@Decorator @Priority(45)` on `CaseMemoryStore`. Intercepts `erase()`, `eraseSubject()`, `eraseSubjectAcrossTenants()`. After delegate erasure, fires `MemoryEntityErased` CDI events when count > 0. Three sealed variants: `ByRequest` (subject + domain), `ByEntity` (subject only), `CrossTenant` (subject + tenant set). `Clock` injection for testability.
+
+#### Event Flow
+
+```
+ExperienceStream.record(event)
+  → store.store(MemoryInput)  →  fire ExperienceRecorded
+                                       ↓ @Observes (sync)
+                                  RelationshipObserver
+                                    → if target-agent && != self
+                                      → store relationship  →  fire RelationshipRecorded
+
+ReflectionService.reflect(agentId, since)
+  → query experiences  →  synthesizer.synthesize() [SPI]
+  → store each reflection  →  fire ReflectionRecorded
+
+EngagementStream.record(event)  →  store  →  fire EngagementRecorded
+MemoryEmitter.emit(input)       →  store (fire-and-forget, swallow errors)
+```
+
+### Inference and Fusion Internals
+
+#### BgeM3Embedder
+
+`final class` in `inference-bge-m3/`. Implements `MultiModalEmbedder`. Single `InferenceModel.run()` produces all three embedding types from named output tensors:
+
+- **Dense (1024-dim):** `output.vector("dense")` → L2-normalized
+- **Sparse:** `output.vector("sparse")` → ReLU activation (`max(0, x)`) + threshold filter (`SPARSE_THRESHOLD = 0.01f`) → `Map<Integer, Float>`
+- **ColBERT:** `output.output("colbert")` → per-row L2-normalization → `float[][]`
+
+Batch support via `model.runBatch()`. Reports `supportedModes()` = all three, `denseDimension()` = 1024, `colbertDimension()` = 1024.
+
+#### MultiModalEmbedder Interface
+
+Core contract in `inference-api/`: `embed(String)`, `embedBatch(List)`, `supportedModes()`, `denseDimension()`, `colbertDimension()`, `maxSequenceLength()`.
+
+**`embedSeparate(denseText, nonDenseText)`** — default method for per-leg embedding separation. Uses `embedBatch(List.of(denseText, nonDenseText))` (not individual `embed()` calls) to preserve ONNX batch composition — individual calls (batch=1) can produce different embeddings due to padding/attention mask differences. Short-circuits to single `embed()` when texts are equal.
+
+`MultiModalEmbedding` — value type. Dense mandatory, sparse and ColBERT nullable. Deep-copies arrays on construction and access.
+
+#### SeparateModelEmbedder and MultiModalEmbedderProducer
+
+`SeparateModelEmbedder` — adapter in `rag/`: `EmbeddingModel` (LangChain4j, required) + optional `SparseEmbedder` → `MultiModalEmbedder`. Never produces ColBERT. `@DefaultBean` — displaced when BGE-M3 or other native multi-modal model is on classpath.
+
+`MultiModalEmbedderProducer` — `@ApplicationScoped` CDI producer. `@IfBuildProperty(casehub.rag.embedder.enabled=true, enableIfMissing=true)`. Composes `Instance<EmbeddingModel>` (required) + `Instance<SparseEmbedder>` (optional).
+
+`MatryoshkaMultiModalEmbedder.wrapIfNeeded(embedder, dimension)` — static factory that truncates dense vectors to target dimension + L2 re-normalization. Double-wrap prevention: returns original if already wrapped or dimension is empty.
+
+#### inference-quarkus CDI Extension
+
+`@Inference` — `@Qualifier` annotation with `@Nonbinding String value()`. Usage: `@Inject @Inference("nli") InferenceModel model`.
+
+`InferenceModelProducer` — `@ApplicationScoped`. Uses `InjectionPoint` to read the qualifier's `value()` at injection time. Models cached in `ConcurrentHashMap` — `computeIfAbsent()` creates `OnnxInferenceModel` from config. Shuts down all models on `@Observes ShutdownEvent`.
+
+Config: `casehub.inference.models.<name>.model-path`, `tokenizer-path`, `max-sequence-length` (default 512), `intra-op-threads`, `inter-op-threads`.
+
+#### ScoreFusion
+
+Pure static utility in `fusion-api/`. Two algorithms:
+
+**Weighted RRF:** `rrf(legs, idExtractor, topK, k)`. Per leg: sorts by score descending, computes `leg.weight() / (k + rank + 1)` per item. `leg.weight()` directly scales rank contribution. Normalized: `maxScore = totalWeight / (k + 1)`, each result divided by maxScore → [0,1].
+
+**Convex Combination:** `convexCombination(legs, idExtractor, topK)`. Per leg: min-max normalizes scores to [0,1], multiplies by `normalizedWeight = leg.weight() / totalWeight` (auto-normalized to sum to 1.0).
+
+`ScoredLeg<T>(items, scoreExtractor, weight)` — generic, carries its own score extraction function. `FusedResult<T>(item, score)`.
+
+#### CamelCaseExpander
+
+Pure static utility. `expand(text)` splits tokens at camelCase/PascalCase/digit boundaries, appending expanded parts after originals. `XMLParser` → `XMLParser XML Parser`. Aids BM25 recall for code-domain text.
+
+### RAG Gaps
+
+#### CorpusIngestionService
+
+`@ApplicationScoped` in `rag/`. Bridges corpus modules to the RAG pipeline — reads documents from `ChangeSource`, extracts metadata via `MetadataExtractor`, chunks, and pushes to Qdrant via `EmbeddingIngestor`.
+
+**Two ingestion modes:**
+- **Event-driven (filesystem):** On `@Observes StartupEvent`, starts `WatchableChangeSource.watch()` filesystem watchers with `ChangeListener` callback. Watcher failures fall back to polling
+- **Scheduled polling (ZIP-based):** `@Scheduled` polls bindings where `ChangeSource` is not `WatchableChangeSource`. Separate cursor checkpoint every 5 minutes
+
+**Binding discovery:** Merges `CorpusBindingProducer` (config-driven) + `Instance<CorpusIngestionBinding>` (custom CDI beans). Each binding provides `name()`, `changeSource()`, `corpusReader()`, `metadataExtractor()`.
+
+**Cursor persistence:** `CursorStore` SPI tracks per-corpus position. On failure, cursor is NOT advanced — retried next poll. **Concurrency:** Per-corpus `ReentrantLock` via `ConcurrentHashMap.computeIfAbsent()`, `tryLock()` — concurrent ingestions silently skipped.
+
+**Reconciliation:** `reconcile(corpusName)` — full-scan: indexes missing documents, deletes orphaned Qdrant entries, resets cursor.
+
+#### Query Expansion Drift Detection
+
+In `QueryExpandingCaseRetriever`. `filterByDrift()` detects expanded queries that semantically diverge from the original via `CosineSimilarity` with optional `Instance<EmbeddingModel>`.
+
+**Config:** `ExpansionConfig.DriftConfig` — `enabled` (default false), `threshold` (default 0.7), `action` (`DriftAction`: OBSERVE logs warning and keeps query, DROP removes it).
+
+**Micrometer metrics:** `casehub.rag.expansion.total`, `casehub.rag.expansion.drift` (similarity distribution), `casehub.rag.expansion.drift.fallback` (dropped queries). Error isolation: drift detection failure returns unfiltered list.
+
+#### TenantGuard
+
+`@FunctionalInterface` in `rag/`. `TenantGuard.of(CurrentPrincipal)` — returns no-op when principal is null (Hortora use case: no tenant enforcement), delegates to `MemoryPermissions.assertTenant()` otherwise. Async-safe via `RequestContextCheck.isActive()`.
+
+#### ColbertQuantizationConfig
+
+Nested interface in `RagConfig`. `type()` (NONE/BINARY/SCALAR, default NONE), `alwaysRam()` (default true). Applied to ColBERT multi-vector params in `ensureCollection()` — same quantization wiring as `DenseQuantization` but targeting the ColBERT vector specifically.
+
+### Cognitive API Cross-Cutting Types
+
+Shared types in `cognitive-api/` used by MindMap, Memory, and CBR subsystems.
+
+#### Confidence and ConfidenceOrigin
+
+`Confidence` — record: `ConfidenceOrigin origin`, `double value` [0,1], `Instant decayReference` (nullable). Factories: `stated(value, decayRef)`, `inferred(value, decayRef)`, `speculated(value, decayRef)` (all require non-null decayReference), `unknown(value)` (null decayReference). `decayReference` anchors `ConfidenceDecayDecorator`.
+
+`ConfidenceOrigin` — enum: STATED (user asserted), INFERRED (derived by rules), SPECULATED (LLM/heuristic), UNKNOWN. Used for filtering via `MindMapQuery.confidenceOrigin()` and default confidence values via `MindMapConfidenceDefaults.forOrigin()`.
+
+#### TemporalMark
+
+Sealed interface with `resolveToInstant(Instant now)`. Three variants:
+- `WallClock(Instant)` — absolute timestamp
+- `Relative(Duration offset, Instant anchor)` — relative to anchor or `now`. Enables "3 hours from now" references
+- `Ordinal(String turnId, Instant resolved)` — conversation-turn-based ordering with resolved timestamp
+
+#### AffectType
+
+Enum: `INHERENT` (emotion about the entity itself), `ANTICIPATORY` (emotion about a future event related to the entity). Distinguishes emotional dimensions in PAD tagging.
+
+### Corpus Internals
+
+#### Corpus SPIs
+
+`CorpusStore` — write SPI: `append(path, byte[]|InputStream|Path)`, `delete(path)`. Append-only semantics (versioned in ZIP backend, overwrites in Flat backend).
+
+`CorpusReader` — read SPI: `read(path)`, `readStream(path)`, `readVersion(path, version)`, `versions(path)` → `List<VersionInfo>`, `list()`, `list(prefix)`, `exists(path)`. Version-aware reads.
+
+`ChangeSource` — `changesSince(cursor) → ChangeSet`, `fullScan() → ChangeSet`. Cursor-based change tracking. `ChangedEntry(path, ChangeType)`, `ChangeType`: ADDED/MODIFIED/DELETED.
+
+`WatchableChangeSource` — extends `ChangeSource + AutoCloseable`: `watch(ChangeListener)`. `ChangeListener` is `@FunctionalInterface`: `onChange(List<ChangedEntry>)`. For push-based notification.
+
+`CorpusIntegrity` — health SPI: `check()` (read-only), `checkAndRecover()` (detect + repair), `fullHashVerification()` (expensive SHA-256 of all closed ZIPs). Returns `IntegrityReport` with status (OK/DEGRADED/FAILED) and issue list.
+
+#### ZipCorpusStore
+
+Implements both `CorpusStore` and `CorpusReader`. Rolling ZIP archives managed via Zip4j.
+
+**Entry naming:** `<version>/<path>` inside the ZIP. Deletions store empty tombstone markers at `_tombstones/<path>.deleted`. Paths starting with `_` are reserved and rejected.
+
+**ChainManifest** (`chain.json`): Ordered list of `ChainEntry` records (uuid, file, sequence, status, predecessor, contentHash SHA-256). Statuses: `active` (current write target), `closed` (sealed), `compacted` (replaced). Atomic save via temp file + `ATOMIC_MOVE`. Custom recursive-descent JSON parser — zero library dependency.
+
+**MasterIndex:** Rebuilt from ZIP central directories on startup. Maps logical paths → `EntryLocation(zipFile, version, timestamp)`. Tombstones remove paths. Processes chain entries in sequence order, skipping compacted entries.
+
+**Rollover:** `checkRollover()` after each `append()`. When active ZIP exceeds `config.maxZipSize()`, seals it (writes internal meta, computes SHA-256), creates new active ZIP with incremented sequence.
+
+#### FlatCorpusStore
+
+Implements both `CorpusStore` and `CorpusReader`. Direct filesystem mapping — path maps to `rootDir.resolve(path)`. No versioning (only version 1). No tombstones (deletes remove file). Hidden files and `_`-prefixed paths skipped in `list()`.
+
+#### CompositeCorpusStore
+
+Wraps `ZipCorpusStore` + `FlatCorpusStore`. Writes go to both (ZIP is source of truth; flat provides filesystem access for external tools). Reads delegate exclusively to ZIP.
+
+#### Compactor
+
+Static utility. Two modes: `TOMBSTONES_ONLY` (removes tombstone markers, keeps all versions), `FULL` (keeps only latest per path, removes tombstoned paths entirely). Steps: verify closed + not compacted, filter entries, write temp ZIP, compute SHA-256, retire old manifest entry, add new closed entry, atomically replace.
+
+#### ZipIntegrityChecker
+
+Implements `CorpusIntegrity`. Three levels: `check()` validates chain + ZIP existence + entry counts, `checkAndRecover()` reconstructs missing manifests and internal metas, `fullHashVerification()` SHA-256 verifies all closed archives.
+
+### Schema Generator
+
+`CognitiveSchemaGenerator` — plain Java class (no CDI) in `schema-generator/`. Constructs a victools `SchemaGenerator` (Draft 2020-12) with four modules:
+
+- **JacksonModule** — respects `@JsonPropertyOrder`
+- **EnumInliningModule** — intercepts enum types, produces `{type: "string", enum: [values]}` using `toString()` on each constant
+- **SealedHierarchyModule** — from `casehub-platform-schema-generator`. Sealed interfaces → `oneOf` + `const` type discriminator. `DISCRIMINATOR_OVERRIDES` map overrides discriminator values per permit (e.g., `GaussianDecay → "gaussian"`, `ItakuraParallelogram → "itakura"`)
+- **ShorthandModule** — scalar-or-object `oneOf` for three types: `Confidence` (number or `{origin, value, decayReference}`), `NodeRef` (string pattern or `{scheme, id, qualifier}`), `RecurrenceRule` (RRULE string or `{freq, interval, count, until, byDay}`)
+
+Two public methods: `generate(Class<?>) → JsonNode`, `generateToYaml(Class<?>, Path)` (YAML output, minimize-quotes). **Extension:** add shorthand types to `ShorthandModule`, discriminator overrides to the `DISCRIMINATOR_OVERRIDES` map.
+
+### CBR JPA Backend
+
+`JpaCbrCaseMemoryStore` — `@Alternative @Priority(3) @ApplicationScoped` in `memory-cbr-jpa/`. PostgreSQL-backed via `EntityManager`.
+
+`CbrCaseEntity` — JPA `@Entity` with 18 columns. Features stored as JSON string via Jackson (not native JSONB operators) — deserializes to Java, scores via `CbrSimilarityScorer` in-memory. FEATURE_ONLY retrieval mode only — SEMANTIC_ONLY returns empty, HYBRID degrades to FEATURE_ONLY with log warning.
+
+`cbrType` discriminator on load: `"plan"` → `ResolvedCase`, `"feature-vector"` → `FeatureVectorCbrCase`, `"textual"` → `ResolutionGuide`.
+
+### CbrSuggestions and FeatureStatistics
+
+`CbrSuggestions` — immutable record: `featureStats` (Map<String, FeatureStatistics>), `historicalSuccessRate`, `experienceCount`, `averageSimilarity`. `EMPTY` constant, `isEmpty()` checks `experienceCount == 0`.
+
+`FeatureStatistics` — immutable record: `min`, `max`, `median`, `p75`, `sampleCount`. `compute(double[])` factory: clones + sorts array, nearest-rank percentile: `index = ceil(rank × n) − 1`, clamped to 0.
+
+### EmbeddingTextSimilarity
+
+`LocalSimilarityFunction` implementation in `memory-cbr-embedding/` for semantic text field cosine similarity. Plain Java (no CDI).
+
+`precompute(List<String>)` — batch embedding via `model.embedAll()`. Filters uncached texts, deduplicates, stores in `HashMap` cache. Called by `QdrantCbrCaseMemoryStore`'s two-pass retrieval to pre-embed all candidate text values in one batch.
+
+`compute(FeatureValue, FeatureValue)` — extracts strings from `StringVal` pairs, embeds each (cache-backed), returns `max(0.0, CosineSimilarity.between())`. `CbrSimilarityScorer` uses this as a `LocalSimilarityFunction` override for `Text(semantic=true)` fields.
+
 ---
 
 ## Dependencies
@@ -501,16 +1059,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS mindmap_subgraph_tenant_type_idx
 
 ## Current State
 
-All inference, RAG, CBR, and agent memory modules shipped. Active development on agent memory patterns (experience stream, relationships, reflection, personality-aware retrieval) and retrieval model quality (embedding evaluation, BGE-M3, ColBERT, RelevanceEvaluator).
+All inference, RAG, CBR, agent memory, MindMap, and cognitive subsystem modules shipped. Active development on knowledge consolidation, cognitive profiles, and agent memory event streams.
 
 | Area | What shipped |
 |------|-------------|
 | Inference Foundation | `InferenceModel` SPI with sealed `InferenceInput` (Text + Tensor), ONNX runtime, task adapters (NLI, classification, tensor classification, regression, reranking), SPLADE sparse embeddings, BGE-M3 multi-modal embeddings, Quarkus CDI extension |
-| RAG Pipeline | Three-leg hybrid search (dense + sparse + BM25) with configurable fusion (RRF/DBSF/CC); `FusionWeightsConfig` with per-leg weights; per-query weight multipliers + effectiveWeight(); `PayloadBoostCaseRetriever` quality rescore; `MatryoshkaEmbeddingModel`; `DenseQuantization`; ColBERT multi-vector scalar quantization; per-leg embedding separation; corrective RAG + cross-encoder reranking; query expansion (HyDE, template, step-back); retrieval tracking; pre-ingestion dedup gate; `RetrievalAnalyzer` (document stats, query clusters with MinHash, correlation graph, document impact) |
+| RAG Pipeline | Three-leg hybrid search (dense + sparse + BM25) with configurable fusion (RRF/DBSF/CC); `FusionWeightsConfig` with per-leg weights; per-query weight multipliers + effectiveWeight(); `PayloadBoostCaseRetriever` quality rescore; `MatryoshkaEmbeddingModel`; `DenseQuantization`; ColBERT multi-vector scalar quantization; per-leg embedding separation; corrective RAG + cross-encoder reranking; query expansion (HyDE, template, step-back) with drift detection; retrieval tracking; pre-ingestion dedup gate; `RetrievalAnalyzer` (document stats, query clusters with MinHash, correlation graph, document impact); `CorpusIngestionService` with event-driven + polling modes |
 | CBR | Typed feature values (9 field types, 7 value types); `SimilaritySpec` sealed (6 similarity functions incl. DTW + edit distance); weighted per-field scoring; plan adaptation SPI (caseType-aware, variantId tracking); plan ensemble analysis SPI; temporal decay (3 strategies); hierarchical scoping with ScopeDecay; supersession + reinstate + audit; trend detection + enrichment; cross-encoder reranking; embedding-based text similarity; trust-weighted retrieval; outcome-weighted retrieval + CloudEvent feedback; CBR retention (age + count + trust purge); trust trajectory purge; reconciliation with Qdrant; JPA/PostgreSQL backend; retrieval tracking (retrieval + adaptation + ensemble); erasure notification; personality transition schema; scan/discoverTenants admin operations; CbrSuggestions/FeatureStatistics |
-| Agent Memory | Five backends (in-memory, JPA, SQLite, Mem0, Graphiti — all blocking, reactive tier removed); `MemoryEmitter` fire-and-forget wrapper; `MemoryOrder.SALIENCE` (recency x confidence); unified `Confidence` record (origin + value); confidence-based retention purge with MemoryRetentionScheduler; permission-aware queries; paginated scan; cross-tenant erasure |
-| Corpus | Append-only zip archives, flat filesystem, composite multi-backend; change tracking; compaction; integrity checks |
+| Agent Memory | Five backends (in-memory, JPA, SQLite, Mem0, Graphiti); `MemoryEmitter` fire-and-forget wrapper; `MemoryOrder.SALIENCE` (recency x confidence); unified `Confidence` record (origin + value); confidence-based retention purge; five event streams (experience, relationship, reflection, mood, engagement); `CaseEnrichmentStep` SPI; erasure notification |
+| MindMap | Thing/MindMapNode hierarchy; TypeRegistry with lazy per-tenant bootstrap; trait system (programmatic + declarative rules); 4-deep CDI decorator chain (DerivedEdge, TraitApplication, AffectTrajectory, IdleTracker); ConfidenceDecay read-side decorator; vocabulary normalization; graph analysis (MindMapAnalyzer — orphans, centrality, k-cores, contradictions); merge with conflict reporting; supersession/reinstatement; capability-gated operations |
+| MindMap Intelligence | MindMapExtractor (LLM entity/relationship extraction); ConversationBridge (fast segmentation + async enrichment pipeline); CognitiveLoader (vocabulary from YAML profiles); CuriositySignalGenerator (5-category signals with affect dampening); RecurrenceRule/Generator |
+| Cognitive Index | TemporalIndex (cross-store chronological aggregation); AffectTrajectoryAnalyzer; TemporalFocus (proximity/recency + affect modifiers); CognitiveProfile (cross-store entity resolution); PerspectivalMerge/Resolver; CognitiveDefaults/Registry (YAML per-agent config); CognitiveDerivationEngine (8 derivation pathways from eidos identity); DeclarativeRuleRegistry; Modulation framework (profiles + factors + retrieval modulator) |
+| Consolidation | ConsolidationScheduler (idle-gated, curiosity-driven priority); 4-phase pipeline (AccessFrequency, MergeDetection, CommunitySummary, CuriosityRefresh); RetrievalAccessTracker + Bjork's dual-strength model |
+| Corpus | Append-only zip archives, flat filesystem, composite multi-backend; chain manifest; change tracking; compaction; integrity checks with recovery |
 | Score Fusion | `fusion-api` tier-1 module — weighted RRF + CC algorithms, `CamelCaseExpander` for BM25 preprocessing. Shared by RAG and CBR |
+| Schema Generator | JSON Schema generation (Draft 2020-12) for cognitive types — sealed hierarchy oneOf, enum inlining, shorthand scalar-or-object patterns, YAML output |
 | Evaluation | Python ML pipelines: code-domain embedding evaluation (#49), strategy classifier with CNN-Attention + ONNX export (#75, #76) |
 
 Native image gate passed. Service deploys in JVM mode by design. Reachability metadata retained for downstream native consumers.

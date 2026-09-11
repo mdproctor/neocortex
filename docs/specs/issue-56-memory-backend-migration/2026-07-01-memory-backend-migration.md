@@ -131,7 +131,7 @@ Everything non-memory: CurrentPrincipal, Path, Preferences, EndpointRegistry, ag
 
 **Prerequisite:** open all consumer repos (neural-text, devtown, aml, clinical, soc, fsitrading, parent, casehub-all) in the same IntelliJ workspace before step 1.
 
-1. Delete `CbrCaseEntry.java` and `CbrCaseEntryTest.java` from platform-api (superseded by `ResolutionGuide` — zero external consumers)
+1. Delete `CbrCaseEntry.java` and `CbrCaseEntryTest.java` from platform-api (superseded by `TextualCbrCase` — zero external consumers)
 2. Rename package `io.casehub.platform.api.memory` → `io.casehub.memory` in platform-api (IntelliJ propagates all imports across workspace)
 3. Rename package `io.casehub.platform.memory` → `io.casehub.memory` in platform backend modules (separate refactoring operation — different source package from step 2)
 4. Create target module POMs in neural-text

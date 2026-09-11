@@ -411,7 +411,7 @@ double confidence = m.confidence() != null ? m.confidence().value() : 1.0;
 | `Double confidence()` | Returns nullable Double | `Confidence confidence()` — returns nullable Confidence |
 | `withOutcome(String, Double)` | Double confidence param | `withOutcome(String, Confidence)` |
 
-#### `ResolutionGuide`, `FeatureVectorCbrCase`, `ResolvedCase`
+#### `TextualCbrCase`, `FeatureVectorCbrCase`, `PlanCbrCase`
 
 Record component `Double confidence` → `Confidence confidence` (nullable). Validation changes from manual `< 0.0 || > 1.0` check to relying on `Confidence` constructor validation. `withOutcome` signature updates.
 
