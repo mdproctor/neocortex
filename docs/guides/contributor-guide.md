@@ -311,6 +311,164 @@ Supports `reconcile(caseType, tenantId)`, `reconcileAll(caseType)`, `discoverTen
 | 45 | `ErasureNotificationCbrCaseMemoryStore` | memory |
 | 44 | `SupersessionNotificationCbrCaseMemoryStore` | memory |
 
+**MindMapStore chain (mindmap):**
+| Priority | Decorator | Module |
+|----------|-----------|--------|
+| 80 | `DerivedEdgeDecorator` | mindmap |
+| 70 | `TraitApplicationDecorator` | mindmap |
+| 65 | `AffectTrajectoryDecorator` | mindmap |
+| 30 | `MindMapStoreIdleTracker` | mindmap |
+
+### Knowledge Model Internals
+
+#### Thing / MindMapNode Hierarchy
+
+`Thing` (in `thing-api`) is the semantic knowledge representation base — identity, properties, traits, and a dynamic type system. `MindMapNode` (in `mindmap-api`) extends `Thing` with cognitive features — what the agent *believes* about the entity.
+
+```
+Thing (thing-api, zero deps)
+  — id(), name(), type(), property(), properties(), traits()
+  — is(), as()  [default methods]
+    └── MindMapNode (mindmap-api)
+        — confidence(), PAD, temporal bounds, provenance, refs()
+        — subgraphType()  ← type() delegates here
+```
+
+**Dependency direction:** `thing-api` ← `mindmap-api` ← `mindmap-intelligence` ← `cognitive-index`. Consumers who need entity access depend on `thing-api` (zero deps). Cognitive subsystem components depend on `mindmap-api`.
+
+**Key invariant:** `MindMapNode.type()` is a default method that delegates to `subgraphType()`. This ensures every MindMapNode's type comes from its subgraph membership — no implementor can diverge. Thing is a read-only projection; mutations go through `MindMapStore`.
+
+See the consumer guide for `is()`/`as()` usage patterns, `SubgraphTypes` constants, and the knowledge lifecycle.
+
+#### Adding subgraphType() to Store Implementations
+
+Every `MindMapNode` returned by a store must have `subgraphType()` resolved at construction time. Two patterns exist:
+
+**SQLite — JOIN pattern.** All node-returning queries JOIN with `mindmap_subgraph` on `subgraph_id`. Cost is negligible — `subgraph_id` is the primary key, so each resolution is a single B-tree lookup:
+
+```sql
+SELECT n.*, sg.type AS sg_type
+FROM mindmap_node n
+JOIN mindmap_subgraph sg ON n.subgraph_id = sg.subgraph_id
+WHERE n.node_id = ? AND n.tenant_id = ?
+```
+
+The `toNode(ResultSet)` method reads `rs.getString("sg_type")` into the `SqliteNode` record.
+
+**InMemory — cache lookup pattern.** `addNode()` resolves the subgraph type at creation from the in-memory `subgraphs` map:
+
+```java
+MindMapSubgraph sg = subgraphs.get(input.subgraphId());
+String sgType = sg != null ? sg.type() : "";
+StoredNode node = new StoredNode(id, input.name(), input.subgraphId(), sgType, ...);
+```
+
+**The rule:** never defer type resolution to a property or lazy lookup. `subgraphType()` must be available on every node the store returns. `MindMapStoreContractTest` validates this.
+
+#### TypeRegistry Internals
+
+`TypeRegistry` is an `@ApplicationScoped` CDI bean in `mindmap-intelligence` that mediates all type operations. It uses `Instance<MindMapStore>` for graceful degradation — when no store is on the classpath, all operations return empty results.
+
+**Lazy bootstrap.** Types are bootstrapped per tenant on first access via `ConcurrentHashMap.computeIfAbsent`. No eager `@PostConstruct` scan — this avoids discovering which tenants exist at startup and handles new tenants provisioned after the application starts. The bootstrap sequence:
+
+1. Find the `TYPE_SYSTEM` subgraph by type (iterates `listSubgraphs`)
+2. If absent, create it — catch `IllegalStateException` on the unique constraint `(tenant_id, type)` if another JVM instance wins the race, then re-query
+3. Load all existing type nodes into the cache
+4. Create core type nodes if absent (general, person, project, organisation, concept, research-area)
+
+**Core types.** `CORE_TYPES` maps well-known types to their Java interfaces: `PERSON → Personable.class`, `PROJECT → Projectlike.class`, `ORGANISATION → Organisational.class`. Core type nodes carry a `java-class` property and schema properties derived from the interface via reflection.
+
+**Schema derivation.** `deriveSchemaFromInterface()` reflects declared methods (excluding defaults and Object methods), mapping return types: `String`/`Optional<String>` → `"string"`, `int`/`Integer`/`long`/`Long`/`double`/`Double` → `"number"`, `boolean`/`Boolean` → `"boolean"`. All reflected fields default to `required = false`.
+
+**Dynamic type registration.** `registerType(typeName, parentType, tenantId)` creates a node in TYPE_SYSTEM with an optional `subtype-of` edge to the parent. Type names are normalized with `strip().toLowerCase()`. If the type already exists, the call is a no-op.
+
+**Cache structure.** `BootstrappedTenant` holds `typeSystemSubgraphId` + a `ConcurrentHashMap<String, String>` mapping type name → node ID. `resolveTypeNode()` does a `store.getNode()` call — the cache maps names to IDs, not to node objects, since node state may change.
+
+#### Writing TraitRules
+
+TraitRules evaluate nodes for trait assignment. Two approaches:
+
+**Programmatic rules.** Implement the `TraitRule` interface and register as an `@ApplicationScoped` CDI bean:
+
+```java
+@ApplicationScoped
+public class PersonableTraitRule implements TraitRule {
+    @Override
+    public String traitName() { return "Personable"; }
+
+    @Override
+    public boolean matches(MindMapNode node, List<MindMapEdge> edges) {
+        boolean hasProperties = node.property("birthday").isPresent()
+            || node.property("role").isPresent()
+            || node.property("email").isPresent();
+        boolean hasEdges = edges.stream()
+            .anyMatch(e -> "parent-of".equals(e.edgeType())
+                || "works-at".equals(e.edgeType()));
+        return hasProperties || hasEdges;
+    }
+}
+```
+
+The trait name must be PascalCase, matching the Java interface simple name.
+
+**Declarative rules.** `DeclarativeTraitRule` wraps a `RuleCondition` tree — a sealed interface with 11 variants: `HasProperty`, `PropertyEquals`, `PropertyIn`, `NotHasProperty`, `HasEdgeType`, `HasEdgeTypes`, `HasAnyEdge`, `InSubgraphType`, `AnyOf`, `AllOf`, `Not`. Declared in YAML cognitive profiles, deserialized by `DeclarativeTraitRuleDeserializer`, loaded by `DeclarativeRuleRegistry` — global rules from `rules/*.yaml` + per-agent overrides (name-based merge: local rule with same name suppresses global).
+
+**How traits get applied.** `TraitApplicationDecorator` (@Decorator @Priority(70)) intercepts `addNode`, `updateNode`, `addEdge`, and `removeEdge`. After the delegate operation completes, it evaluates all rules (programmatic + declarative) against the affected node. If any rule matches a trait not yet present, the trait is added via `NodeUpdate`. If no rule matches a previously present trait, it is removed. A `ThreadLocal` reentrancy guard prevents infinite recursion (trait update triggers `updateNode` which would re-evaluate). When a `PrincipalId` is available, per-agent declarative rules are resolved; otherwise all rules fire.
+
+#### ThingProxyHandler — Adding Return Type Coercions
+
+`ThingProxyHandler` is a package-private class in `thing-api` (67 lines). It creates JDK `Proxy` instances that map interface method names to `thing.property(methodName)` calls with return type coercion:
+
+| Return type | Present value | Missing value |
+|-------------|--------------|---------------|
+| `String` | value as-is | `null` |
+| `Optional<String>` | `Optional.of(value)` | `Optional.empty()` |
+| `Integer` / `int` | `Integer.parseInt(value)` | `null` / `0` |
+| `Long` / `long` | `Long.parseLong(value)` | `null` / `0L` |
+| `Double` / `double` | `Double.parseDouble(value)` | `null` / `0.0` |
+| `Boolean` / `boolean` | `Boolean.parseBoolean(value)` | `null` / `false` |
+
+Special methods: `toString` → `"InterfaceName[nodeName]"`, `hashCode` → `hash(id, traitInterface)`, `equals` → same node ID + same trait interface.
+
+**To add a new coercion:**
+
+1. Add a case to `coerce(String value, Class<?> returnType)` in `ThingProxyHandler`
+2. If primitive: add the default to `primitiveDefault(Class<?> returnType)`
+3. Update `TypeRegistry.mapReturnType()` in `mindmap-intelligence` to map the Java return type to a schema type string
+4. Add a test in `thing-api`'s `ThingTest`
+
+**Constraint:** `thing-api` has zero dependencies — coercions cannot use external libraries.
+
+#### Creating Trait Interfaces
+
+**Placement.** Platform-provided traits live in `mindmap-intelligence` (`Personable`, `Projectlike`, `Organisational`, `Eventlike`). Consumer-defined traits live in any module — `as()` works with any interface.
+
+**Convention.** Trait names are PascalCase (matching the Java interface simple name). `is("Personable")` is case-sensitive. Method names map to property keys — `birthday()` reads `property("birthday")`. Methods should return `Optional<String>` (preferred), `String`, or primitive wrappers.
+
+**Checklist for a new platform trait:**
+
+1. Create the interface in `mindmap-intelligence` (e.g., `Eventlike.java`) — methods return `Optional<String>`
+2. Create a `TraitRule` implementation (e.g., `EventlikeTraitRule.java`) — `@ApplicationScoped`, define the matching criteria
+3. Add the mapping to `TypeRegistry.CORE_TYPES` if this trait corresponds to a core subgraph type
+4. Add tests in `StandardTraitRulesTest`
+
+#### Flyway Migration Pattern — V4 Reference
+
+`V4__subgraph_type_string.sql` in `mindmap-sqlite` is a reference pattern for data conversion migrations:
+
+```sql
+-- Convert SubgraphType enum names to lowercase strings
+UPDATE mindmap_subgraph SET type = LOWER(type);
+
+-- Add unique constraint on (tenant_id, type) to prevent duplicate type names per tenant
+CREATE UNIQUE INDEX IF NOT EXISTS mindmap_subgraph_tenant_type_idx
+    ON mindmap_subgraph (tenant_id, type);
+```
+
+**Pattern elements:** data conversion (`LOWER`) + structural constraint (unique index). The index is created with `IF NOT EXISTS` for idempotency. The unique constraint on `(tenant_id, type)` enables `TypeRegistry`'s race-condition recovery — when two JVM instances try to create the TYPE_SYSTEM subgraph simultaneously, the loser hits the constraint, catches the exception, and re-queries.
+
+**File location convention:** `<module>/src/main/resources/db/<module-slug>/migration/V<N>__<description>.sql`.
+
 ---
 
 ## Dependencies
