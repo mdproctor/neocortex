@@ -3,6 +3,9 @@ package io.casehub.neocortex.knowledge.dedup;
 import com.zaxxer.hikari.HikariDataSource;
 import io.casehub.neocortex.sqlite.SqliteDataSourceFactory;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -10,10 +13,12 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Optional;
 
+@ApplicationScoped
 public class DedupIndexStore {
 
     private final HikariDataSource ds;
 
+    @Inject
     public DedupIndexStore(HikariDataSource ds) {
         this.ds = ds;
     }

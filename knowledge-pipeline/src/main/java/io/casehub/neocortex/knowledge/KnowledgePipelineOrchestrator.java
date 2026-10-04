@@ -40,6 +40,8 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
     private final CacheDecayPolicy decayPolicy;
     private final SubsumptionRule subsumptionRule;
     private final int geohashPrecision;
+    private       KnowledgePipelineMetrics metrics;
+
 
     public KnowledgePipelineOrchestrator(
             List<LocationPlatform> providers,
@@ -64,6 +66,11 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
         this.geohashPrecision = geohashPrecision;
     }
 
+    void setMetrics(KnowledgePipelineMetrics metrics) {
+        this.metrics = metrics;
+    }
+
+
     @Override
     public List<CachedEntity> search(KnowledgeQuery query, String tenantId) {
         return search(query, tenantId, null);
@@ -82,6 +89,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
                 if (entity != null) cached.add(entity);
             }
             if (!cached.isEmpty()) {
+                if (metrics != null) metrics.recordCacheHit(queryType(query), tenantId);
                 if (researchSessionId != null) {
                     cached.forEach(e ->
                         metadataStore.addSession(e.id(), researchSessionId));
@@ -109,7 +117,9 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             }
         }
 
-        List<ProviderPlace> fetched = fetchFromProviders(query);
+        if (metrics != null) metrics.recordCacheMiss(queryType(query), tenantId);
+
+        List<ProviderPlace> fetched = fetchFromProviders(query, tenantId);
         if (fetched.isEmpty()) return List.of();
 
         Instant now = Instant.now();
@@ -238,18 +248,29 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
 
     record ProviderPlace(String providerId, Place place) {}
 
-    private List<ProviderPlace> fetchFromProviders(KnowledgeQuery query) {
+    private List<ProviderPlace> fetchFromProviders(KnowledgeQuery query, String tenantId) {
         List<ProviderPlace> all = new ArrayList<>();
         for (LocationPlatform provider : providers) {
             if (!provider.supports(LocationPlatform.PlaceSearch.class)) continue;
             try {
+                var sample = metrics != null ? metrics.startProviderFetch() : null;
                 List<Place> providerResults = fetchAllPages(provider, query);
+                if (sample != null) metrics.recordProviderFetch(sample, provider.id(), tenantId);
                 providerResults.forEach(p -> all.add(new ProviderPlace(provider.id(), p)));
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Provider " + provider.id() + " failed", e);
+                if (metrics != null) metrics.recordProviderError(provider.id(), tenantId);
             }
         }
         return all;
+    }
+
+    private static String queryType(KnowledgeQuery query) {
+        return switch (query) {
+            case KnowledgeQuery.TextSearch ignored -> "TEXT";
+            case KnowledgeQuery.NearbySearch ignored -> "NEARBY";
+            case KnowledgeQuery.CategorySearch ignored -> "CATEGORY";
+        };
     }
 
     private List<Place> fetchAllPages(LocationPlatform provider, KnowledgeQuery query) {

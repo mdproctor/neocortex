@@ -5,6 +5,8 @@ import io.casehub.neocortex.knowledge.ResearchSession;
 import io.casehub.neocortex.knowledge.ResearchState;
 import io.casehub.neocortex.sqlite.SqliteDataSourceFactory;
 
+import jakarta.annotation.PreDestroy;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -93,5 +95,6 @@ public class ResearchSessionStore {
         );
     }
 
+    @PreDestroy
     public void close() { ds.close(); }
 }

@@ -7,12 +7,19 @@ import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.SpatialCacheStore;
 import io.casehub.neocortex.knowledge.resolution.Haversine;
 
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Alternative;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Alternative
+@Priority(2)
+@ApplicationScoped
 public class InMemorySpatialCacheStore implements SpatialCacheStore {
 
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, CachedEntity>> tenants =

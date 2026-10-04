@@ -2,6 +2,9 @@ package io.casehub.neocortex.knowledge.cache;
 
 import com.zaxxer.hikari.HikariDataSource;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -15,10 +18,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@ApplicationScoped
 public class EntityMetadataStore {
 
     private final HikariDataSource ds;
 
+    @Inject
     public EntityMetadataStore(HikariDataSource ds) {
         this.ds = ds;
     }

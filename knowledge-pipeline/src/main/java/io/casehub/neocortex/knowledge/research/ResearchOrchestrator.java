@@ -12,11 +12,15 @@ import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+@ApplicationScoped
 public class ResearchOrchestrator implements ResearchSessionService {
 
     private final ResearchSessionStore sessionStore;
@@ -25,6 +29,7 @@ public class ResearchOrchestrator implements ResearchSessionService {
     private final EntityMetadataStore metadataStore;
     private final CacheDecayPolicy decayPolicy;
 
+    @Inject
     public ResearchOrchestrator(ResearchSessionStore sessionStore,
                                  MindMapStore mindMapStore,
                                  SpatialCacheStore cacheStore,

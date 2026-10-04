@@ -5,6 +5,9 @@ import io.casehub.neocortex.knowledge.KnowledgeQuery;
 import io.casehub.neocortex.knowledge.NormalizedQuery;
 import com.zaxxer.hikari.HikariDataSource;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,10 +17,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@ApplicationScoped
 public class QueryCacheStore {
 
     private final HikariDataSource ds;
 
+    @Inject
     public QueryCacheStore(HikariDataSource ds) {
         this.ds = ds;
     }

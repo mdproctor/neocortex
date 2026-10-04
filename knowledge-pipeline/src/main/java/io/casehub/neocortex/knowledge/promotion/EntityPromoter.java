@@ -4,7 +4,9 @@ import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.PromotionRequest;
 import io.casehub.neocortex.knowledge.PromotionResult;
 import io.casehub.neocortex.knowledge.SpatialCacheStore;
+import io.casehub.neocortex.knowledge.KnowledgePipelineMetrics;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
+import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
 import io.casehub.neocortex.mindmap.EdgeInput;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapStore;
@@ -13,12 +15,14 @@ import io.casehub.neocortex.mindmap.NodeRef;
 import io.casehub.neocortex.mindmap.NodeUpdate;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import io.casehub.neocortex.mindmap.intelligence.SubgraphUtils;
-import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+@ApplicationScoped
 public class EntityPromoter {
 
     private final MindMapStore mindMapStore;
@@ -26,6 +30,7 @@ public class EntityPromoter {
     private final DedupIndexStore dedupStore;
     private final ResearchSessionStore sessionStore;
 
+    @Inject
     public EntityPromoter(MindMapStore mindMapStore,
                           SpatialCacheStore cacheStore,
                           DedupIndexStore dedupStore,
@@ -35,6 +40,14 @@ public class EntityPromoter {
         this.dedupStore = dedupStore;
         this.sessionStore = sessionStore;
     }
+
+    private KnowledgePipelineMetrics metrics;
+
+    @Inject
+    void setMetrics(KnowledgePipelineMetrics metrics) {
+        this.metrics = metrics;
+    }
+
 
     public PromotionResult promote(PromotionRequest request) {
         CachedEntity entity = cacheStore.get(
@@ -49,6 +62,7 @@ public class EntityPromoter {
             enrichExistingNode(dedupEntry.get().mindMapNodeId(), entity,
                 request.tenantId());
             linkToResearchSession(dedupEntry.get().mindMapNodeId(), request);
+            if (metrics != null) metrics.recordPromotion(false, request.tenantId());
             return new PromotionResult(dedupEntry.get().mindMapNodeId(), false);
         }
 
@@ -59,6 +73,7 @@ public class EntityPromoter {
             dedupStore.setMindMapNodeId(
                 entity.source(), entity.externalId(), existing.id());
             linkToResearchSession(existing.id(), request);
+            if (metrics != null) metrics.recordPromotion(false, request.tenantId());
             return new PromotionResult(existing.id(), false);
         }
 
@@ -66,6 +81,7 @@ public class EntityPromoter {
         dedupStore.setMindMapNodeId(
             entity.source(), entity.externalId(), nodeId);
         linkToResearchSession(nodeId, request);
+        if (metrics != null) metrics.recordPromotion(true, request.tenantId());
         return new PromotionResult(nodeId, true);
     }
 

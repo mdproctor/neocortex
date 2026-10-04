@@ -24,6 +24,8 @@ public class CacheEvictionScheduler {
     private final DedupIndexStore dedupStore;
     private final Duration maxEntityAge;
     private final Duration maxSessionDuration;
+    private       io.casehub.neocortex.knowledge.KnowledgePipelineMetrics metrics;
+
 
     public CacheEvictionScheduler(SpatialCacheStore cacheStore,
                                     EntityMetadataStore metadataStore,
@@ -38,6 +40,11 @@ public class CacheEvictionScheduler {
         this.maxEntityAge = maxEntityAge;
         this.maxSessionDuration = maxSessionDuration;
     }
+
+    public void setMetrics(io.casehub.neocortex.knowledge.KnowledgePipelineMetrics metrics) {
+        this.metrics = metrics;
+    }
+
 
     public void runEviction() {
         Set<String> tenants = discoverTenants();
@@ -72,6 +79,7 @@ public class CacheEvictionScheduler {
         if (evicted > 0 || skipped > 0) {
             LOG.info("Eviction for tenant " + tenantId + ": evicted=" + evicted
                      + " skipped=" + skipped);
+            if (metrics != null) metrics.recordEviction(evicted, skipped, tenantId);
         }
 
         evictByAge(tenantId, now);

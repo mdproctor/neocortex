@@ -8,6 +8,9 @@ import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.SpatialCacheStore;
 import io.casehub.neocortex.knowledge.resolution.Haversine;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,10 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@ApplicationScoped
 public class SqliteSpatialCacheStore implements SpatialCacheStore {
 
     private final HikariDataSource ds;
 
+    @Inject
     public SqliteSpatialCacheStore(HikariDataSource ds) {
         this.ds = ds;
     }
