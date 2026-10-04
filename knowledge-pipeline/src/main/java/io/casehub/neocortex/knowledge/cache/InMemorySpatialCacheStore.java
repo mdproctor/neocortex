@@ -76,6 +76,14 @@ public class InMemorySpatialCacheStore implements SpatialCacheStore {
             existing.sessionIds(), existing.hasDetail()));
     }
 
+
+    @Override
+    public List<CachedEntity> listAll(String tenantId) {
+        var entities = tenants.get(tenantId);
+        if (entities == null) {return List.of();}
+        return List.copyOf(entities.values());
+    }
+
     @Override
     public List<String> findExpired(String tenantId, Instant now) {
         var entities = tenants.get(tenantId);

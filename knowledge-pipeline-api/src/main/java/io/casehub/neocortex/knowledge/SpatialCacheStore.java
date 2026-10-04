@@ -21,6 +21,9 @@ public interface SpatialCacheStore {
 
     void expire(String entityId, Instant expiresAt, String tenantId);
 
+
+    List<CachedEntity> listAll(String tenantId);
+
     List<String> findExpired(String tenantId, Instant now);
 
     Set<String> discoverTenants();

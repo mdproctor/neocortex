@@ -178,7 +178,7 @@ class KnowledgePipelineIntegrationTest {
         var sessionStore = new ResearchSessionStore(researchDs);
         var scheduler = new CacheEvictionScheduler(
             cacheStore, metadataStore, sessionStore, dedupStore,
-            Duration.ofDays(90));
+            Duration.ofDays(90), Duration.ofDays(180));
 
         scheduler.runEviction();
 

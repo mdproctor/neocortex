@@ -1,13 +1,12 @@
 package io.casehub.neocortex.knowledge.cache;
 
+import com.zaxxer.hikari.HikariDataSource;
 import io.casehub.connectors.location.model.Coordinates;
 import io.casehub.neocortex.knowledge.BoundingBox;
 import io.casehub.neocortex.knowledge.CacheFilter;
 import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.SpatialCacheStore;
 import io.casehub.neocortex.knowledge.resolution.Haversine;
-
-import com.zaxxer.hikari.HikariDataSource;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -174,6 +173,24 @@ public class SqliteSpatialCacheStore implements SpatialCacheStore {
             ps.setString(2, entityId);
             ps.setString(3, tenantId);
             ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    @Override
+    public List<CachedEntity> listAll(String tenantId) {
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT * FROM entity_metadata WHERE tenant_id = ?")) {
+            ps.setString(1, tenantId);
+            ResultSet          rs      = ps.executeQuery();
+            List<CachedEntity> results = new ArrayList<>();
+            while (rs.next()) {
+                results.add(mapRow(rs));
+            }
+            return results;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

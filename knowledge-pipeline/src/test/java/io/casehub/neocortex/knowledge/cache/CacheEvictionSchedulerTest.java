@@ -1,13 +1,12 @@
 package io.casehub.neocortex.knowledge.cache;
 
+import com.zaxxer.hikari.HikariDataSource;
 import io.casehub.connectors.location.model.Coordinates;
 import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.ResearchState;
-import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
+import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
 import io.casehub.neocortex.sqlite.SqliteDataSourceFactory;
-import com.zaxxer.hikari.HikariDataSource;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +42,7 @@ class CacheEvictionSchedulerTest {
 
         scheduler = new CacheEvictionScheduler(
             cacheStore, metadataStore, sessionStore, dedupStore,
-            Duration.ofDays(90));
+            Duration.ofDays(90), Duration.ofDays(180));
     }
 
     @AfterEach
@@ -144,6 +143,44 @@ class CacheEvictionSchedulerTest {
         assertThat(cacheStore.get("e2", "t1")).isNotNull();
         assertThat(cacheStore.get("e3", "t2")).isNull();
     }
+
+    @Test
+    void autoCompletesSessionsPastMaxDuration() {
+        Instant old = Instant.now().minus(Duration.ofDays(200));
+        var session = new io.casehub.neocortex.knowledge.ResearchSession(
+                "s1", "Old Session", null, "sg-1", ResearchState.ACTIVE,
+                "tenant-1", old, old);
+        sessionStore.insert(session);
+
+        cacheStore.set(expiredEntity("e1", "tenant-1"), "tenant-1");
+        metadataStore.addSession("e1", "s1");
+
+        scheduler.runEviction();
+
+        assertThat(sessionStore.get("s1").get().state()).isEqualTo(ResearchState.COMPLETED);
+    }
+
+    @Test
+    void evictsEntitiesPastMaxAgeEvenWithActiveSession() {
+        var ancient = new io.casehub.neocortex.knowledge.CachedEntity(
+                "e1", "Old Place", new io.casehub.connectors.location.model.Coordinates(51.5, -0.1),
+                "restaurant", "google", "ext-1", Map.of(),
+                Instant.now().minus(Duration.ofDays(100)),
+                Instant.now().plusSeconds(86400),
+                Set.of(), false);
+        cacheStore.set(ancient, "tenant-1");
+
+        var session = new io.casehub.neocortex.knowledge.ResearchSession(
+                "s1", "Test", null, "sg-1", ResearchState.ACTIVE,
+                "tenant-1", Instant.now(), Instant.now());
+        sessionStore.insert(session);
+        metadataStore.addSession("e1", "s1");
+
+        scheduler.runEviction();
+
+        assertThat(cacheStore.get("e1", "tenant-1")).isNull();
+    }
+
 
     private CachedEntity expiredEntity(String id, String tenantId) {
         return new CachedEntity(id, "Test", new Coordinates(51.5, -0.1),
