@@ -7,8 +7,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -116,6 +116,19 @@ public class EntityMetadataStore {
             return sessions;
         } catch (SQLException e) { throw new RuntimeException(e); }
     }
+
+    public Set<String> entitiesForSession(String sessionId) {
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT entity_id FROM entity_sessions WHERE session_id = ?")) {
+            ps.setString(1, sessionId);
+            ResultSet rs       = ps.executeQuery();
+            var       entities = new LinkedHashSet<String>();
+            while (rs.next()) {entities.add(rs.getString("entity_id"));}
+            return entities;
+        } catch (SQLException e) {throw new RuntimeException(e);}
+    }
+
 
     private EntityMetadata mapRow(ResultSet rs) throws SQLException {
         String detailFetched = rs.getString("detail_fetched_at");

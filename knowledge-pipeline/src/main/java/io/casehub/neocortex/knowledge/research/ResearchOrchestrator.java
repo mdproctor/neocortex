@@ -1,8 +1,12 @@
 package io.casehub.neocortex.knowledge.research;
 
+import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.ResearchSession;
 import io.casehub.neocortex.knowledge.ResearchSessionService;
 import io.casehub.neocortex.knowledge.ResearchState;
+import io.casehub.neocortex.knowledge.SpatialCacheStore;
+import io.casehub.neocortex.knowledge.cache.CacheDecayPolicy;
+import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
 import io.casehub.neocortex.mindmap.MindMapStore;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphInput;
@@ -10,17 +14,27 @@ import io.casehub.neocortex.mindmap.SubgraphTypes;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public class ResearchOrchestrator implements ResearchSessionService {
 
     private final ResearchSessionStore sessionStore;
     private final MindMapStore mindMapStore;
+    private final SpatialCacheStore cacheStore;
+    private final EntityMetadataStore metadataStore;
+    private final CacheDecayPolicy decayPolicy;
 
     public ResearchOrchestrator(ResearchSessionStore sessionStore,
-                                 MindMapStore mindMapStore) {
+                                 MindMapStore mindMapStore,
+                                 SpatialCacheStore cacheStore,
+                                 EntityMetadataStore metadataStore,
+                                 CacheDecayPolicy decayPolicy) {
         this.sessionStore = sessionStore;
         this.mindMapStore = mindMapStore;
+        this.cacheStore = cacheStore;
+        this.metadataStore = metadataStore;
+        this.decayPolicy = decayPolicy;
     }
 
     @Override
@@ -49,7 +63,18 @@ public class ResearchOrchestrator implements ResearchSessionService {
 
     @Override
     public void resume(String sessionId) {
-        sessionStore.updateState(sessionId, ResearchState.ACTIVE, Instant.now());
+        Instant now = Instant.now();
+        sessionStore.updateState(sessionId, ResearchState.ACTIVE, now);
+        var session = sessionStore.get(sessionId);
+        if (session.isEmpty()) {return;}
+        Set<String> entityIds = metadataStore.entitiesForSession(sessionId);
+        for (String entityId : entityIds) {
+            CachedEntity entity = cacheStore.get(entityId, session.get().tenantId());
+            if (entity != null) {
+                Instant newExpiry = now.plus(decayPolicy.ttlFor(entity));
+                cacheStore.expire(entityId, newExpiry, session.get().tenantId());
+            }
+        }
     }
 
     @Override

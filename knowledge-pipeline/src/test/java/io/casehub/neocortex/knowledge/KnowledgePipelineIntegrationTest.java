@@ -60,7 +60,8 @@ class KnowledgePipelineIntegrationTest {
         metadataStore = new EntityMetadataStore(pipelineDs);
         var sessionStore = new ResearchSessionStore(researchDs);
         mindMap = new InMemoryMindMapStore();
-        researchOrchestrator = new ResearchOrchestrator(sessionStore, mindMap);
+        researchOrchestrator = new ResearchOrchestrator(sessionStore, mindMap,
+            cacheStore, metadataStore, new CacheDecayPolicy());
         var promoter = new EntityPromoter(mindMap, cacheStore, dedupStore, sessionStore);
         var resolutionEngine = new EntityResolutionEngine(new PlaceMatcher());
 

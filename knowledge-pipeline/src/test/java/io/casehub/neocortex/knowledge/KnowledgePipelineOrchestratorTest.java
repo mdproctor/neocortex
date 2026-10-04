@@ -51,7 +51,8 @@ class KnowledgePipelineOrchestratorTest {
         var metadataStore = new EntityMetadataStore(pipelineDs);
         var sessionStore = new ResearchSessionStore(researchDs);
         var mindMap = new InMemoryMindMapStore();
-        var researchOrchestrator = new ResearchOrchestrator(sessionStore, mindMap);
+        var researchOrchestrator = new ResearchOrchestrator(sessionStore, mindMap,
+            cacheStore, metadataStore, new CacheDecayPolicy());
         var promoter = new EntityPromoter(mindMap, cacheStore, dedupStore, sessionStore);
         var resolutionEngine = new EntityResolutionEngine(new PlaceMatcher());
 
