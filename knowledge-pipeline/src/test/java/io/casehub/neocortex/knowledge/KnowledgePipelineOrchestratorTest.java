@@ -67,6 +67,7 @@ class KnowledgePipelineOrchestratorTest {
             resolutionEngine,
             promoter,
             new CacheDecayPolicy(),
+            new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
             6
         );
     }

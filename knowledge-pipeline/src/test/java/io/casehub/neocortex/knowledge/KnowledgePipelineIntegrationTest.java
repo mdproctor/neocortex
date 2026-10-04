@@ -81,7 +81,8 @@ class KnowledgePipelineIntegrationTest {
         orchestrator = new KnowledgePipelineOrchestrator(
             List.of(provider), cacheStore, queryCache, dedupStore,
             metadataStore, resolutionEngine, promoter,
-            new CacheDecayPolicy(), 6);
+            new CacheDecayPolicy(),
+            new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(), 6);
     }
 
     @AfterEach

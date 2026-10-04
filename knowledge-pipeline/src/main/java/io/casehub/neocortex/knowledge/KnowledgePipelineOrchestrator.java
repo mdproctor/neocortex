@@ -39,6 +39,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
     private final EntityResolutionEngine resolutionEngine;
     private final EntityPromoter promoter;
     private final CacheDecayPolicy decayPolicy;
+    private final SubsumptionRule subsumptionRule;
     private final int geohashPrecision;
 
     public KnowledgePipelineOrchestrator(
@@ -50,6 +51,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             EntityResolutionEngine resolutionEngine,
             EntityPromoter promoter,
             CacheDecayPolicy decayPolicy,
+            SubsumptionRule subsumptionRule,
             int geohashPrecision) {
         this.providers = providers;
         this.cacheStore = cacheStore;
@@ -59,6 +61,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
         this.resolutionEngine = resolutionEngine;
         this.promoter = promoter;
         this.decayPolicy = decayPolicy;
+        this.subsumptionRule = subsumptionRule;
         this.geohashPrecision = geohashPrecision;
     }
 
@@ -85,6 +88,25 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
                         metadataStore.addSession(e.id(), researchSessionId));
                 }
                 return cached;
+            }
+        }
+
+        List<QueryCacheStore.QueryCacheEntry> cached = queryCache.listForTenant(tenantId);
+        for (var entry : cached) {
+            List<CachedEntity> broaderEntities = new ArrayList<>();
+            for (String eid : entry.entityIds()) {
+                CachedEntity e = cacheStore.get(eid, tenantId);
+                if (e != null) broaderEntities.add(e);
+            }
+            if (broaderEntities.isEmpty()) continue;
+            NormalizedQuery broaderNormalized = entry.toNormalizedQuery();
+            var subsumed = subsumptionRule.subsume(normalized, broaderEntities, broaderNormalized);
+            if (subsumed.isPresent()) {
+                List<CachedEntity> result = subsumed.get();
+                if (researchSessionId != null) {
+                    result.forEach(e -> metadataStore.addSession(e.id(), researchSessionId));
+                }
+                return result;
             }
         }
 
@@ -129,7 +151,29 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
 
         Instant searchExpiresAt = now.plus(decayPolicy.searchResultsTtl());
         List<String> entityIds = resolved.stream().map(CachedEntity::id).toList();
-        queryCache.record(normalized.cacheKey(), tenantId, entityIds, searchExpiresAt);
+        String queryType = switch (query) {
+            case KnowledgeQuery.TextSearch ignored -> "TEXT";
+            case KnowledgeQuery.NearbySearch ignored -> "NEARBY";
+            case KnowledgeQuery.CategorySearch ignored -> "CATEGORY";
+        };
+        Double lat = switch (query) {
+            case KnowledgeQuery.NearbySearch n -> n.center().lat();
+            case KnowledgeQuery.CategorySearch c -> c.center().lat();
+            default -> null;
+        };
+        Double lng = switch (query) {
+            case KnowledgeQuery.NearbySearch n -> n.center().lng();
+            case KnowledgeQuery.CategorySearch c -> c.center().lng();
+            default -> null;
+        };
+        Integer radius = switch (query) {
+            case KnowledgeQuery.NearbySearch n -> n.radiusMeters();
+            case KnowledgeQuery.CategorySearch c -> c.radiusMeters();
+            default -> null;
+        };
+        String cat = query instanceof KnowledgeQuery.CategorySearch c ? c.category() : null;
+        queryCache.record(normalized.cacheKey(), tenantId, entityIds, searchExpiresAt,
+            queryType, lat, lng, radius, cat);
 
         return resolved;
     }
