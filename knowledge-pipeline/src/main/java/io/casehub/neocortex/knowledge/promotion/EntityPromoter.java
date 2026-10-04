@@ -8,12 +8,11 @@ import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
 import io.casehub.neocortex.mindmap.EdgeInput;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapStore;
-import io.casehub.neocortex.mindmap.MindMapSubgraph;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.NodeRef;
 import io.casehub.neocortex.mindmap.NodeUpdate;
-import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
+import io.casehub.neocortex.mindmap.intelligence.SubgraphUtils;
 import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
 
 import java.util.HashMap;
@@ -97,7 +96,7 @@ public class EntityPromoter {
     }
 
     private String createNewPlaceNode(CachedEntity entity, String tenantId) {
-        String subgraphId = ensureSubgraph(SubgraphTypes.PLACE, tenantId);
+        String subgraphId = SubgraphUtils.ensureSubgraph(mindMapStore, SubgraphTypes.PLACE, tenantId);
 
         Map<String, String> props = new HashMap<>();
         if (entity.coordinates() != null) {
@@ -129,12 +128,5 @@ public class EntityPromoter {
             request.tenantId());
     }
 
-    private String ensureSubgraph(String type, String tenantId) {
-        return mindMapStore.listSubgraphs(tenantId).stream()
-            .filter(s -> type.equals(s.type()))
-            .map(MindMapSubgraph::id)
-            .findFirst()
-            .orElseGet(() -> mindMapStore.createSubgraph(
-                new SubgraphInput(type, type, null), tenantId));
-    }
+
 }

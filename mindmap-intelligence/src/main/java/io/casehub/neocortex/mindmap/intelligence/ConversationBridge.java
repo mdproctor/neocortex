@@ -3,10 +3,8 @@ package io.casehub.neocortex.mindmap.intelligence;
 import io.casehub.neocortex.cognitive.ConfidenceOrigin;
 import io.casehub.neocortex.mindmap.MindMapConfidenceDefaults;
 import io.casehub.neocortex.mindmap.MindMapStore;
-import io.casehub.neocortex.mindmap.MindMapSubgraph;
 import io.casehub.neocortex.mindmap.MutationContext;
 import io.casehub.neocortex.mindmap.NodeInput;
-import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import io.casehub.neocortex.mindmap.intelligence.consolidation.RetrievalAccessTracker;
 import io.casehub.platform.api.identity.PrincipalId;
@@ -108,12 +106,6 @@ public class ConversationBridge {
     }
 
     private String findOrCreateGeneralSubgraph(String tenantId) {
-        return store.listSubgraphs(tenantId).stream()
-            .filter(sg -> SubgraphTypes.GENERAL.equals(sg.type()))
-            .map(MindMapSubgraph::id)
-            .findFirst()
-            .orElseGet(() -> store.createSubgraph(
-                new SubgraphInput("General", SubgraphTypes.GENERAL, null),
-                tenantId));
+        return SubgraphUtils.ensureSubgraph(store, "General", SubgraphTypes.GENERAL, tenantId);
     }
 }

@@ -4,7 +4,6 @@ import io.casehub.neocortex.mindmap.EdgeInput;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapStore;
 import io.casehub.neocortex.mindmap.NodeInput;
-import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -32,7 +31,7 @@ public class CheckInService {
     }
 
     private String resolveOrCreatePlace(CheckInRequest request, String tenantId) {
-        String subgraphId = ensureSubgraph(SubgraphTypes.PLACE, tenantId);
+        String subgraphId = SubgraphUtils.ensureSubgraph(store, SubgraphTypes.PLACE, tenantId);
         MindMapNode existing = store.resolveNode(request.placeName(), subgraphId, tenantId);
         if (existing != null) {
             return existing.id();
@@ -46,7 +45,7 @@ public class CheckInService {
     }
 
     private String createActivity(CheckInRequest request, String placeNodeId, String tenantId) {
-        String subgraphId = ensureSubgraph(SubgraphTypes.ACTIVITY, tenantId);
+        String subgraphId = SubgraphUtils.ensureSubgraph(store, SubgraphTypes.ACTIVITY, tenantId);
         Map<String, String> props = new HashMap<>();
         if (request.date() != null) props.put("date", request.date().toString());
         if (request.activityType() != null) props.put("activityType", request.activityType());
@@ -67,7 +66,7 @@ public class CheckInService {
 
     private List<String> linkParticipants(CheckInRequest request, String activityNodeId, String tenantId) {
         List<String> edgeIds = new ArrayList<>();
-        String personSubgraphId = ensureSubgraph(SubgraphTypes.PERSON, tenantId);
+        String personSubgraphId = SubgraphUtils.ensureSubgraph(store, SubgraphTypes.PERSON, tenantId);
         for (var participant : request.participants()) {
             String personId = resolveOrCreatePerson(participant.name(), personSubgraphId, tenantId);
             String edgeId = store.addEdge(
@@ -90,12 +89,4 @@ public class CheckInService {
             tenantId);
     }
 
-    private String ensureSubgraph(String type, String tenantId) {
-        return store.listSubgraphs(tenantId).stream()
-            .filter(s -> type.equals(s.type()))
-            .map(s -> s.id())
-            .findFirst()
-            .orElseGet(() -> store.createSubgraph(
-                new SubgraphInput(type, type, null), tenantId));
-    }
 }

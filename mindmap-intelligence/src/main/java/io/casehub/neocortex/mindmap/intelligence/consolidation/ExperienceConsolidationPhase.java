@@ -19,8 +19,8 @@ import io.casehub.neocortex.mindmap.MindMapSubgraph;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.NodeUpdate;
 import io.casehub.neocortex.mindmap.SignalCategory;
-import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
+import io.casehub.neocortex.mindmap.intelligence.SubgraphUtils;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -252,13 +252,7 @@ public class ExperienceConsolidationPhase implements ConsolidationPhase {
     }
 
     private String findOrCreateCognitiveSubgraph(String tenantId) {
-        return mindMapStore.listSubgraphs(tenantId).stream()
-            .filter(sg -> SubgraphTypes.COGNITIVE.equals(sg.type()))
-            .map(MindMapSubgraph::id)
-            .findFirst()
-            .orElseGet(() -> mindMapStore.createSubgraph(
-                new SubgraphInput("Cognitive", SubgraphTypes.COGNITIVE, null),
-                tenantId));
+        return SubgraphUtils.ensureSubgraph(mindMapStore, "Cognitive", SubgraphTypes.COGNITIVE, tenantId);
     }
 
     private Set<String> loadExistingSourceMemoryIds(String tenantId) {
@@ -301,12 +295,6 @@ public class ExperienceConsolidationPhase implements ConsolidationPhase {
     }
 
     private String findOrCreateTypeSystemSubgraph(String tenantId) {
-        return mindMapStore.listSubgraphs(tenantId).stream()
-            .filter(sg -> SubgraphTypes.TYPE_SYSTEM.equals(sg.type()))
-            .map(MindMapSubgraph::id)
-            .findFirst()
-            .orElseGet(() -> mindMapStore.createSubgraph(
-                new SubgraphInput("Type System", SubgraphTypes.TYPE_SYSTEM, null),
-                tenantId));
+        return SubgraphUtils.ensureSubgraph(mindMapStore, "Type System", SubgraphTypes.TYPE_SYSTEM, tenantId);
     }
 }
