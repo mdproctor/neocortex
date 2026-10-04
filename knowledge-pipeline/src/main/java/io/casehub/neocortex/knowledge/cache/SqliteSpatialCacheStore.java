@@ -254,7 +254,7 @@ public class SqliteSpatialCacheStore implements SpatialCacheStore {
             ps.setString(5, entity.externalId());
             ps.setString(6, serializeProperties(entity.properties()));
             ps.setString(7, entity.fetchedAt() != null ? entity.fetchedAt().toString() : null);
-            ps.setString(8, null);
+            ps.setString(8, entity.detailFetchedAt() != null ? entity.detailFetchedAt().toString() : null);
             ps.setInt(9, entity.hasDetail() ? 1 : 0);
             ps.setString(10, tenantId);
             if (entity.coordinates() != null) {
@@ -312,6 +312,10 @@ public class SqliteSpatialCacheStore implements SpatialCacheStore {
         Instant fetchedAt = (fetchedAtStr != null && !fetchedAtStr.isEmpty())
             ? Instant.parse(fetchedAtStr) : null;
 
+        String detailFetchedAtStr = rs.getString("detail_fetched_at");
+        Instant detailFetchedAt = (detailFetchedAtStr != null && !detailFetchedAtStr.isEmpty())
+            ? Instant.parse(detailFetchedAtStr) : null;
+
         return new CachedEntity(
             rs.getString("entity_id"),
             rs.getString("name"),
@@ -321,6 +325,7 @@ public class SqliteSpatialCacheStore implements SpatialCacheStore {
             rs.getString("external_id"),
             parseProperties(rs.getString("properties")),
             fetchedAt,
+            detailFetchedAt,
             expiresAt,
             Set.of(),
             rs.getInt("has_detail") == 1

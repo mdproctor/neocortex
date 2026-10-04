@@ -38,7 +38,7 @@ class EntityResolutionEngineTest {
                                  String source, String extId) {
         return new CachedEntity(id, name, new Coordinates(lat, lng),
             "restaurant", source, extId, Map.of(),
-            Instant.now(), Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
     }
 
     @Test
@@ -91,7 +91,7 @@ class EntityResolutionEngineTest {
     void entityWithoutCoordinatesIsPassedThrough() {
         var entity = new CachedEntity("e1", "Unknown Place", null,
             "restaurant", "google", "g1", Map.of(),
-            Instant.now(), Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
         var result = engine.resolve(List.of(entity), cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(1);
     }

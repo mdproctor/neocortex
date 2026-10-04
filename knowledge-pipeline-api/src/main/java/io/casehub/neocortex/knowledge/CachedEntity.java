@@ -16,6 +16,7 @@ public record CachedEntity(
     String externalId,
     Map<String, String> properties,
     Instant fetchedAt,
+    Instant detailFetchedAt,
     Instant expiresAt,
     Set<String> sessionIds,
     boolean hasDetail

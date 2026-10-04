@@ -2,7 +2,6 @@ package io.casehub.neocortex.knowledge;
 
 import io.casehub.connectors.Page;
 import io.casehub.connectors.PageRequest;
-import io.casehub.connectors.location.model.Coordinates;
 import io.casehub.connectors.location.model.Place;
 import io.casehub.connectors.location.spi.LocationPlatform;
 import io.casehub.neocortex.knowledge.cache.CacheDecayPolicy;
@@ -133,7 +132,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
 
             entities.add(new CachedEntity(
                 entityId, place.name(), place.location(), category,
-                providerId, place.id(), props, now, expiresAt,
+                providerId, place.id(), props, now, null, expiresAt,
                 researchSessionId != null ? Set.of(researchSessionId) : Set.of(),
                 false));
         }
@@ -185,7 +184,56 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
 
     @Override
     public void refreshStale(String tenantId) {
-        // placeholder — will scan for stale fields and trigger selective re-fetch
+        List<CachedEntity> entities  = cacheStore.listAll(tenantId);
+        Instant            now       = Instant.now();
+        int                refreshed = 0;
+
+        for (CachedEntity entity : entities) {
+            try {
+                var stale = decayPolicy.staleGroups(entity, now);
+                if (stale.isEmpty()) {continue;}
+
+                if (stale.contains(CacheDecayPolicy.StaleFieldGroup.DETAIL)) {
+                    for (LocationPlatform provider : providers) {
+                        if (!provider.supports(LocationPlatform.PlaceDetails.class)) {continue;}
+                        if (!provider.id().equals(entity.source())) {continue;}
+                        try {
+                            var details = provider.placeDetails("pipeline")
+                                                    .get(entity.externalId());
+                            if (details != null) {
+                                Map<String, String> props = new HashMap<>(entity.properties());
+                                if (details.phoneNumber() != null) {props.put("phone", details.phoneNumber());}
+                                if (details.website() != null) {props.put("website", details.website());}
+                                if (details.formattedAddress() != null) {
+                                    props.put("address", details.formattedAddress());
+                                }
+                                if (details.priceLevel() != null) {
+                                    props.put("priceLevel", details.priceLevel().name());
+                                }
+                                if (details.rating() != null) {props.put("rating", String.valueOf(details.rating()));}
+
+                                CachedEntity updated = new CachedEntity(
+                                        entity.id(), entity.name(), entity.coordinates(),
+                                        entity.category(), entity.source(), entity.externalId(),
+                                        props, entity.fetchedAt(), now, entity.expiresAt(),
+                                        entity.sessionIds(), true);
+                                cacheStore.set(updated, tenantId);
+                                refreshed++;
+                            }
+                        } catch (Exception e) {
+                            LOG.log(Level.WARNING, "Detail refresh failed for " + entity.id(), e);
+                        }
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Refresh failed for entity " + entity.id(), e);
+            }
+        }
+
+        if (refreshed > 0) {
+            LOG.info("Refreshed " + refreshed + " stale entities for tenant " + tenantId);
+        }
     }
 
     record ProviderPlace(String providerId, Place place) {}

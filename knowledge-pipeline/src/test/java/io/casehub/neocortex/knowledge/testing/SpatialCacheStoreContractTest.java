@@ -28,7 +28,7 @@ public abstract class SpatialCacheStoreContractTest {
     protected CachedEntity entity(String id, double lat, double lng) {
         return new CachedEntity(id, "Place " + id, new Coordinates(lat, lng),
             "restaurant", "google", "ext-" + id, Map.of(),
-            Instant.now(), Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
     }
 
     @Test
@@ -94,10 +94,10 @@ public abstract class SpatialCacheStoreContractTest {
     void nearbyFiltersByCategory() {
         var italian = new CachedEntity("e1", "Ondine", new Coordinates(51.5, -0.1),
             "italian", "google", "ext-1", Map.of(),
-            Instant.now(), Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
         var coffee = new CachedEntity("e2", "Costa", new Coordinates(51.50001, -0.10001),
             "coffee", "google", "ext-2", Map.of(),
-            Instant.now(), Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
         store.set(italian, "t1");
         store.set(coffee, "t1");
 
@@ -110,7 +110,7 @@ public abstract class SpatialCacheStoreContractTest {
     void findExpiredReturnsExpiredEntities() {
         var expired = new CachedEntity("e1", "Old", new Coordinates(51.5, -0.1),
             "restaurant", "google", "ext-1", Map.of(),
-            Instant.now().minusSeconds(86400), Instant.now().minusSeconds(1), Set.of(), false);
+            Instant.now().minusSeconds(86400), null, Instant.now().minusSeconds(1), Set.of(), false);
         store.set(expired, "t1");
         assertThat(store.findExpired("t1", Instant.now())).contains("e1");
     }

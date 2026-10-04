@@ -72,7 +72,7 @@ public class InMemorySpatialCacheStore implements SpatialCacheStore {
         entities.put(entityId, new CachedEntity(
             existing.id(), existing.name(), existing.coordinates(),
             existing.category(), existing.source(), existing.externalId(),
-            existing.properties(), existing.fetchedAt(), expiresAt,
+            existing.properties(), existing.fetchedAt(), existing.detailFetchedAt(), expiresAt,
             existing.sessionIds(), existing.hasDetail()));
     }
 

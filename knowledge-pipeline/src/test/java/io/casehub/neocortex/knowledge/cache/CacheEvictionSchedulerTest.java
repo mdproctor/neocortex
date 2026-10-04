@@ -166,7 +166,7 @@ class CacheEvictionSchedulerTest {
                 "e1", "Old Place", new io.casehub.connectors.location.model.Coordinates(51.5, -0.1),
                 "restaurant", "google", "ext-1", Map.of(),
                 Instant.now().minus(Duration.ofDays(100)),
-                Instant.now().plusSeconds(86400),
+                null, Instant.now().plusSeconds(86400),
                 Set.of(), false);
         cacheStore.set(ancient, "tenant-1");
 
@@ -186,14 +186,14 @@ class CacheEvictionSchedulerTest {
         return new CachedEntity(id, "Test", new Coordinates(51.5, -0.1),
             "restaurant", "google", "g-" + id, Map.of(),
             Instant.now().minus(Duration.ofDays(2)),
-            Instant.now().minus(Duration.ofHours(1)),
+            null, Instant.now().minus(Duration.ofHours(1)),
             Set.of(), false);
     }
 
     private CachedEntity validEntity(String id, String tenantId) {
         return new CachedEntity(id, "Test", new Coordinates(51.5, -0.1),
             "restaurant", "google", "g-" + id, Map.of(),
-            Instant.now(), Instant.now().plus(Duration.ofDays(30)),
+            Instant.now(), null, Instant.now().plus(Duration.ofDays(30)),
             Set.of(), false);
     }
 }

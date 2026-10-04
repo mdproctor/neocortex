@@ -51,7 +51,7 @@ class EntityPromoterTest {
         return new CachedEntity(id, "Ondine", new Coordinates(55.9505, -3.1915),
             "restaurant", "google", "ChIJ-ondine",
             Map.of("phone", "+44 131 226 1888", "rating", "4.5"),
-            Instant.now(), Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
     }
 
     @Test

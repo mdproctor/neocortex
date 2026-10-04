@@ -98,7 +98,7 @@ public class EntityResolutionEngine {
         return new CachedEntity(
             primary.id(), primary.name(), primary.coordinates(),
             primary.category(), primary.source(), primary.externalId(),
-            mergedProps, primary.fetchedAt(), primary.expiresAt(),
+            mergedProps, primary.fetchedAt(), primary.detailFetchedAt(), primary.expiresAt(),
             primary.sessionIds(), primary.hasDetail() || existing.hasDetail());
     }
 }
