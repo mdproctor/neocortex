@@ -101,7 +101,7 @@ Five related capabilities in one repo:
 | Module | artifactId | What you get |
 |--------|-----------|-------------|
 | `knowledge-pipeline-api` | `casehub-neocortex-knowledge-pipeline-api` | `KnowledgePipelineService` SPI (search + promote), `SpatialCacheStore` SPI, `EntityMatcher<T>` SPI, `SubsumptionRule` SPI, `QueryNormalizer` SPI, `ResearchSessionService` SPI, `KnowledgeQuery` sealed hierarchy (TextSearch, NearbySearch, CategorySearch), value types |
-| `knowledge-pipeline` | `casehub-neocortex-knowledge-pipeline` | `KnowledgePipelineOrchestrator`, `SqliteSpatialCacheStore` (R*Tree), `InMemorySpatialCacheStore`, `SpatialSubsumptionRule`, `EntityResolutionEngine`, `PlaceMatcher`, `EntityPromoter`, `ResearchOrchestrator`, `CacheEvictionScheduler`, `CacheDecayPolicy`, `KnowledgePipelineMetrics` |
+| `knowledge-pipeline` | `casehub-neocortex-knowledge-pipeline` | CDI-ready runtime — `KnowledgePipelineOrchestrator`, `SqliteSpatialCacheStore` (R*Tree), `InMemorySpatialCacheStore` (@Alternative), `SpatialSubsumptionRule`, `EntityResolutionEngine`, `PlaceMatcher`, `EntityPromoter`, `ResearchOrchestrator`, `CacheEvictionScheduler` (@Scheduled via `CacheEvictionTask`), `CacheDecayPolicy`, `KnowledgePipelineMetrics` (Micrometer), `KnowledgePipelineConfig` (@ConfigMapping `casehub.knowledge.*`), `KnowledgePipelineDefaultBeans` (CDI producers). Auto-discovers `LocationPlatform` providers via `Instance<LocationPlatform>`. |
 
 ### Cognitive Index
 
