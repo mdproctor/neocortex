@@ -93,7 +93,7 @@ class ResearchOrchestratorTest {
         Instant shortExpiry = Instant.now().plusSeconds(60);
         var entity = new CachedEntity("e1", "Place", new Coordinates(51.5, -0.1),
                                       "restaurant", "google", "ext-1", Map.of(),
-                                      Instant.now(), null, shortExpiry, Set.of(), false);
+                                      Instant.now(), null, shortExpiry, Set.of(), false, null);
         cacheStore.set(entity, TENANT);
         metadataStore.addSession("e1", session.id());
 

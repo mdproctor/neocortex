@@ -333,7 +333,8 @@ public class SqliteSpatialCacheStore implements SpatialCacheStore {
             detailFetchedAt,
             expiresAt,
             Set.of(),
-            rs.getInt("has_detail") == 1
+            rs.getInt("has_detail") == 1,
+            "location"
         );
     }
 

@@ -20,7 +20,7 @@ public abstract class EntityMatcherContractTest {
                                    String source, String extId, Map<String, String> props) {
         return new CachedEntity(id, name, new Coordinates(lat, lng), "restaurant",
             source, extId, props, Instant.now(),
-            null, Instant.now().plusSeconds(86400), Set.of(), false);
+            null, Instant.now().plusSeconds(86400), Set.of(), false, null);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package io.casehub.neocortex.knowledge.resolution;
 
 import io.casehub.connectors.location.model.Coordinates;
+import io.casehub.neocortex.knowledge.BlockingStrategy;
 import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.cache.InMemorySpatialCacheStore;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
@@ -20,12 +21,14 @@ class EntityResolutionEngineTest {
 
     private EntityResolutionEngine engine;
     private InMemorySpatialCacheStore cache;
+    private BlockingStrategy blocking;
     private DedupIndexStore dedup;
 
     @BeforeEach
     void setUp() {
         engine = new EntityResolutionEngine(new PlaceMatcher());
         cache = new InMemorySpatialCacheStore();
+        blocking = new SpatialBlockingStrategy(cache, 200);
         dedup = new DedupIndexStore(":memory:");
     }
 
@@ -38,14 +41,14 @@ class EntityResolutionEngineTest {
                                  String source, String extId) {
         return new CachedEntity(id, name, new Coordinates(lat, lng),
             "restaurant", source, extId, Map.of(),
-            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false, null);
     }
 
     @Test
     void knownEntityInDedupIndexIsPassedThrough() {
         dedup.upsert("google", "ChIJ123", "e1");
         var entities = List.of(entity("e1", "Ondine", 51.5, -0.1, "google", "ChIJ123"));
-        var result = engine.resolve(entities, cache, dedup, "t1");
+        var result = engine.resolve(entities, blocking, cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(1);
         assertThat(result.signals()).isEmpty();
     }
@@ -57,7 +60,7 @@ class EntityResolutionEngineTest {
 
         var newEntity = entity("e-new", "Ondine", 51.50001, -0.10001,
             "tripadvisor", "t1-ext");
-        var result = engine.resolve(List.of(newEntity), cache, dedup, "t1");
+        var result = engine.resolve(List.of(newEntity), blocking, cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(1);
         assertThat(result.signals()).isEmpty();
     }
@@ -70,7 +73,7 @@ class EntityResolutionEngineTest {
 
         var newEntity = entity("e-new", "Ondine Seafood Bar",
             51.5002, -0.1002, "tripadvisor", "t1-ext");
-        var result = engine.resolve(List.of(newEntity), cache, dedup, "t1");
+        var result = engine.resolve(List.of(newEntity), blocking, cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(1);
     }
 
@@ -81,7 +84,7 @@ class EntityResolutionEngineTest {
 
         var newEntity = entity("e-new", "Starbucks", 51.5005, -0.1005,
             "tripadvisor", "t1-ext");
-        var result = engine.resolve(List.of(newEntity), cache, dedup, "t1");
+        var result = engine.resolve(List.of(newEntity), blocking, cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(1);
         assertThat(result.resolved().get(0).name()).isEqualTo("Starbucks");
         assertThat(result.signals()).isEmpty();
@@ -91,8 +94,8 @@ class EntityResolutionEngineTest {
     void entityWithoutCoordinatesIsPassedThrough() {
         var entity = new CachedEntity("e1", "Unknown Place", null,
             "restaurant", "google", "g1", Map.of(),
-            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false);
-        var result = engine.resolve(List.of(entity), cache, dedup, "t1");
+            Instant.now(), null, Instant.now().plusSeconds(86400), Set.of(), false, null);
+        var result = engine.resolve(List.of(entity), blocking, cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(1);
     }
 
@@ -103,7 +106,7 @@ class EntityResolutionEngineTest {
             entity("e2", "Costa", 51.6, -0.2, "google", "g2"),
             entity("e3", "Starbucks", 51.7, -0.3, "google", "g3")
         );
-        var result = engine.resolve(entities, cache, dedup, "t1");
+        var result = engine.resolve(entities, blocking, cache, dedup, "t1");
         assertThat(result.resolved()).hasSize(3);
     }
 }

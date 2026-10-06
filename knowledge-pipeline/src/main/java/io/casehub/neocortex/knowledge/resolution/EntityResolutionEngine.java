@@ -1,11 +1,11 @@
 package io.casehub.neocortex.knowledge.resolution;
 
-import io.casehub.neocortex.knowledge.CacheFilter;
+import io.casehub.neocortex.knowledge.BlockingStrategy;
+import io.casehub.neocortex.knowledge.CacheStore;
 import io.casehub.neocortex.knowledge.CachedEntity;
 import io.casehub.neocortex.knowledge.EntityMatcher;
 import io.casehub.neocortex.knowledge.MatchResult;
 import io.casehub.neocortex.knowledge.MatchTier;
-import io.casehub.neocortex.knowledge.SpatialCacheStore;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
 import io.casehub.neocortex.mindmap.AttentionSignal;
 import io.casehub.neocortex.mindmap.SignalCategory;
@@ -17,22 +17,19 @@ import java.util.function.Consumer;
 public class EntityResolutionEngine {
 
     private final EntityMatcher<CachedEntity> matcher;
-    private final int blockingRadiusMeters;
     private final double autoMergeThreshold;
     private final double signalThreshold;
 
     public EntityResolutionEngine(EntityMatcher<CachedEntity> matcher,
-                                   int blockingRadiusMeters,
                                    double autoMergeThreshold,
                                    double signalThreshold) {
         this.matcher = matcher;
-        this.blockingRadiusMeters = blockingRadiusMeters;
         this.autoMergeThreshold = autoMergeThreshold;
         this.signalThreshold = signalThreshold;
     }
 
     public EntityResolutionEngine(EntityMatcher<CachedEntity> matcher) {
-        this(matcher, 200, 0.8, 0.6);
+        this(matcher, 0.8, 0.6);
     }
 
     public record ResolutionResult(
@@ -41,7 +38,8 @@ public class EntityResolutionEngine {
     ) {}
 
     public ResolutionResult resolve(List<CachedEntity> newEntities,
-                                     SpatialCacheStore cacheStore,
+                                     BlockingStrategy blockingStrategy,
+                                     CacheStore cacheStore,
                                      DedupIndexStore dedupStore,
                                      String tenantId) {
         List<CachedEntity> resolved = new ArrayList<>();
@@ -54,14 +52,7 @@ public class EntityResolutionEngine {
                 continue;
             }
 
-            if (entity.coordinates() == null) {
-                resolved.add(entity);
-                continue;
-            }
-
-            List<CachedEntity> candidates = cacheStore.nearby(
-                entity.coordinates(), blockingRadiusMeters,
-                CacheFilter.none(), tenantId);
+            List<CachedEntity> candidates = blockingStrategy.findCandidates(entity, cacheStore, tenantId);
 
             CachedEntity bestMatch = null;
             MatchResult bestResult = null;
@@ -99,6 +90,6 @@ public class EntityResolutionEngine {
             primary.id(), primary.name(), primary.coordinates(),
             primary.category(), primary.source(), primary.externalId(),
             mergedProps, primary.fetchedAt(), primary.detailFetchedAt(), primary.expiresAt(),
-            primary.sessionIds(), primary.hasDetail() || existing.hasDetail());
+            primary.sessionIds(), primary.hasDetail() || existing.hasDetail(), primary.domain());
     }
 }

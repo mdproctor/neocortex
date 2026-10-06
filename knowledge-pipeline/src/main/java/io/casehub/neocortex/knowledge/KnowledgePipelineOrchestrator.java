@@ -11,6 +11,7 @@ import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
 import io.casehub.neocortex.knowledge.cache.QueryCacheStore;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
 import io.casehub.neocortex.knowledge.normalization.ExpansionStrategy;
+import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
 import io.casehub.neocortex.knowledge.promotion.EntityPromoter;
 import io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine;
 
@@ -45,6 +46,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
     private final TermNormalizer normalizer;
     private final ExpansionStrategy expansionStrategy;
     private final int maxVariantQueries;
+    private final BlockingStrategy blockingStrategy;
     private       KnowledgePipelineMetrics metrics;
 
 
@@ -75,6 +77,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
         this.normalizer = normalizer;
         this.expansionStrategy = expansionStrategy;
         this.maxVariantQueries = maxVariantQueries;
+        this.blockingStrategy = new SpatialBlockingStrategy(cacheStore, 200);
     }
 
     void setMetrics(KnowledgePipelineMetrics metrics) {
@@ -156,10 +159,10 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
                 entityId, place.name(), place.location(), category,
                 providerId, place.id(), props, now, null, expiresAt,
                 researchSessionId != null ? Set.of(researchSessionId) : Set.of(),
-                false));
+                false, "location"));
         }
 
-        var resolution = resolutionEngine.resolve(entities, cacheStore, dedupStore, tenantId);
+        var resolution = resolutionEngine.resolve(entities, blockingStrategy, cacheStore, dedupStore, tenantId);
         List<CachedEntity> resolved = resolution.resolved();
 
         for (CachedEntity entity : resolved) {
@@ -176,6 +179,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             case KnowledgeQuery.TextSearch ignored -> "TEXT";
             case KnowledgeQuery.NearbySearch ignored -> "NEARBY";
             case KnowledgeQuery.CategorySearch ignored -> "CATEGORY";
+            default -> "UNKNOWN";
         };
         Double lat = switch (query) {
             case KnowledgeQuery.NearbySearch n -> n.center().lat();
@@ -238,7 +242,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
                                         entity.id(), entity.name(), entity.coordinates(),
                                         entity.category(), entity.source(), entity.externalId(),
                                         props, entity.fetchedAt(), now, entity.expiresAt(),
-                                        entity.sessionIds(), true);
+                                        entity.sessionIds(), true, "location");
                                 cacheStore.set(updated, tenantId);
                                 refreshed++;
                             }
@@ -349,6 +353,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             case KnowledgeQuery.TextSearch ignored -> "TEXT";
             case KnowledgeQuery.NearbySearch ignored -> "NEARBY";
             case KnowledgeQuery.CategorySearch ignored -> "CATEGORY";
+            default -> "UNKNOWN";
         };
     }
 
@@ -376,6 +381,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
                 search.searchNearby(n.center(), n.radiusMeters(), pageRequest);
             case KnowledgeQuery.CategorySearch c ->
                 search.searchByCategory(c.category(), c.center(), c.radiusMeters(), pageRequest);
+            default -> throw new UnsupportedOperationException("Unsupported query type: " + query.getClass().getName());
         };
     }
 

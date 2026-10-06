@@ -23,7 +23,7 @@ class SqliteSpatialCacheStoreTest extends SpatialCacheStoreContractTest {
     private HikariDataSource ds;
 
     @Override
-    protected SpatialCacheStore createStore() {
+    protected SpatialCacheStore createSpatialStore() {
         ds = SqliteDataSourceFactory.create(":memory:", 3, 5000);
         SqliteDataSourceFactory.migrate(ds, "classpath:db/knowledge-pipeline");
         return new SqliteSpatialCacheStore(ds);
@@ -36,23 +36,23 @@ class SqliteSpatialCacheStoreTest extends SpatialCacheStoreContractTest {
 
     @Test
     void removeAlsoDeletesSpatialIndex() {
-        store.set(entity("e1", 55.9533, -3.1883), "t1");
-        store.remove("e1", "t1");
-        assertThat(store.nearby(new Coordinates(55.9533, -3.1883), 100,
+        spatialStore.set(entity("e1", 55.9533, -3.1883), "t1");
+        spatialStore.remove("e1", "t1");
+        assertThat(spatialStore.nearby(new Coordinates(55.9533, -3.1883), 100,
             CacheFilter.none(), "t1")).isEmpty();
     }
 
     @Test
     void setUpdatesExistingEntity() {
-        store.set(entity("e1", 55.9533, -3.1883), "t1");
+        spatialStore.set(entity("e1", 55.9533, -3.1883), "t1");
         var updated = new CachedEntity("e1", "Ondine Seafood",
             new Coordinates(55.9534, -3.1884), "restaurant",
             "google", "ext-e1", Map.of("phone", "0131 226 1888"),
             Instant.now(), null, Instant.now().plus(Duration.ofDays(30)),
-            Set.of(), true);
-        store.set(updated, "t1");
+            Set.of(), true, null);
+        spatialStore.set(updated, "t1");
 
-        var result = store.get("e1", "t1");
+        var result = spatialStore.get("e1", "t1");
         assertThat(result.name()).isEqualTo("Ondine Seafood");
         assertThat(result.hasDetail()).isTrue();
         assertThat(result.properties()).containsEntry("phone", "0131 226 1888");

@@ -21,6 +21,7 @@ public class SpatialSubsumptionRule implements SubsumptionRule {
             case KnowledgeQuery.NearbySearch narrow ->
                 tryNearbySubsumption(narrow, broaderResults, broaderQuery);
             case KnowledgeQuery.TextSearch ignored -> Optional.empty();
+            default -> Optional.empty();
         };
     }
 

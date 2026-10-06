@@ -6,6 +6,10 @@ import io.casehub.neocortex.knowledge.TermNormalizer;
 import io.casehub.neocortex.knowledge.cache.CacheDecayPolicy;
 import io.casehub.neocortex.knowledge.cache.CacheEvictionScheduler;
 import io.casehub.neocortex.knowledge.normalization.ExpansionStrategy;
+import io.casehub.neocortex.knowledge.cache.SpatialCacheKeyGenerator;
+import io.casehub.neocortex.knowledge.resolution.CompositeSearchableProvider;
+import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
+import io.casehub.neocortex.knowledge.resolution.SpatialSearchableProvider;
 import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
 import io.casehub.neocortex.knowledge.cache.QueryCacheStore;
 import io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule;
@@ -18,8 +22,10 @@ import io.casehub.neocortex.sqlite.SqliteDataSourceFactory;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import io.quarkus.arc.DefaultBean;
-import java.util.Set;
+import jakarta.inject.Named;
+import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Disposes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
@@ -121,5 +127,40 @@ public class KnowledgePipelineDefaultBeans {
         store.close();
     }
 
+    @Produces
+    @DefaultBean
+    @ApplicationScoped
+    @Named("location")
+    DomainSupport spatialDomainSupport(
+            Instance<LocationPlatform> platforms,
+            SpatialCacheStore spatialCacheStore,
+            CacheDecayPolicy decayPolicy,
+            SubsumptionRule subsumptionRule,
+            EntityMatcher<CachedEntity> entityMatcher,
+            TermNormalizer normalizer,
+            KnowledgePipelineConfig config) {
+        List<SearchableProvider> providers = platforms.stream()
+                .filter(p -> p.supports(LocationPlatform.PlaceSearch.class))
+                .map(p -> (SearchableProvider) new SpatialSearchableProvider(
+                        p, decayPolicy.coordinatesTtl()))
+                .toList();
+
+        SearchableProvider provider = providers.size() == 1
+                ? providers.get(0)
+                : new CompositeSearchableProvider("location", providers);
+
+        return new DomainSupport("location", provider,
+                new SpatialCacheKeyGenerator(config.geohashPrecision()),
+                subsumptionRule, entityMatcher,
+                new SpatialBlockingStrategy(spatialCacheStore, 200),
+                List.of(normalizer));
+    }
+
+    @Produces
+    @DefaultBean
+    @ApplicationScoped
+    DomainRegistry domainRegistry(@Any Instance<DomainSupport> domains) {
+        return new DomainRegistry(domains.stream().toList());
+    }
 
 }

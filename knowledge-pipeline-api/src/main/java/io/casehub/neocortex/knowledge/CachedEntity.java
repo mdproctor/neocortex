@@ -19,7 +19,8 @@ public record CachedEntity(
     Instant detailFetchedAt,
     Instant expiresAt,
     Set<String> sessionIds,
-    boolean hasDetail
+    boolean hasDetail,
+    String domain
 ) {
 
     public CachedEntity {

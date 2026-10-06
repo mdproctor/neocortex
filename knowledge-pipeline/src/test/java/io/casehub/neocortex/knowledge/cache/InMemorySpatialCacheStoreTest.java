@@ -6,7 +6,7 @@ import io.casehub.neocortex.knowledge.testing.SpatialCacheStoreContractTest;
 class InMemorySpatialCacheStoreTest extends SpatialCacheStoreContractTest {
 
     @Override
-    protected SpatialCacheStore createStore() {
+    protected SpatialCacheStore createSpatialStore() {
         return new InMemorySpatialCacheStore();
     }
 }

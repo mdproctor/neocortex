@@ -80,7 +80,7 @@ public class InMemorySpatialCacheStore implements SpatialCacheStore {
             existing.id(), existing.name(), existing.coordinates(),
             existing.category(), existing.source(), existing.externalId(),
             existing.properties(), existing.fetchedAt(), existing.detailFetchedAt(), expiresAt,
-            existing.sessionIds(), existing.hasDetail()));
+            existing.sessionIds(), existing.hasDetail(), existing.domain()));
     }
 
 

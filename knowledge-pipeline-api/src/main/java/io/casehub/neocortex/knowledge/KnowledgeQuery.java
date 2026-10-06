@@ -4,7 +4,9 @@ import io.casehub.connectors.location.model.Coordinates;
 
 import java.util.Objects;
 
-public sealed interface KnowledgeQuery {
+public interface KnowledgeQuery {
+
+    default String domain() { return "location"; }
 
     record TextSearch(String query, String domain) implements KnowledgeQuery {
         public TextSearch { Objects.requireNonNull(query); }

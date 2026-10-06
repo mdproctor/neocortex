@@ -167,7 +167,7 @@ class CacheEvictionSchedulerTest {
                 "restaurant", "google", "ext-1", Map.of(),
                 Instant.now().minus(Duration.ofDays(100)),
                 null, Instant.now().plusSeconds(86400),
-                Set.of(), false);
+                Set.of(), false, null);
         cacheStore.set(ancient, "tenant-1");
 
         var session = new io.casehub.neocortex.knowledge.ResearchSession(
@@ -187,13 +187,13 @@ class CacheEvictionSchedulerTest {
             "restaurant", "google", "g-" + id, Map.of(),
             Instant.now().minus(Duration.ofDays(2)),
             null, Instant.now().minus(Duration.ofHours(1)),
-            Set.of(), false);
+            Set.of(), false, null);
     }
 
     private CachedEntity validEntity(String id, String tenantId) {
         return new CachedEntity(id, "Test", new Coordinates(51.5, -0.1),
             "restaurant", "google", "g-" + id, Map.of(),
             Instant.now(), null, Instant.now().plus(Duration.ofDays(30)),
-            Set.of(), false);
+            Set.of(), false, null);
     }
 }

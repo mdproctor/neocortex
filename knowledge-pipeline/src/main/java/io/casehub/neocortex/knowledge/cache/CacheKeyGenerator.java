@@ -28,6 +28,7 @@ public final class CacheKeyGenerator {
                     + ":" + SpatialBucket.encode(
                         c.center().lat(), c.center().lng(), geohashPrecision)
                     + ":" + c.radiusMeters();
+            default -> throw new UnsupportedOperationException("Unsupported query type: " + query.getClass().getName());
         };
         return new NormalizedQuery(query, key);
     }
@@ -57,6 +58,7 @@ public final class CacheKeyGenerator {
                         c.center().lat(), c.center().lng(), geohashPrecision)
                       + ":" + c.radiusMeters();
             }
+            default -> throw new UnsupportedOperationException("Unsupported query type: " + query.getClass().getName());
         };
 
         return new NormalizationResult(
