@@ -4,8 +4,6 @@ import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
 import java.time.Duration;
-import java.util.List;
-import java.util.Optional;
 
 @ConfigMapping(prefix = "casehub.knowledge")
 public interface KnowledgePipelineConfig {
@@ -25,16 +23,6 @@ public interface KnowledgePipelineConfig {
         @WithDefault("true")
         boolean enabled();
     }
-
-    ExpansionConfig expansion();
-
-    interface ExpansionConfig {
-        Optional<List<String>> knownProviders();
-
-        @WithDefault("10")
-        int maxVariantQueries();
-    }
-
 
     interface SqliteConfig {
         @WithDefault("knowledge-pipeline.db") String path();

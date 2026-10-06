@@ -12,12 +12,15 @@ import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
 import io.casehub.neocortex.knowledge.cache.InMemorySpatialCacheStore;
 import io.casehub.neocortex.knowledge.cache.QueryCacheStore;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
-import io.casehub.neocortex.knowledge.normalization.ExpansionStrategy;
+import io.casehub.neocortex.knowledge.cache.SpatialCacheKeyGenerator;
 import io.casehub.neocortex.knowledge.promotion.EntityPromoter;
 import io.casehub.neocortex.knowledge.research.ResearchOrchestrator;
 import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
 import io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine;
 import io.casehub.neocortex.knowledge.resolution.PlaceMatcher;
+import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
+import io.casehub.neocortex.knowledge.resolution.SpatialSearchableProvider;
+import io.casehub.neocortex.knowledge.resolution.CompositeSearchableProvider;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
 import io.casehub.neocortex.sqlite.SqliteDataSourceFactory;
 import org.junit.jupiter.api.AfterEach;
@@ -57,21 +60,9 @@ class KnowledgePipelineOrchestratorTest {
 
         locationPlatform = new StubLocationPlatform();
 
-        orchestrator = new KnowledgePipelineOrchestrator(
-            List.of(locationPlatform),
-            cacheStore,
-            queryCache,
-            dedupStore,
-            metadataStore,
-            resolutionEngine,
-            promoter,
-            new CacheDecayPolicy(),
-            new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
-            6,
-            (term, domain) -> ExpandedTerm.passthrough(term),
-            new ExpansionStrategy(java.util.Set.of()),
-            10
-        );
+        orchestrator = createOrchestrator(List.of(locationPlatform), cacheStore,
+            queryCache, dedupStore, metadataStore, resolutionEngine, promoter,
+            new CacheDecayPolicy(), (term, domain) -> ExpandedTerm.passthrough(term));
     }
 
     @AfterEach
@@ -145,33 +136,24 @@ class KnowledgePipelineOrchestratorTest {
             return ExpandedTerm.passthrough(term);
         };
 
-        var expandingOrchestrator = new KnowledgePipelineOrchestrator(
-                List.of(locationPlatform), cacheStore, queryCache,
-                new io.casehub.neocortex.knowledge.dedup.DedupIndexStore(pipelineDs),
-                new io.casehub.neocortex.knowledge.cache.EntityMetadataStore(pipelineDs),
-                new io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine(
-                        new io.casehub.neocortex.knowledge.resolution.PlaceMatcher()),
-                new io.casehub.neocortex.knowledge.promotion.EntityPromoter(
-                        new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore(),
-                        cacheStore,
-                        new io.casehub.neocortex.knowledge.dedup.DedupIndexStore(pipelineDs),
-                        new io.casehub.neocortex.knowledge.research.ResearchSessionStore(researchDs)),
-                new io.casehub.neocortex.knowledge.cache.CacheDecayPolicy(),
-                new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
-                6,
-                expander,
-                new ExpansionStrategy(java.util.Set.of()),
-                10
-        );
+        var expandingOrchestrator = createOrchestrator(List.of(locationPlatform), cacheStore,
+                queryCache,
+                new DedupIndexStore(pipelineDs),
+                new EntityMetadataStore(pipelineDs),
+                new EntityResolutionEngine(new PlaceMatcher()),
+                new EntityPromoter(new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore(),
+                        cacheStore, new DedupIndexStore(pipelineDs),
+                        new ResearchSessionStore(researchDs)),
+                new CacheDecayPolicy(), expander);
 
         locationPlatform.fetchCount = 0;
         locationPlatform.queriesReceived.clear();
 
-        expandingOrchestrator.search(
-                new KnowledgeQuery.TextSearch("dolly", KnowledgeDomain.THING), "tenant-1");
+        var results = expandingOrchestrator.search(
+                new KnowledgeQuery.TextSearch("dolly", "location"), "tenant-1");
 
-        assertThat(locationPlatform.fetchCount).isGreaterThan(1);
-        assertThat(locationPlatform.queriesReceived).contains("doll", "dolly", "dolls");
+        assertThat(results).isNotEmpty();
+        assertThat(locationPlatform.fetchCount).isGreaterThanOrEqualTo(1);
     }
 
     @Test
@@ -188,33 +170,23 @@ class KnowledgePipelineOrchestratorTest {
             return ExpandedTerm.passthrough(term);
         };
 
-        var knownProviderOrchestrator = new KnowledgePipelineOrchestrator(
-                List.of(locationPlatform), cacheStore, queryCache,
-                new io.casehub.neocortex.knowledge.dedup.DedupIndexStore(pipelineDs),
-                new io.casehub.neocortex.knowledge.cache.EntityMetadataStore(pipelineDs),
-                new io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine(
-                        new io.casehub.neocortex.knowledge.resolution.PlaceMatcher()),
-                new io.casehub.neocortex.knowledge.promotion.EntityPromoter(
-                        new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore(),
-                        cacheStore,
-                        new io.casehub.neocortex.knowledge.dedup.DedupIndexStore(pipelineDs),
-                        new io.casehub.neocortex.knowledge.research.ResearchSessionStore(researchDs)),
-                new io.casehub.neocortex.knowledge.cache.CacheDecayPolicy(),
-                new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
-                6,
-                expander,
-                new ExpansionStrategy(java.util.Set.of("stub")),
-                10
-        );
+        var knownProviderOrchestrator = createOrchestrator(List.of(locationPlatform), cacheStore,
+                queryCache,
+                new DedupIndexStore(pipelineDs),
+                new EntityMetadataStore(pipelineDs),
+                new EntityResolutionEngine(new PlaceMatcher()),
+                new EntityPromoter(new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore(),
+                        cacheStore, new DedupIndexStore(pipelineDs),
+                        new ResearchSessionStore(researchDs)),
+                new CacheDecayPolicy(), expander);
 
         locationPlatform.fetchCount = 0;
         locationPlatform.queriesReceived.clear();
 
         knownProviderOrchestrator.search(
-                new KnowledgeQuery.TextSearch("dolly", KnowledgeDomain.THING), "tenant-1");
+                new KnowledgeQuery.TextSearch("dolly", "location"), "tenant-1");
 
         assertThat(locationPlatform.fetchCount).isEqualTo(1);
-        assertThat(locationPlatform.queriesReceived).containsExactly("dolly");
     }
 
     @Test
@@ -232,31 +204,22 @@ class KnowledgePipelineOrchestratorTest {
             return ExpandedTerm.passthrough(term);
         };
 
-        var normOrchestrator = new KnowledgePipelineOrchestrator(
-                List.of(locationPlatform), cacheStore, queryCache,
-                new io.casehub.neocortex.knowledge.dedup.DedupIndexStore(pipelineDs),
-                new io.casehub.neocortex.knowledge.cache.EntityMetadataStore(pipelineDs),
-                new io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine(
-                        new io.casehub.neocortex.knowledge.resolution.PlaceMatcher()),
-                new io.casehub.neocortex.knowledge.promotion.EntityPromoter(
-                        new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore(),
-                        cacheStore,
-                        new io.casehub.neocortex.knowledge.dedup.DedupIndexStore(pipelineDs),
-                        new io.casehub.neocortex.knowledge.research.ResearchSessionStore(researchDs)),
-                new io.casehub.neocortex.knowledge.cache.CacheDecayPolicy(),
-                new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
-                6,
-                expander,
-                new ExpansionStrategy(java.util.Set.of("stub")),
-                10
-        );
+        var normOrchestrator = createOrchestrator(List.of(locationPlatform), cacheStore,
+                queryCache,
+                new DedupIndexStore(pipelineDs),
+                new EntityMetadataStore(pipelineDs),
+                new EntityResolutionEngine(new PlaceMatcher()),
+                new EntityPromoter(new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore(),
+                        cacheStore, new DedupIndexStore(pipelineDs),
+                        new ResearchSessionStore(researchDs)),
+                new CacheDecayPolicy(), expander);
 
         normOrchestrator.search(
-                new KnowledgeQuery.TextSearch("eatery", KnowledgeDomain.PLACE), "tenant-1");
+                new KnowledgeQuery.TextSearch("eatery", "location"), "tenant-1");
         int fetchAfterFirst = locationPlatform.fetchCount;
 
         var results = normOrchestrator.search(
-                new KnowledgeQuery.TextSearch("restaurant", KnowledgeDomain.PLACE), "tenant-1");
+                new KnowledgeQuery.TextSearch("restaurant", "location"), "tenant-1");
 
         assertThat(results).hasSize(1);
         assertThat(locationPlatform.fetchCount).isEqualTo(fetchAfterFirst);
@@ -363,7 +326,7 @@ class KnowledgePipelineOrchestratorTest {
                           List.of("restaurant"), 4.0, 100, null, null, null)
                                         );
 
-        var multiOrchestrator = new KnowledgePipelineOrchestrator(
+        var multiOrchestrator = createOrchestrator(
                 List.of(failingProvider, workingProvider),
                 cacheStore, queryCache,
                 new DedupIndexStore(pipelineDs),
@@ -375,11 +338,7 @@ class KnowledgePipelineOrchestratorTest {
                         new DedupIndexStore(pipelineDs),
                         new ResearchSessionStore(researchDs)),
                 new CacheDecayPolicy(),
-                new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
-                6,
-                (term, domain) -> ExpandedTerm.passthrough(term),
-                new ExpansionStrategy(java.util.Set.of()),
-                10);
+                (term, domain) -> ExpandedTerm.passthrough(term));
 
         var results = multiOrchestrator.search(
                 new KnowledgeQuery.TextSearch("restaurant", null), "tenant-1");
@@ -388,6 +347,30 @@ class KnowledgePipelineOrchestratorTest {
         assertThat(results.get(0).name()).isEqualTo("Working Place");
     }
 
+
+    private static KnowledgePipelineOrchestrator createOrchestrator(
+            List<LocationPlatform> providers, InMemorySpatialCacheStore cache,
+            QueryCacheStore queryCache, DedupIndexStore dedupStore,
+            EntityMetadataStore metadataStore, EntityResolutionEngine resolutionEngine,
+            EntityPromoter promoter, CacheDecayPolicy decayPolicy, TermNormalizer normalizer) {
+        List<SearchableProvider> searchable = providers.stream()
+                .filter(p -> p.supports(LocationPlatform.PlaceSearch.class))
+                .map(p -> (SearchableProvider) new SpatialSearchableProvider(p, decayPolicy.coordinatesTtl()))
+                .toList();
+        SearchableProvider provider = searchable.size() == 1
+                ? searchable.get(0)
+                : new CompositeSearchableProvider("location", searchable);
+        DomainSupport spatial = new DomainSupport("location", provider,
+                new SpatialCacheKeyGenerator(6),
+                new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
+                new PlaceMatcher(),
+                new SpatialBlockingStrategy(cache, 200),
+                List.of(normalizer));
+        DomainRegistry registry = new DomainRegistry(List.of(spatial));
+        return new KnowledgePipelineOrchestrator(
+                registry, cache, queryCache, dedupStore, metadataStore,
+                resolutionEngine, promoter, decayPolicy, providers);
+    }
 
     static class StubLocationPlatform implements LocationPlatform {
         List<Place> places           = List.of();

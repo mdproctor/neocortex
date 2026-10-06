@@ -36,6 +36,7 @@ class KnowledgeQueryTest {
             case KnowledgeQuery.TextSearch t -> "text:" + t.query();
             case KnowledgeQuery.NearbySearch n -> "nearby";
             case KnowledgeQuery.CategorySearch c -> "cat:" + c.category();
+            default -> "unknown";
         };
         assertThat(result).isEqualTo("text:pizza");
     }

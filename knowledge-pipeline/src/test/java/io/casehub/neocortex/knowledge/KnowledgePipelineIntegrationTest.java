@@ -6,7 +6,6 @@ import io.casehub.connectors.location.model.Coordinates;
 import io.casehub.connectors.location.model.Place;
 import io.casehub.connectors.location.model.PriceLevel;
 import io.casehub.connectors.location.spi.LocationPlatform;
-import io.casehub.neocortex.knowledge.normalization.ExpansionStrategy;
 import io.casehub.neocortex.knowledge.cache.CacheDecayPolicy;
 import io.casehub.neocortex.knowledge.cache.CacheEvictionScheduler;
 import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
@@ -18,6 +17,9 @@ import io.casehub.neocortex.knowledge.research.ResearchOrchestrator;
 import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
 import io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine;
 import io.casehub.neocortex.knowledge.resolution.PlaceMatcher;
+import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
+import io.casehub.neocortex.knowledge.resolution.SpatialSearchableProvider;
+import io.casehub.neocortex.knowledge.cache.SpatialCacheKeyGenerator;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.NodeRef;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
@@ -79,13 +81,20 @@ class KnowledgePipelineIntegrationTest {
                 PriceLevel.VERY_EXPENSIVE)
         ));
 
+        TermNormalizer noOp = (term, domain) -> ExpandedTerm.passthrough(term);
+        var decayPolicy = new CacheDecayPolicy();
+        var searchableProvider = new SpatialSearchableProvider(provider, decayPolicy.coordinatesTtl());
+        var spatial = new DomainSupport("location", searchableProvider,
+                new SpatialCacheKeyGenerator(6),
+                new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(),
+                new PlaceMatcher(),
+                new SpatialBlockingStrategy(cacheStore, 200),
+                List.of(noOp));
+        var registry = new DomainRegistry(List.of(spatial));
         orchestrator = new KnowledgePipelineOrchestrator(
-            List.of(provider), cacheStore, queryCache, dedupStore,
+            registry, cacheStore, queryCache, dedupStore,
             metadataStore, resolutionEngine, promoter,
-            new CacheDecayPolicy(),
-            new io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule(), 6,
-            (term, domain) -> ExpandedTerm.passthrough(term),
-            new ExpansionStrategy(java.util.Set.of()), 10);
+            decayPolicy, List.of(provider));
     }
 
     @AfterEach

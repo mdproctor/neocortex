@@ -1,24 +1,17 @@
 package io.casehub.neocortex.knowledge;
 
-import io.casehub.connectors.Page;
-import io.casehub.connectors.PageRequest;
-import io.casehub.connectors.location.model.Place;
 import io.casehub.connectors.location.spi.LocationPlatform;
 import io.casehub.neocortex.knowledge.cache.CacheDecayPolicy;
-import io.casehub.neocortex.knowledge.cache.CacheEntityIdGenerator;
-import io.casehub.neocortex.knowledge.cache.CacheKeyGenerator;
 import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
 import io.casehub.neocortex.knowledge.cache.QueryCacheStore;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
-import io.casehub.neocortex.knowledge.normalization.ExpansionStrategy;
-import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
 import io.casehub.neocortex.knowledge.promotion.EntityPromoter;
 import io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,38 +26,28 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int DEFAULT_MAX_PAGES = 3;
 
-    private final List<LocationPlatform> providers;
-    private final SpatialCacheStore cacheStore;
+    private final DomainRegistry domainRegistry;
+    private final CacheStore cacheStore;
     private final QueryCacheStore queryCache;
     private final DedupIndexStore dedupStore;
     private final EntityMetadataStore metadataStore;
     private final EntityResolutionEngine resolutionEngine;
     private final EntityPromoter promoter;
     private final CacheDecayPolicy decayPolicy;
-    private final SubsumptionRule subsumptionRule;
-    private final int geohashPrecision;
-    private final TermNormalizer normalizer;
-    private final ExpansionStrategy expansionStrategy;
-    private final int maxVariantQueries;
-    private final BlockingStrategy blockingStrategy;
+    private final List<LocationPlatform> locationProviders;
     private       KnowledgePipelineMetrics metrics;
 
-
     public KnowledgePipelineOrchestrator(
-            List<LocationPlatform> providers,
-            SpatialCacheStore cacheStore,
+            DomainRegistry domainRegistry,
+            CacheStore cacheStore,
             QueryCacheStore queryCache,
             DedupIndexStore dedupStore,
             EntityMetadataStore metadataStore,
             EntityResolutionEngine resolutionEngine,
             EntityPromoter promoter,
             CacheDecayPolicy decayPolicy,
-            SubsumptionRule subsumptionRule,
-            int geohashPrecision,
-            TermNormalizer normalizer,
-            ExpansionStrategy expansionStrategy,
-            int maxVariantQueries) {
-        this.providers = providers;
+            List<LocationPlatform> locationProviders) {
+        this.domainRegistry = domainRegistry;
         this.cacheStore = cacheStore;
         this.queryCache = queryCache;
         this.dedupStore = dedupStore;
@@ -72,18 +55,12 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
         this.resolutionEngine = resolutionEngine;
         this.promoter = promoter;
         this.decayPolicy = decayPolicy;
-        this.subsumptionRule = subsumptionRule;
-        this.geohashPrecision = geohashPrecision;
-        this.normalizer = normalizer;
-        this.expansionStrategy = expansionStrategy;
-        this.maxVariantQueries = maxVariantQueries;
-        this.blockingStrategy = new SpatialBlockingStrategy(cacheStore, 200);
+        this.locationProviders = locationProviders;
     }
 
     void setMetrics(KnowledgePipelineMetrics metrics) {
         this.metrics = metrics;
     }
-
 
     @Override
     public List<CachedEntity> search(KnowledgeQuery query, String tenantId) {
@@ -93,8 +70,14 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
     @Override
     public List<CachedEntity> search(KnowledgeQuery query, String tenantId,
                                       String researchSessionId) {
-        var normResult = CacheKeyGenerator.generate(query, geohashPrecision, normalizer);
-        NormalizedQuery normalized = normResult.normalizedQuery();
+        String domain = query.domain() != null ? query.domain() : "location";
+        DomainSupport domainSupport = domainRegistry.lookup(domain)
+            .orElseThrow(() -> new UnsupportedOperationException(
+                "No domain registered: " + domain));
+
+        Map<String, ExpandedTerm> expansions = normalize(query, domainSupport);
+        NormalizedQuery normalized = domainSupport.keyGenerator()
+            .generate(query, expansions);
 
         var cacheHit = queryCache.lookup(normalized.cacheKey(), tenantId);
         if (cacheHit.isPresent()) {
@@ -104,7 +87,7 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
                 if (entity != null) cached.add(entity);
             }
             if (!cached.isEmpty()) {
-                if (metrics != null) metrics.recordCacheHit(queryType(query), tenantId);
+                if (metrics != null) metrics.recordCacheHit(domain, tenantId);
                 if (researchSessionId != null) {
                     cached.forEach(e ->
                         metadataStore.addSession(e.id(), researchSessionId));
@@ -113,8 +96,8 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             }
         }
 
-        List<QueryCacheStore.QueryCacheEntry> cached = queryCache.listForTenant(tenantId);
-        for (var entry : cached) {
+        List<QueryCacheStore.QueryCacheEntry> cachedQueries = queryCache.listForTenant(tenantId);
+        for (var entry : cachedQueries) {
             List<CachedEntity> broaderEntities = new ArrayList<>();
             for (String eid : entry.entityIds()) {
                 CachedEntity e = cacheStore.get(eid, tenantId);
@@ -122,7 +105,8 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             }
             if (broaderEntities.isEmpty()) continue;
             NormalizedQuery broaderNormalized = entry.toNormalizedQuery();
-            var subsumed = subsumptionRule.subsume(normalized, broaderEntities, broaderNormalized);
+            var subsumed = domainSupport.subsumption()
+                .subsume(normalized, broaderEntities, broaderNormalized);
             if (subsumed.isPresent()) {
                 List<CachedEntity> result = subsumed.get();
                 if (researchSessionId != null) {
@@ -132,37 +116,22 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             }
         }
 
-        if (metrics != null) metrics.recordCacheMiss(queryType(query), tenantId);
+        if (metrics != null) metrics.recordCacheMiss(domain, tenantId);
 
-        List<ProviderPlace> fetched = fetchFromProviders(query, tenantId, normResult.expansions());
+        List<CachedEntity> fetched = fetchFromDomain(query, domainSupport);
         if (fetched.isEmpty()) return List.of();
 
-        Instant now = Instant.now();
-        List<CachedEntity> entities = new ArrayList<>();
-        for (ProviderPlace pp : fetched) {
-            Place place = pp.place();
-            String providerId = pp.providerId();
-            String entityId = CacheEntityIdGenerator.generate(providerId, place.id());
-            Instant expiresAt = now.plus(decayPolicy.coordinatesTtl());
-
-            Map<String, String> props = new HashMap<>();
-            if (place.phoneNumber() != null) props.put("phone", place.phoneNumber());
-            if (place.website() != null) props.put("website", place.website());
-            if (place.formattedAddress() != null) props.put("address", place.formattedAddress());
-            if (place.priceLevel() != null) props.put("priceLevel", place.priceLevel().name());
-            if (place.rating() != null) props.put("rating", String.valueOf(place.rating()));
-
-            String category = place.types() != null && !place.types().isEmpty()
-                ? place.types().get(0) : null;
-
-            entities.add(new CachedEntity(
-                entityId, place.name(), place.location(), category,
-                providerId, place.id(), props, now, null, expiresAt,
-                researchSessionId != null ? Set.of(researchSessionId) : Set.of(),
-                false, "location"));
+        if (researchSessionId != null) {
+            fetched = fetched.stream()
+                .map(e -> new CachedEntity(e.id(), e.name(), e.coordinates(),
+                    e.category(), e.source(), e.externalId(), e.properties(),
+                    e.fetchedAt(), e.detailFetchedAt(), e.expiresAt(),
+                    Set.of(researchSessionId), e.hasDetail(), e.domain()))
+                .toList();
         }
 
-        var resolution = resolutionEngine.resolve(entities, blockingStrategy, cacheStore, dedupStore, tenantId);
+        var resolution = resolutionEngine.resolve(
+            fetched, domainSupport.blockingStrategy(), cacheStore, dedupStore, tenantId);
         List<CachedEntity> resolved = resolution.resolved();
 
         for (CachedEntity entity : resolved) {
@@ -173,32 +142,10 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
             }
         }
 
-        Instant searchExpiresAt = now.plus(decayPolicy.searchResultsTtl());
+        Instant searchExpiresAt = Instant.now().plus(decayPolicy.searchResultsTtl());
         List<String> entityIds = resolved.stream().map(CachedEntity::id).toList();
-        String queryType = switch (query) {
-            case KnowledgeQuery.TextSearch ignored -> "TEXT";
-            case KnowledgeQuery.NearbySearch ignored -> "NEARBY";
-            case KnowledgeQuery.CategorySearch ignored -> "CATEGORY";
-            default -> "UNKNOWN";
-        };
-        Double lat = switch (query) {
-            case KnowledgeQuery.NearbySearch n -> n.center().lat();
-            case KnowledgeQuery.CategorySearch c -> c.center().lat();
-            default -> null;
-        };
-        Double lng = switch (query) {
-            case KnowledgeQuery.NearbySearch n -> n.center().lng();
-            case KnowledgeQuery.CategorySearch c -> c.center().lng();
-            default -> null;
-        };
-        Integer radius = switch (query) {
-            case KnowledgeQuery.NearbySearch n -> n.radiusMeters();
-            case KnowledgeQuery.CategorySearch c -> c.radiusMeters();
-            default -> null;
-        };
-        String cat = query instanceof KnowledgeQuery.CategorySearch c ? c.category() : null;
-        queryCache.record(normalized.cacheKey(), tenantId, entityIds, searchExpiresAt,
-            queryType, lat, lng, radius, cat);
+        recordQueryCache(normalized.cacheKey(), tenantId, entityIds,
+            searchExpiresAt, query, domain);
 
         return resolved;
     }
@@ -210,47 +157,18 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
 
     @Override
     public void refreshStale(String tenantId) {
-        List<CachedEntity> entities  = cacheStore.listAll(tenantId);
-        Instant            now       = Instant.now();
-        int                refreshed = 0;
+        List<CachedEntity> entities = cacheStore.listAll(tenantId);
+        Instant now = Instant.now();
+        int refreshed = 0;
 
         for (CachedEntity entity : entities) {
             try {
                 var stale = decayPolicy.staleGroups(entity, now);
-                if (stale.isEmpty()) {continue;}
+                if (stale.isEmpty()) continue;
 
-                if (stale.contains(CacheDecayPolicy.StaleFieldGroup.DETAIL)) {
-                    for (LocationPlatform provider : providers) {
-                        if (!provider.supports(LocationPlatform.PlaceDetails.class)) {continue;}
-                        if (!provider.id().equals(entity.source())) {continue;}
-                        try {
-                            var details = provider.placeDetails("pipeline")
-                                                    .get(entity.externalId());
-                            if (details != null) {
-                                Map<String, String> props = new HashMap<>(entity.properties());
-                                if (details.phoneNumber() != null) {props.put("phone", details.phoneNumber());}
-                                if (details.website() != null) {props.put("website", details.website());}
-                                if (details.formattedAddress() != null) {
-                                    props.put("address", details.formattedAddress());
-                                }
-                                if (details.priceLevel() != null) {
-                                    props.put("priceLevel", details.priceLevel().name());
-                                }
-                                if (details.rating() != null) {props.put("rating", String.valueOf(details.rating()));}
-
-                                CachedEntity updated = new CachedEntity(
-                                        entity.id(), entity.name(), entity.coordinates(),
-                                        entity.category(), entity.source(), entity.externalId(),
-                                        props, entity.fetchedAt(), now, entity.expiresAt(),
-                                        entity.sessionIds(), true, "location");
-                                cacheStore.set(updated, tenantId);
-                                refreshed++;
-                            }
-                        } catch (Exception e) {
-                            LOG.log(Level.WARNING, "Detail refresh failed for " + entity.id(), e);
-                        }
-                        break;
-                    }
+                if (stale.contains(CacheDecayPolicy.StaleFieldGroup.DETAIL)
+                        && "location".equals(entity.domain())) {
+                    refreshed += refreshLocationDetail(entity, tenantId, now);
                 }
             } catch (Exception e) {
                 LOG.log(Level.WARNING, "Refresh failed for entity " + entity.id(), e);
@@ -262,127 +180,116 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
         }
     }
 
-    record ProviderPlace(String providerId, Place place) {}
-
-    private List<ProviderPlace> fetchFromProviders(KnowledgeQuery query, String tenantId,
-                                                    Map<String, ExpandedTerm> expansions) {
-        List<ProviderPlace> all = new ArrayList<>();
-        for (LocationPlatform provider : providers) {
-            if (!provider.supports(LocationPlatform.PlaceSearch.class)) continue;
+    private int refreshLocationDetail(CachedEntity entity, String tenantId, Instant now) {
+        for (LocationPlatform provider : locationProviders) {
+            if (!provider.supports(LocationPlatform.PlaceDetails.class)) continue;
+            if (!provider.id().equals(entity.source())) continue;
             try {
-                var sample = metrics != null ? metrics.startProviderFetch() : null;
-                List<Place> providerResults;
-
-                if (expansions.isEmpty()
-                        || !(query instanceof KnowledgeQuery.TextSearch)
-                        || expansionStrategy.strategyFor(provider.id())
-                            == ExpansionStrategy.Mode.CANONICAL_ONLY) {
-                    providerResults = fetchAllPages(provider, query);
-                } else {
-                    providerResults = fetchWithVariants(provider, (KnowledgeQuery.TextSearch) query,
-                        expansions);
-                }
-
-                if (sample != null) metrics.recordProviderFetch(sample, provider.id(), tenantId);
-                providerResults.forEach(p -> all.add(new ProviderPlace(provider.id(), p)));
-            } catch (Exception e) {
-                LOG.log(Level.WARNING, "Provider " + provider.id() + " failed", e);
-                if (metrics != null) metrics.recordProviderError(provider.id(), tenantId);
-            }
-        }
-        return all;
-    }
-
-    private List<Place> fetchWithVariants(LocationPlatform provider,
-                                           KnowledgeQuery.TextSearch query,
-                                           Map<String, ExpandedTerm> expansions) {
-        Set<String> seenIds = new HashSet<>();
-        List<Place> results = new ArrayList<>();
-
-        List<String> variantQueries = buildVariantQueries(query.query(), expansions);
-        int cap = Math.min(variantQueries.size(), maxVariantQueries);
-        if (cap < variantQueries.size()) {
-            LOG.warning("Truncating variant queries from " + variantQueries.size() + " to " + cap);
-        }
-
-        for (int i = 0; i < cap; i++) {
-            try {
-                var variantQuery = new KnowledgeQuery.TextSearch(variantQueries.get(i), query.domain());
-                List<Place> fetched = fetchAllPages(provider, variantQuery);
-                for (Place p : fetched) {
-                    if (p.id() != null && seenIds.add(p.id())) {
-                        results.add(p);
-                    } else if (p.id() == null) {
-                        results.add(p);
+                var details = provider.placeDetails("pipeline").get(entity.externalId());
+                if (details != null) {
+                    Map<String, String> props = new HashMap<>(entity.properties());
+                    if (details.phoneNumber() != null) props.put("phone", details.phoneNumber());
+                    if (details.website() != null) props.put("website", details.website());
+                    if (details.formattedAddress() != null) {
+                        props.put("address", details.formattedAddress());
                     }
+                    if (details.priceLevel() != null) {
+                        props.put("priceLevel", details.priceLevel().name());
+                    }
+                    if (details.rating() != null) {
+                        props.put("rating", String.valueOf(details.rating()));
+                    }
+
+                    CachedEntity updated = new CachedEntity(
+                        entity.id(), entity.name(), entity.coordinates(),
+                        entity.category(), entity.source(), entity.externalId(),
+                        props, entity.fetchedAt(), now, entity.expiresAt(),
+                        entity.sessionIds(), true, entity.domain());
+                    cacheStore.set(updated, tenantId);
+                    return 1;
                 }
             } catch (Exception e) {
-                LOG.log(Level.WARNING, "Variant query failed: " + variantQueries.get(i), e);
+                LOG.log(Level.WARNING, "Detail refresh failed for " + entity.id(), e);
             }
+            break;
         }
-        return results;
+        return 0;
     }
 
-    static List<String> buildVariantQueries(String originalQuery, Map<String, ExpandedTerm> expansions) {
-        String normalized = CacheKeyGenerator.normalizeText(originalQuery);
-        List<String> queries = new ArrayList<>();
-
-        String canonicalQuery = normalized;
-        for (var entry : expansions.entrySet()) {
-            String term = entry.getKey().toLowerCase().strip();
-            canonicalQuery = canonicalQuery.replace(term, entry.getValue().canonical());
+    private void recordQueryCache(String cacheKey, String tenantId,
+                                   List<String> entityIds, Instant expiresAt,
+                                   KnowledgeQuery query, String domain) {
+        String queryType;
+        Double lat = null, lng = null;
+        Integer radius = null;
+        String cat = null;
+        switch (query) {
+            case KnowledgeQuery.TextSearch ignored -> queryType = "TEXT";
+            case KnowledgeQuery.NearbySearch n -> {
+                queryType = "NEARBY";
+                lat = n.center().lat();
+                lng = n.center().lng();
+                radius = n.radiusMeters();
+            }
+            case KnowledgeQuery.CategorySearch c -> {
+                queryType = "CATEGORY";
+                lat = c.center().lat();
+                lng = c.center().lng();
+                radius = c.radiusMeters();
+                cat = c.category();
+            }
+            default -> queryType = domain.toUpperCase();
         }
-        queries.add(canonicalQuery);
+        queryCache.record(cacheKey, tenantId, entityIds, expiresAt,
+            queryType, lat, lng, radius, cat);
+    }
 
-        for (var entry : expansions.entrySet()) {
-            String term = entry.getKey().toLowerCase().strip();
-            for (String variant : entry.getValue().variants()) {
-                if (variant.equals(entry.getValue().canonical())) continue;
-                String variantQuery = canonicalQuery.replace(entry.getValue().canonical(), variant);
-                if (!queries.contains(variantQuery)) {
-                    queries.add(variantQuery);
+    private Map<String, ExpandedTerm> normalize(KnowledgeQuery query,
+                                                 DomainSupport domainSupport) {
+        if (!(query instanceof KnowledgeQuery.TextSearch textSearch)) {
+            return Map.of();
+        }
+        Map<String, ExpandedTerm> expansions = new LinkedHashMap<>();
+        String text = textSearch.query().toLowerCase().strip();
+        String[] tokens = text.split("\\s+");
+        for (String token : tokens) {
+            for (TermNormalizer normalizer : domainSupport.normalizerChain()) {
+                ExpandedTerm expanded = normalizer.normalize(token, query.domain());
+                if (!token.equals(expanded.canonical()) || expanded.variants().size() > 1) {
+                    expansions.put(token, expanded);
+                    break;
                 }
             }
         }
-
-        return queries;
+        return expansions;
     }
 
-    private static String queryType(KnowledgeQuery query) {
-        return switch (query) {
-            case KnowledgeQuery.TextSearch ignored -> "TEXT";
-            case KnowledgeQuery.NearbySearch ignored -> "NEARBY";
-            case KnowledgeQuery.CategorySearch ignored -> "CATEGORY";
-            default -> "UNKNOWN";
-        };
-    }
+    private List<CachedEntity> fetchFromDomain(KnowledgeQuery query,
+                                                DomainSupport domainSupport) {
+        SearchableProvider provider = domainSupport.provider();
+        if (!provider.supports(query)) {
+            LOG.warning("Provider " + provider.id() + " does not support query: "
+                + query.getClass().getSimpleName());
+            return List.of();
+        }
 
-    private List<Place> fetchAllPages(LocationPlatform provider, KnowledgeQuery query) {
-        List<Place> all = new ArrayList<>();
-        PageRequest pageRequest = PageRequest.first(DEFAULT_PAGE_SIZE);
+        List<CachedEntity> all = new ArrayList<>();
+        PipelinePageRequest pageRequest = PipelinePageRequest.first(DEFAULT_PAGE_SIZE);
         int pages = 0;
 
         while (pages < DEFAULT_MAX_PAGES) {
-            Page<Place> page = executeFetch(provider, query, pageRequest);
-            all.addAll(page.items());
-            pages++;
-            if (!page.hasMore() || page.nextCursor() == null) break;
-            pageRequest = new PageRequest(page.nextCursor(), DEFAULT_PAGE_SIZE);
+            try {
+                PipelinePage<CachedEntity> page = provider.search(query, pageRequest);
+                all.addAll(page.items());
+                pages++;
+                if (!page.hasMore() || page.nextCursor() == null) break;
+                pageRequest = new PipelinePageRequest(page.nextCursor(), DEFAULT_PAGE_SIZE);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Provider " + provider.id() + " failed", e);
+                if (metrics != null) metrics.recordProviderError(provider.id(), "");
+                break;
+            }
         }
         return all;
     }
-
-    private Page<Place> executeFetch(LocationPlatform provider, KnowledgeQuery query,
-                                      PageRequest pageRequest) {
-        var search = provider.placeSearch("pipeline");
-        return switch (query) {
-            case KnowledgeQuery.TextSearch t -> search.searchByText(t.query(), pageRequest);
-            case KnowledgeQuery.NearbySearch n ->
-                search.searchNearby(n.center(), n.radiusMeters(), pageRequest);
-            case KnowledgeQuery.CategorySearch c ->
-                search.searchByCategory(c.category(), c.center(), c.radiusMeters(), pageRequest);
-            default -> throw new UnsupportedOperationException("Unsupported query type: " + query.getClass().getName());
-        };
-    }
-
 }
