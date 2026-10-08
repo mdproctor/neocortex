@@ -1,6 +1,5 @@
 package io.casehub.neocortex.knowledge.normalization;
 
-import io.casehub.neocortex.knowledge.KnowledgeDomain;
 import io.casehub.neocortex.knowledge.KnowledgeQuery;
 import io.casehub.neocortex.knowledge.cache.CacheKeyGenerator;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,8 +19,8 @@ class TermNormalizationIntegrationTest {
 
     @Test
     void synonymQueriesProduceSameCacheKey() {
-        var q1 = new KnowledgeQuery.TextSearch("eatery", KnowledgeDomain.PLACE);
-        var q2 = new KnowledgeQuery.TextSearch("restaurant", KnowledgeDomain.PLACE);
+        var q1 = new KnowledgeQuery.TextSearch("eatery", "location");
+        var q2 = new KnowledgeQuery.TextSearch("restaurant", "location");
 
         var r1 = CacheKeyGenerator.generate(q1, 6, normalizer);
         var r2 = CacheKeyGenerator.generate(q2, 6, normalizer);
@@ -32,7 +31,7 @@ class TermNormalizationIntegrationTest {
 
     @Test
     void expansionDataAvailableForVariantDispatch() {
-        var q = new KnowledgeQuery.TextSearch("eatery", KnowledgeDomain.PLACE);
+        var q = new KnowledgeQuery.TextSearch("eatery", "location");
         var result = CacheKeyGenerator.generate(q, 6, normalizer);
 
         assertThat(result.expansions()).isNotEmpty();
@@ -51,7 +50,7 @@ class TermNormalizationIntegrationTest {
 
     @Test
     void compoundTermProducesCanonicalCacheKey() {
-        var q1 = new KnowledgeQuery.TextSearch("coffee shop", KnowledgeDomain.PLACE);
+        var q1 = new KnowledgeQuery.TextSearch("coffee shop", "location");
         var result = CacheKeyGenerator.generate(q1, 6, normalizer);
 
         assertThat(result.normalizedQuery().cacheKey()).startsWith("TEXT:");

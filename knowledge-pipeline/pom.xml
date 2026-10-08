@@ -33,6 +33,26 @@
       <artifactId>casehub-connectors-location-spi</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-connectors-commerce-spi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-connectors-contacts-spi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-connectors-document-spi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-connectors-project-spi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc</artifactId>
     </dependency>

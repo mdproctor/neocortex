@@ -6,7 +6,7 @@ import java.util.Objects;
 
 public interface KnowledgeQuery {
 
-    default String domain() { return "location"; }
+    default String domain() { return null; }
 
     record TextSearch(String query, String domain) implements KnowledgeQuery {
         public TextSearch { Objects.requireNonNull(query); }

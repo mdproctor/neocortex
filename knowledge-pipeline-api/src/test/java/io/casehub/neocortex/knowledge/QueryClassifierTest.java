@@ -12,11 +12,11 @@ class QueryClassifierTest {
 
     @Test
     void noOpReturnsEmpty() {
-        assertThat(noOp.classify("find pizza", KnowledgeDomain.PLACE)).isEmpty();
+        assertThat(noOp.classify("find pizza", "location")).isEmpty();
     }
 
     @Test
     void noOpReturnsEmptyForBlank() {
-        assertThat(noOp.classify("", KnowledgeDomain.PLACE)).isEmpty();
+        assertThat(noOp.classify("", "location")).isEmpty();
     }
 }

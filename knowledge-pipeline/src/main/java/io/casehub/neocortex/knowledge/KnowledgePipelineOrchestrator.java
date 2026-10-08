@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -245,20 +246,26 @@ public class KnowledgePipelineOrchestrator implements KnowledgePipelineService {
     }
 
     private Map<String, ExpandedTerm> normalize(KnowledgeQuery query,
-                                                 DomainSupport domainSupport) {
+                                                DomainSupport domainSupport) {
         if (!(query instanceof KnowledgeQuery.TextSearch textSearch)) {
             return Map.of();
         }
         Map<String, ExpandedTerm> expansions = new LinkedHashMap<>();
-        String text = textSearch.query().toLowerCase().strip();
-        String[] tokens = text.split("\\s+");
+        String                    text       = textSearch.query().toLowerCase().strip();
+        String[]                  tokens     = text.split("\\s+");
         for (String token : tokens) {
+            String      current     = token;
+            Set<String> allVariants = new LinkedHashSet<>();
+            allVariants.add(token);
             for (TermNormalizer normalizer : domainSupport.normalizerChain()) {
-                ExpandedTerm expanded = normalizer.normalize(token, query.domain());
-                if (!token.equals(expanded.canonical()) || expanded.variants().size() > 1) {
-                    expansions.put(token, expanded);
-                    break;
+                ExpandedTerm expanded = normalizer.normalize(current, query.domain());
+                if (!current.equals(expanded.canonical()) || expanded.variants().size() > 1) {
+                    current = expanded.canonical();
+                    allVariants.addAll(expanded.variants());
                 }
+            }
+            if (!token.equals(current) || allVariants.size() > 1) {
+                expansions.put(token, new ExpandedTerm(current, allVariants));
             }
         }
         return expansions;

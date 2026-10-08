@@ -1,6 +1,5 @@
 package io.casehub.neocortex.knowledge.normalization;
 
-import io.casehub.neocortex.knowledge.KnowledgeDomain;
 import io.casehub.neocortex.knowledge.KnowledgeQuery;
 import org.junit.jupiter.api.Test;
 
@@ -13,12 +12,12 @@ class LlmQueryClassifierTest {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
         var result = classifier.parseResponse(
             "{\"type\":\"TEXT\",\"query\":\"Italian food\"}",
-            KnowledgeDomain.PLACE);
+            "location");
         assertThat(result).isPresent();
         assertThat(result.get()).isInstanceOf(KnowledgeQuery.TextSearch.class);
         var ts = (KnowledgeQuery.TextSearch) result.get();
         assertThat(ts.query()).isEqualTo("Italian food");
-        assertThat(ts.domain()).isEqualTo(KnowledgeDomain.PLACE);
+        assertThat(ts.domain()).isEqualTo("location");
     }
 
     @Test
@@ -26,7 +25,7 @@ class LlmQueryClassifierTest {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
         var result = classifier.parseResponse(
             "{\"type\":\"CATEGORY\",\"category\":\"restaurant\",\"radius\":1000}",
-            KnowledgeDomain.PLACE);
+            "location");
         assertThat(result).isPresent();
         assertThat(result.get()).isInstanceOf(KnowledgeQuery.TextSearch.class);
     }
@@ -36,7 +35,7 @@ class LlmQueryClassifierTest {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
         var result = classifier.parseResponse(
             "{\"type\":\"NEARBY\",\"location\":\"King's Cross, London\",\"radius\":500}",
-            KnowledgeDomain.PLACE);
+            "location");
         assertThat(result).isPresent();
         assertThat(result.get()).isInstanceOf(KnowledgeQuery.TextSearch.class);
         var ts = (KnowledgeQuery.TextSearch) result.get();
@@ -48,28 +47,28 @@ class LlmQueryClassifierTest {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
         var result = classifier.parseResponse(
             "{\"type\":\"NEARBY\",\"radius\":500}",
-            KnowledgeDomain.PLACE);
+            "location");
         assertThat(result).isEmpty();
     }
 
     @Test
     void invalidJsonReturnsEmpty() {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
-        var result = classifier.parseResponse("not json", KnowledgeDomain.PLACE);
+        var result = classifier.parseResponse("not json", "location");
         assertThat(result).isEmpty();
     }
 
     @Test
     void blankResponseReturnsEmpty() {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
-        var result = classifier.parseResponse("", KnowledgeDomain.PLACE);
+        var result = classifier.parseResponse("", "location");
         assertThat(result).isEmpty();
     }
 
     @Test
     void noAgentProviderReturnsEmpty() {
         var classifier = new LlmQueryClassifier((io.casehub.platform.agent.AgentProvider) null, (java.util.List<io.casehub.connectors.location.spi.LocationPlatform>) null);
-        var result = classifier.classify("find pizza near me", KnowledgeDomain.PLACE);
+        var result = classifier.classify("find pizza near me", "location");
         assertThat(result).isEmpty();
     }
 }

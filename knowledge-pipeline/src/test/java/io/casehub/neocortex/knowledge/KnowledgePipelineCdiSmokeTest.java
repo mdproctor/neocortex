@@ -53,10 +53,10 @@ class KnowledgePipelineCdiSmokeTest {
         var promoter      = new EntityPromoter(mindMap, cacheStore, dedupStore, sessionStore);
         var metrics       = new KnowledgePipelineMetrics(io.micrometer.core.instrument.Metrics.globalRegistry);
 
-        var noOpNormalizer = new io.casehub.neocortex.knowledge.normalization.NoOpTermNormalizer();
+        var wordNetNormalizer = new io.casehub.neocortex.knowledge.normalization.WordNetTermNormalizer();
         var spatialDomain = beans.spatialDomainSupport(
                 new EmptyInstance<>(), cacheStore, decayPolicy, subsumptionRule, matcher,
-                noOpNormalizer, config);
+                wordNetNormalizer, config);
         assertThat(spatialDomain).isNotNull();
         assertThat(spatialDomain.domain()).isEqualTo("location");
 

@@ -43,9 +43,9 @@ class KnowledgeQueryTest {
 
     @Test
     void textSearchAcceptsDomain() {
-        var q = new KnowledgeQuery.TextSearch("dolly", KnowledgeDomain.THING);
+        var q = new KnowledgeQuery.TextSearch("dolly", "commerce");
         assertThat(q.query()).isEqualTo("dolly");
-        assertThat(q.domain()).isEqualTo("thing");
+        assertThat(q.domain()).isEqualTo("commerce");
     }
 
     @Test

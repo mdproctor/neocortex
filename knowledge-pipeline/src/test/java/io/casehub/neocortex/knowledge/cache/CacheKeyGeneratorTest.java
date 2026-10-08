@@ -3,7 +3,6 @@ package io.casehub.neocortex.knowledge.cache;
 import io.casehub.connectors.location.model.Coordinates;
 import io.casehub.neocortex.knowledge.CacheFilter;
 import io.casehub.neocortex.knowledge.ExpandedTerm;
-import io.casehub.neocortex.knowledge.KnowledgeDomain;
 import io.casehub.neocortex.knowledge.KnowledgeQuery;
 import io.casehub.neocortex.knowledge.TermNormalizer;
 import org.junit.jupiter.api.Test;
@@ -88,8 +87,8 @@ class CacheKeyGeneratorTest {
             return ExpandedTerm.passthrough(term);
         };
 
-        var q1 = new KnowledgeQuery.TextSearch("italian eatery", KnowledgeDomain.PLACE);
-        var q2 = new KnowledgeQuery.TextSearch("italian restaurant", KnowledgeDomain.PLACE);
+        var q1 = new KnowledgeQuery.TextSearch("italian eatery", "location");
+        var q2 = new KnowledgeQuery.TextSearch("italian restaurant", "location");
 
         var r1 = CacheKeyGenerator.generate(q1, 6, normalizer);
         var r2 = CacheKeyGenerator.generate(q2, 6, normalizer);
@@ -102,7 +101,7 @@ class CacheKeyGeneratorTest {
         TermNormalizer normalizer = (term, domain) ->
                                             new ExpandedTerm("doll", Set.of("doll", "dolly"));
 
-        var q      = new KnowledgeQuery.TextSearch("dolly", KnowledgeDomain.THING);
+        var q      = new KnowledgeQuery.TextSearch("dolly", "commerce");
         var result = CacheKeyGenerator.generate(q, 6, normalizer);
 
         assertThat(result.expansions()).containsKey("dolly");
@@ -119,7 +118,7 @@ class CacheKeyGeneratorTest {
     @Test
     void categorySearchNormalizesWithPlaceDomain() {
         TermNormalizer normalizer = (term, domain) -> {
-            assertThat(domain).isEqualTo(KnowledgeDomain.PLACE);
+            assertThat(domain).isEqualTo("location");
             return new ExpandedTerm("cafe", Set.of("cafe", "café", "coffee shop"));
         };
 
@@ -145,7 +144,7 @@ class CacheKeyGeneratorTest {
     void passthroughNormalizerProducesNoExpansions() {
         TermNormalizer normalizer = (term, domain) -> ExpandedTerm.passthrough(term);
 
-        var q      = new KnowledgeQuery.TextSearch("starbucks", KnowledgeDomain.PLACE);
+        var q      = new KnowledgeQuery.TextSearch("starbucks", "location");
         var result = CacheKeyGenerator.generate(q, 6, normalizer);
 
         assertThat(result.normalizedQuery().cacheKey()).isEqualTo("TEXT:starbucks");

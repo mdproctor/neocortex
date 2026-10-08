@@ -1,6 +1,5 @@
 package io.casehub.neocortex.knowledge.normalization;
 
-import io.casehub.neocortex.knowledge.KnowledgeDomain;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +21,7 @@ class WordNetTermNormalizerTest {
 
     @Test
     void knownSynonymSetReturnsCanonicalAndVariants() {
-        var result = normalizer.normalize("eatery", KnowledgeDomain.PLACE);
+        var result = normalizer.normalize("eatery", "location");
         assertThat(result.canonical()).isNotNull();
         assertThat(result.variants()).contains("eatery");
         assertThat(result.variants().size()).isGreaterThan(1);
@@ -30,7 +29,7 @@ class WordNetTermNormalizerTest {
 
     @Test
     void unknownTermReturnsPassthrough() {
-        var result = normalizer.normalize("xyznotaword", KnowledgeDomain.THING);
+        var result = normalizer.normalize("xyznotaword", "commerce");
         assertThat(result.canonical()).isEqualTo("xyznotaword");
         assertThat(result.variants()).containsExactly("xyznotaword");
     }
@@ -44,17 +43,47 @@ class WordNetTermNormalizerTest {
 
     @Test
     void blankTermReturnsPassthrough() {
-        var result = normalizer.normalize("  ", KnowledgeDomain.PLACE);
+        var result = normalizer.normalize("  ", "location");
         assertThat(result.canonical()).isEqualTo("  ");
         assertThat(result.variants()).containsExactly("  ");
     }
 
     @Test
     void multiWordCompoundLookup() {
-        var result = normalizer.normalize("coffee shop", KnowledgeDomain.PLACE);
+        var result = normalizer.normalize("coffee shop", "location");
         assertThat(result.canonical()).isNotNull();
         assertThat(result.variants().size()).isGreaterThan(1);
     }
+
+    @Test
+    void commerceDomainNormalizesArtifacts() {
+        var result = normalizer.normalize("headphones", "commerce");
+        assertThat(result.canonical()).isNotNull();
+        assertThat(result.variants()).contains("earphone");
+        assertThat(result.variants().size()).isGreaterThan(1);
+    }
+
+    @Test
+    void generalDomainNormalizesCommonNouns() {
+        var result = normalizer.normalize("automobile", "general");
+        assertThat(result.canonical()).isNotNull();
+        assertThat(result.variants().size()).isGreaterThan(1);
+    }
+
+    @Test
+    void locationDomainWorksWithNewKey() {
+        var result = normalizer.normalize("restaurant", "location");
+        assertThat(result.canonical()).isNotNull();
+        assertThat(result.variants().size()).isGreaterThan(1);
+    }
+
+    @Test
+    void unknownDomainPassesThrough() {
+        var result = normalizer.normalize("test", "unknown_domain");
+        assertThat(result.canonical()).isEqualTo("test");
+        assertThat(result.variants()).containsExactly("test");
+    }
+
 
     @Test
     void threadSafety() throws Exception {
@@ -62,7 +91,7 @@ class WordNetTermNormalizerTest {
         var executor = Executors.newFixedThreadPool(4);
         for (int i = 0; i < 100; i++) {
             futures.add(executor.submit(() -> {
-                var r = normalizer.normalize("restaurant", KnowledgeDomain.PLACE);
+                var r = normalizer.normalize("restaurant", "location");
                 assertThat(r.canonical()).isNotNull();
             }));
         }

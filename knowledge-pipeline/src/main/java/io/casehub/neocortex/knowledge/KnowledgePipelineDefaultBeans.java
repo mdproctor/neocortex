@@ -1,33 +1,46 @@
 package io.casehub.neocortex.knowledge;
 
 import com.zaxxer.hikari.HikariDataSource;
+import io.casehub.connectors.commerce.spi.CommercePlatform;
+import io.casehub.connectors.contacts.spi.ContactsPlatform;
+import io.casehub.connectors.document.spi.DocumentPlatform;
 import io.casehub.connectors.location.spi.LocationPlatform;
-import io.casehub.neocortex.knowledge.TermNormalizer;
+import io.casehub.connectors.project.model.OwnerRepo;
+import io.casehub.connectors.project.spi.ProjectPlatform;
 import io.casehub.neocortex.knowledge.cache.CacheDecayPolicy;
 import io.casehub.neocortex.knowledge.cache.CacheEvictionScheduler;
-import io.casehub.neocortex.knowledge.cache.SpatialCacheKeyGenerator;
-import io.casehub.neocortex.knowledge.resolution.CompositeSearchableProvider;
-import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
-import io.casehub.neocortex.knowledge.resolution.SpatialSearchableProvider;
 import io.casehub.neocortex.knowledge.cache.EntityMetadataStore;
 import io.casehub.neocortex.knowledge.cache.QueryCacheStore;
+import io.casehub.neocortex.knowledge.cache.SpatialCacheKeyGenerator;
 import io.casehub.neocortex.knowledge.cache.SpatialSubsumptionRule;
 import io.casehub.neocortex.knowledge.dedup.DedupIndexStore;
 import io.casehub.neocortex.knowledge.promotion.EntityPromoter;
 import io.casehub.neocortex.knowledge.research.ResearchSessionStore;
+import io.casehub.neocortex.knowledge.resolution.CompositeSearchableProvider;
 import io.casehub.neocortex.knowledge.resolution.EntityResolutionEngine;
 import io.casehub.neocortex.knowledge.resolution.PlaceMatcher;
+import io.casehub.neocortex.knowledge.resolution.SpatialBlockingStrategy;
+import io.casehub.neocortex.knowledge.resolution.CommerceSearchableProvider;
+import io.casehub.neocortex.knowledge.resolution.ContactsSearchableProvider;
+import io.casehub.neocortex.knowledge.resolution.DocumentSearchableProvider;
+import io.casehub.neocortex.knowledge.resolution.ProjectSearchableProvider;
+import io.casehub.neocortex.knowledge.resolution.SpatialSearchableProvider;
+import io.casehub.neocortex.knowledge.cache.NormalizingTextCacheKeyGenerator;
+import io.casehub.neocortex.knowledge.normalization.PhoneticTermNormalizer;
+import io.casehub.neocortex.knowledge.normalization.StemmingTermNormalizer;
+import io.casehub.neocortex.knowledge.normalization.WordNetTermNormalizer;
 import io.casehub.neocortex.sqlite.SqliteDataSourceFactory;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import io.quarkus.arc.DefaultBean;
-import jakarta.inject.Named;
-import java.util.List;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Disposes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Named;
+
+import java.util.List;
 
 @ApplicationScoped
 public class KnowledgePipelineDefaultBeans {
@@ -130,7 +143,7 @@ public class KnowledgePipelineDefaultBeans {
             CacheDecayPolicy decayPolicy,
             SubsumptionRule subsumptionRule,
             EntityMatcher<CachedEntity> entityMatcher,
-            TermNormalizer normalizer,
+            WordNetTermNormalizer normalizer,
             KnowledgePipelineConfig config) {
         List<SearchableProvider> providers = platforms.stream()
                 .filter(p -> p.supports(LocationPlatform.PlaceSearch.class))
@@ -153,6 +166,96 @@ public class KnowledgePipelineDefaultBeans {
                 subsumptionRule, entityMatcher,
                 new SpatialBlockingStrategy(spatialCacheStore, 200),
                 List.of(normalizer));
+    }
+
+
+    @Produces
+    @DefaultBean
+    @ApplicationScoped
+    @Named("commerce")
+    DomainSupport commerceDomainSupport(
+            Instance<CommercePlatform> platforms,
+            CacheDecayPolicy decayPolicy,
+            WordNetTermNormalizer wordnet) {
+        List<SearchableProvider> providers = platforms.stream()
+                                                      .filter(p -> p.supports(CommercePlatform.ProductSearch.class))
+                                                      .map(p -> (SearchableProvider) new CommerceSearchableProvider(p, decayPolicy.coordinatesTtl()))
+                                                      .toList();
+        SearchableProvider provider = resolveProvider("commerce", providers);
+        return new DomainSupport("commerce", provider,
+                                 NormalizingTextCacheKeyGenerator.INSTANCE,
+                                 TextSubsumptionRule.INSTANCE, NameEntityMatcher.INSTANCE,
+                                 NoOpBlockingStrategy.INSTANCE, List.of(wordnet));
+    }
+
+    @Produces
+    @DefaultBean
+    @ApplicationScoped
+    @Named("contacts")
+    DomainSupport contactsDomainSupport(
+            Instance<ContactsPlatform> platforms,
+            CacheDecayPolicy decayPolicy,
+            PhoneticTermNormalizer phonetic) {
+        List<SearchableProvider> providers = platforms.stream()
+                                                      .filter(p -> p.supports(ContactsPlatform.ContactRead.class))
+                                                      .map(p -> (SearchableProvider) new ContactsSearchableProvider(p, decayPolicy.coordinatesTtl()))
+                                                      .toList();
+        SearchableProvider provider = resolveProvider("contacts", providers);
+        return new DomainSupport("contacts", provider,
+                                 NormalizingTextCacheKeyGenerator.INSTANCE,
+                                 TextSubsumptionRule.INSTANCE, NameEntityMatcher.INSTANCE,
+                                 NoOpBlockingStrategy.INSTANCE, List.of(phonetic));
+    }
+
+    @Produces
+    @DefaultBean
+    @ApplicationScoped
+    @Named("documents")
+    DomainSupport documentsDomainSupport(
+            Instance<DocumentPlatform> platforms,
+            CacheDecayPolicy decayPolicy,
+            StemmingTermNormalizer stemmer,
+            WordNetTermNormalizer wordnet) {
+        List<SearchableProvider> providers = platforms.stream()
+                                                      .filter(p -> p.supports(DocumentPlatform.SearchOperations.class))
+                                                      .map(p -> (SearchableProvider) new DocumentSearchableProvider(p, decayPolicy.coordinatesTtl()))
+                                                      .toList();
+        SearchableProvider provider = resolveProvider("documents", providers);
+        return new DomainSupport("documents", provider,
+                                 NormalizingTextCacheKeyGenerator.INSTANCE,
+                                 TextSubsumptionRule.INSTANCE, NameEntityMatcher.INSTANCE,
+                                 NoOpBlockingStrategy.INSTANCE, List.of(stemmer, wordnet));
+    }
+
+    @Produces
+    @DefaultBean
+    @ApplicationScoped
+    @Named("projects")
+    DomainSupport projectsDomainSupport(
+            Instance<ProjectPlatform> platforms,
+            CacheDecayPolicy decayPolicy,
+            StemmingTermNormalizer stemmer,
+            WordNetTermNormalizer wordnet) {
+        List<SearchableProvider> providers = platforms.stream()
+                                                      .filter(p -> p.supports(ProjectPlatform.Issues.class))
+                                                      .map(p -> (SearchableProvider) new ProjectSearchableProvider(
+                                                              p, new OwnerRepo("casehubio", "neocortex"), decayPolicy.coordinatesTtl()))
+                                                      .toList();
+        SearchableProvider provider = resolveProvider("projects", providers);
+        return new DomainSupport("projects", provider,
+                                 NormalizingTextCacheKeyGenerator.INSTANCE,
+                                 TextSubsumptionRule.INSTANCE, NameEntityMatcher.INSTANCE,
+                                 NoOpBlockingStrategy.INSTANCE, List.of(stemmer, wordnet));
+    }
+
+    private SearchableProvider resolveProvider(String domain, List<SearchableProvider> providers) {
+        if (providers.isEmpty()) {
+            return new NoOpSearchableProvider(domain);
+        } else if (providers.size() == 1) {
+            return providers.get(0);
+        } else {
+            return new CompositeSearchableProvider(domain, providers);
+        }
     }
 
     @Produces

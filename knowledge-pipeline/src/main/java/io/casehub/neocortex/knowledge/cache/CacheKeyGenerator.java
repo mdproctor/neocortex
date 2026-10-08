@@ -48,7 +48,7 @@ public final class CacheKeyGenerator {
                                                   + ":" + n.radiusMeters();
             case KnowledgeQuery.CategorySearch c -> {
                 ExpandedTerm expanded = normalizer.normalize(
-                        c.category().toLowerCase().strip(), KnowledgeDomain.PLACE);
+                        c.category().toLowerCase().strip(), "location");
                 if (!c.category().toLowerCase().strip().equals(expanded.canonical())
                     || expanded.variants().size() > 1) {
                     expansions.put(c.category(), expanded);

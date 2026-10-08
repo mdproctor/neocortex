@@ -1,7 +1,6 @@
 package io.casehub.neocortex.knowledge.normalization;
 
 import io.casehub.neocortex.knowledge.ExpandedTerm;
-import io.casehub.neocortex.knowledge.KnowledgeDomain;
 import io.casehub.neocortex.knowledge.TermNormalizer;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -23,11 +22,17 @@ public class WordNetTermNormalizer implements TermNormalizer {
 
     private static final Logger LOG = Logger.getLogger(WordNetTermNormalizer.class.getName());
 
-    private static final Map<String, List<String>> DOMAIN_TO_LEX_FILES = Map.of(
-        KnowledgeDomain.PLACE, List.of("noun.artifact", "noun.location"),
-        KnowledgeDomain.THING, List.of("noun.artifact", "noun.object"),
-        KnowledgeDomain.ACTIVITY, List.of("noun.act")
-    );
+    private static final Map<String, List<String>> DOMAIN_TO_LEX_FILES = Map.ofEntries(
+            Map.entry("location", List.of("noun.artifact", "noun.location")),
+            Map.entry("commerce", List.of("noun.artifact", "noun.object")),
+            Map.entry("contacts", List.of("noun.person", "noun.group")),
+            Map.entry("documents", List.of("noun.communication", "noun.cognition")),
+            Map.entry("projects", List.of("noun.act", "noun.cognition", "noun.communication")),
+            Map.entry("activity", List.of("noun.act")),
+            Map.entry("general", List.of("noun.artifact", "noun.object", "noun.act",
+                                         "noun.cognition", "noun.communication", "noun.event",
+                                         "noun.person", "noun.group", "noun.state"))
+                                                                                      );
 
     private Dictionary dictionary;
 
