@@ -14,6 +14,7 @@ import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.MemoryQuery;
 import io.casehub.neocortex.memory.Subject;
 import io.casehub.neocortex.mindmap.AttentionBriefing;
+import io.casehub.neocortex.mindmap.intelligence.consolidation.CognitiveAttentionAccumulator;
 import io.casehub.neocortex.mindmap.MindMapStore;
 import io.casehub.neocortex.mindmap.intelligence.ActivityQueryService;
 import io.casehub.neocortex.mindmap.intelligence.ActivitySummary;
@@ -32,19 +33,23 @@ public class CognitionService implements CognitionApi {
     private final CaseMemoryStore      memoryStore;
     private final DomainActivation     domainActivation;
     private final ActivityQueryService activityQueryService;
+    private final CognitiveAttentionAccumulator attentionAccumulator;
+
 
     public CognitionService(MindMapStore store,
                             CognitiveProfile cognitiveProfile,
                             SnapshotStore snapshotStore,
                             CaseMemoryStore memoryStore,
                             DomainActivation domainActivation,
-                            ActivityQueryService activityQueryService) {
+                            ActivityQueryService activityQueryService,
+                            CognitiveAttentionAccumulator attentionAccumulator) {
         this.store                = store;
         this.cognitiveProfile     = cognitiveProfile;
         this.snapshotStore        = snapshotStore;
         this.memoryStore          = memoryStore;
         this.domainActivation     = domainActivation;
         this.activityQueryService = activityQueryService;
+        this.attentionAccumulator = attentionAccumulator;
     }
 
     @Override
@@ -157,7 +162,9 @@ public class CognitionService implements CognitionApi {
 
     @Override
     public AttentionBriefing attention(String tenantId, String principalId, Integer topN) {
-        return null;
+        if (attentionAccumulator == null) {return null;}
+        int n = topN != null ? topN : 10;
+        return attentionAccumulator.currentBriefing(principalId, n);
     }
 
     @Override

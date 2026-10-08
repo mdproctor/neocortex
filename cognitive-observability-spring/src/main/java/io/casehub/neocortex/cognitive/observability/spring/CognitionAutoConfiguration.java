@@ -29,6 +29,7 @@ public class CognitionAutoConfiguration {
                 snapshotStore.getIfAvailable(),
                 memoryStore.getIfAvailable(),
                 domainActivation.getIfAvailable(),
-                activityQueryService.getIfAvailable());
+                activityQueryService.getIfAvailable(),
+                null);
     }
 }

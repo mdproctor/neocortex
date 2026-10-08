@@ -65,7 +65,7 @@ public class CognitiveAttentionAccumulator {
              baseThreshold, minIntervalSeconds, padCacheExpirySeconds);
     }
 
-    CognitiveAttentionAccumulator(
+    public CognitiveAttentionAccumulator(
             CognitiveDefaultsRegistry registry,
             MindMapStore mindMapStore,
             Consumer<CognitiveAttentionRequired> eventSink,
@@ -192,6 +192,21 @@ public class CognitiveAttentionAccumulator {
                 pa.pending.add(signal);
             }
         }
+    }
+
+
+    public AttentionBriefing currentBriefing(String principalId, int topN) {
+        PrincipalAttention pa = perPrincipal.get(principalId);
+        if (pa == null) {
+            return new AttentionBriefing(principalId, "", List.of(), 0.0, clock.instant());
+        }
+        var signals = new ArrayList<>(pa.pending);
+        signals.sort(Comparator.comparingDouble(AttentionSignal::significance).reversed());
+        if (topN > 0 && signals.size() > topN) {
+            signals = new ArrayList<>(signals.subList(0, topN));
+        }
+        String tenantId = signals.isEmpty() ? "" : signals.get(0).tenantId();
+        return new AttentionBriefing(principalId, tenantId, signals, pa.urgencyP75, clock.instant());
     }
 
     private void evaluateThreshold(String principalId, PrincipalAttention pa) {
