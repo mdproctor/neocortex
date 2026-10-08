@@ -9,20 +9,25 @@ import java.util.Map;
 
 public class SubThoughtSituationDecorator implements SituationClassifier {
 
-    private static final Map<String, List<SituationActivation>> TYPE_ACTIVATIONS = Map.of(
-        "affect-observation", List.of(
+    private static final Map<String, List<SituationActivation>> TYPE_ACTIVATIONS = Map.ofEntries(
+        Map.entry("affect-observation", List.of(
             new SituationActivation("acceptance", 0.3),
-            new SituationActivation("exclusion", 0.3)),
-        "causal-inference", List.of(
-            new SituationActivation("mastery", 0.4)),
-        "concern", List.of(
+            new SituationActivation("exclusion", 0.3))),
+        Map.entry("causal-inference", List.of(
+            new SituationActivation("mastery", 0.4))),
+        Map.entry("concern", List.of(
             new SituationActivation("social_threat", 0.6),
-            new SituationActivation("psychological_threat", 0.5)),
-        "intention", List.of(
+            new SituationActivation("psychological_threat", 0.5))),
+        Map.entry("intention", List.of(
             new SituationActivation("agency_granted", 0.5),
-            new SituationActivation("choice_available", 0.4)),
-        "self-reflection", List.of(
-            new SituationActivation("agency_granted", 0.4))
+            new SituationActivation("choice_available", 0.4))),
+        Map.entry("self-reflection", List.of(
+            new SituationActivation("agency_granted", 0.4))),
+        Map.entry("formative-experience", List.of(
+            new SituationActivation("secure_attachment", 0.5),
+            new SituationActivation("neglect", 0.5),
+            new SituationActivation("competence_recognition", 0.4),
+            new SituationActivation("rejection", 0.4)))
     );
 
     private final SituationClassifier delegate;

@@ -64,7 +64,9 @@ public class DirectiveSection implements CognitionPromptRenderer {
             Map.entry("TemporalFocusPromptSection", BlockTag.TEMPORAL),
             Map.entry("ConstraintPromptSection", BlockTag.CONSTRAINTS),
             Map.entry("DomainActivationPromptSection", BlockTag.PERSONALITY),
-            Map.entry("SocialComparisonPromptSection", BlockTag.SOCIAL)
+            Map.entry("SocialComparisonPromptSection", BlockTag.SOCIAL),
+            Map.entry("SubThoughtPromptSection", BlockTag.APPRAISAL),
+            Map.entry("EntityKnowledgePromptSection", BlockTag.MENTAL_MODEL)
     );
 
     private final CognitionPromptRenderer delegate;
