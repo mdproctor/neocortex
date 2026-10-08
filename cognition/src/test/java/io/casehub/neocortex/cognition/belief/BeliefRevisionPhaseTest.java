@@ -141,6 +141,73 @@ class BeliefRevisionPhaseTest {
                 .isGreaterThan(callsAfterRevision);
     }
 
+    @Test
+    void beliefOscillation_trustRevisedThenRebuilt() {
+        var aggressiveConfig = new BeliefRevisionConfig(0.5, 0.3, 0.4);
+        phase = new BeliefRevisionPhase(store, agentProvider, aggressiveConfig);
+
+        addBeliefWithConfidence("People always abandon me", "agent1", 0.25);
+        addEvidence("Peter-Perfect stayed and helped you", "agent1");
+
+        agentProvider.setResponse("""
+                {"contradictions": [{
+                    "beliefNodeId": "any",
+                    "beliefText": "People always abandon me",
+                    "contradictingEvidence": "Peter-Perfect stayed and helped",
+                    "reasoning": "Direct counter-evidence",
+                    "contradictionStrength": 0.9,
+                    "revisedBelief": "Some people stay when it matters"
+                }]}
+                """);
+
+        phase.run(TENANT, List.of());
+
+        var revisedNodes = store.nodesIn(cognitiveSubgraphId, TENANT).stream()
+                .filter(n -> "belief-revision".equals(n.provenance()))
+                .toList();
+        assertThat(revisedNodes).hasSize(1);
+        assertThat(revisedNodes.get(0).name()).isEqualTo("Some people stay when it matters");
+
+        addEvidence("Peter-Perfect left without saying goodbye", "agent1");
+
+        agentProvider.setResponse("""
+                {"contradictions": [{
+                    "beliefNodeId": "any",
+                    "beliefText": "Some people stay when it matters",
+                    "contradictingEvidence": "Peter-Perfect left without saying goodbye",
+                    "reasoning": "The person who stayed before now abandoned",
+                    "contradictionStrength": 0.9,
+                    "revisedBelief": "People leave eventually"
+                }]}
+                """);
+
+        phase.run(TENANT, List.of());
+
+        var secondRevision = store.nodesIn(cognitiveSubgraphId, TENANT).stream()
+                .filter(n -> "belief-revision".equals(n.provenance()))
+                .filter(n -> n.name().equals("People leave eventually"))
+                .toList();
+        assertThat(secondRevision)
+                .as("Second oscillation should produce another revised belief")
+                .hasSize(1);
+    }
+
+    @Test
+    void fiveConsolidationPasses_onlyOneCallWhenNoNewEvidence() {
+        addBelief("The world is dangerous", "agent1");
+        addEvidence("Something happened", "agent1");
+
+        phase.run(TENANT, List.of());
+        phase.run(TENANT, List.of());
+        phase.run(TENANT, List.of());
+        phase.run(TENANT, List.of());
+        phase.run(TENANT, List.of());
+
+        assertThat(agentProvider.callCount())
+                .as("Five consolidation passes with same evidence should produce exactly one LLM call")
+                .isEqualTo(1);
+    }
+
     private void addBelief(String text, String agentId) {
         addBeliefWithConfidence(text, agentId, 0.8);
     }
