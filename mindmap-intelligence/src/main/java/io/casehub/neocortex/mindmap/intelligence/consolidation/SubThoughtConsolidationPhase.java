@@ -55,6 +55,7 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
     private final List<AttentionSignal> pendingSignals = new ArrayList<>();
     private final List<String> unresolvedIntentions = new ArrayList<>();
     private final Map<String, Boolean> lastAffectPolarity = new HashMap<>();
+    private final Set<String> previousAccumKeys = new HashSet<>();
 
     @Inject
     public SubThoughtConsolidationPhase(Instance<CaseMemoryStore> memoryStore,
@@ -130,10 +131,11 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
             lastProcessedId = memory.memoryId();
         }
 
+        var entityTypes = buildEntityTypeIndex(accumulation);
         detectConcernEscalation(accumulation, tenantId);
-        detectContradictions(accumulation, tenantId);
+        detectContradictions(entityTypes, tenantId);
         detectUnresolvedIntentions(accumulation);
-        detectAffectPolarityShifts(accumulation, tenantId);
+        detectAffectPolarityShifts(entityTypes, tenantId);
 
         var graduated = new ArrayList<EntityTypePair>();
         var graduatedNodeIds = new HashMap<EntityTypePair, String>();
@@ -166,22 +168,23 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         }
     }
 
-    private void detectContradictions(Map<EntityTypePair, List<SubThoughtSource>> accumulation,
-                                       String tenantId) {
-        var entities = new HashSet<String>();
+    private Map<String, Set<String>> buildEntityTypeIndex(Map<EntityTypePair, List<SubThoughtSource>> accumulation) {
+        var index = new HashMap<String, Set<String>>();
         for (var key : accumulation.keySet()) {
-            entities.add(key.entity());
+            index.computeIfAbsent(key.entity(), k -> new HashSet<>()).add(key.type());
         }
-        for (String entity : entities) {
-            boolean hasPositive = accumulation.keySet().stream()
-                .anyMatch(k -> entity.equals(k.entity()) && POSITIVE_TYPES.contains(k.type()));
-            boolean hasNegative = accumulation.keySet().stream()
-                .anyMatch(k -> entity.equals(k.entity()) && NEGATIVE_TYPES.contains(k.type()));
+        return index;
+    }
+
+    private void detectContradictions(Map<String, Set<String>> entityTypes, String tenantId) {
+        for (var entry : entityTypes.entrySet()) {
+            boolean hasPositive = entry.getValue().stream().anyMatch(POSITIVE_TYPES::contains);
+            boolean hasNegative = entry.getValue().stream().anyMatch(NEGATIVE_TYPES::contains);
             if (hasPositive && hasNegative) {
                 pendingSignals.add(new AttentionSignal(
                     null, tenantId, SignalCategory.MERGE_CANDIDATE,
-                    null, entity, 0.6,
-                    "Contradictory sub-thoughts about " + entity + " — positive and negative signals coexist"));
+                    null, entry.getKey(), 0.6,
+                    "Contradictory sub-thoughts about " + entry.getKey() + " — positive and negative signals coexist"));
             }
         }
     }
@@ -194,31 +197,24 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         }
     }
 
-    private void detectAffectPolarityShifts(Map<EntityTypePair, List<SubThoughtSource>> accumulation,
-                                             String tenantId) {
-        var entities = new HashSet<String>();
-        for (var key : accumulation.keySet()) {
-            if (POSITIVE_TYPES.contains(key.type()) || NEGATIVE_TYPES.contains(key.type())) {
-                entities.add(key.entity());
-            }
-        }
-        for (String entity : entities) {
-            boolean hasPositive = accumulation.keySet().stream()
-                .anyMatch(k -> entity.equals(k.entity()) && POSITIVE_TYPES.contains(k.type()));
-            boolean hasNegative = accumulation.keySet().stream()
-                .anyMatch(k -> entity.equals(k.entity()) && NEGATIVE_TYPES.contains(k.type()));
+    private void detectAffectPolarityShifts(Map<String, Set<String>> entityTypes, String tenantId) {
+        for (var entry : entityTypes.entrySet()) {
+            boolean hasPositive = entry.getValue().stream().anyMatch(POSITIVE_TYPES::contains);
+            boolean hasNegative = entry.getValue().stream().anyMatch(NEGATIVE_TYPES::contains);
+            if (!hasPositive && !hasNegative) continue;
 
             boolean currentPolarity = hasPositive && !hasNegative;
-            Boolean previousPolarity = lastAffectPolarity.get(entity);
+            String polarityKey = tenantId + ":" + entry.getKey();
+            Boolean previousPolarity = lastAffectPolarity.get(polarityKey);
 
             if (previousPolarity != null && previousPolarity != currentPolarity) {
                 String direction = currentPolarity ? "negative → positive" : "positive → negative";
                 pendingSignals.add(new AttentionSignal(
                     null, tenantId, SignalCategory.AFFECT_CHANGE,
-                    null, entity, 0.7,
-                    "Affect polarity shift for " + entity + ": " + direction));
+                    null, entry.getKey(), 0.7,
+                    "Affect polarity shift for " + entry.getKey() + ": " + direction));
             }
-            lastAffectPolarity.put(entity, currentPolarity);
+            lastAffectPolarity.put(polarityKey, currentPolarity);
         }
     }
 
@@ -319,15 +315,24 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         var sentinel = findSentinelNode(tenantId);
         if (sentinel.isEmpty()) return;
 
+        var currentKeys = new HashSet<String>();
         var props = new HashMap<String, String>();
         for (var entry : accumulation.entrySet()) {
-            props.put(ACCUM_PREFIX + entry.getKey().entity() + ":" + entry.getKey().type(),
-                String.valueOf(entry.getValue().size()));
+            String key = ACCUM_PREFIX + entry.getKey().entity() + ":" + entry.getKey().type();
+            props.put(key, String.valueOf(entry.getValue().size()));
+            currentKeys.add(key);
         }
 
-        if (!props.isEmpty()) {
-            mindMapStore.updateNode(sentinel.get().id(),
-                NodeUpdate.empty().withPropertiesToSet(props), tenantId);
+        var staleKeys = new HashSet<>(previousAccumKeys);
+        staleKeys.removeAll(currentKeys);
+        previousAccumKeys.clear();
+        previousAccumKeys.addAll(currentKeys);
+
+        var update = NodeUpdate.empty();
+        if (!props.isEmpty()) update = update.withPropertiesToSet(props);
+        if (!staleKeys.isEmpty()) update = update.withPropertiesToRemove(staleKeys);
+        if (!props.isEmpty() || !staleKeys.isEmpty()) {
+            mindMapStore.updateNode(sentinel.get().id(), update, tenantId);
         }
     }
 

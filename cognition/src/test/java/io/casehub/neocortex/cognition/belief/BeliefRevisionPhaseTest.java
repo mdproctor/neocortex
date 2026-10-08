@@ -115,7 +115,7 @@ class BeliefRevisionPhaseTest {
     }
 
     @Test
-    void afterRevision_cursorNotAdvanced_soNextPassReEvaluates() {
+    void afterRevision_cursorAdvances_nextPassSkipsSameEvidence() {
         addBeliefWithConfidence("Nobody cares about me", "agent1", 0.25);
         addEvidence("The housekeeper made a birthday cake for you", "agent1");
 
@@ -137,8 +137,8 @@ class BeliefRevisionPhaseTest {
 
         phase.run(TENANT, List.of());
         assertThat(agentProvider.callCount())
-                .as("After a revision, cursor should not advance — next pass re-evaluates the revised belief against same evidence")
-                .isGreaterThan(callsAfterRevision);
+                .as("After a revision, cursor advances — next pass does not re-process same evidence")
+                .isEqualTo(callsAfterRevision);
     }
 
     @Test

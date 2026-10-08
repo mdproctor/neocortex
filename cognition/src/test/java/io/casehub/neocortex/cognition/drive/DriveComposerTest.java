@@ -100,7 +100,7 @@ class DriveComposerTest {
     @Test
     void compose_personalityModulation_socialOrientAmplifiesAffiliation() {
         var disposition = AgentDisposition.builder()
-                .socialOrient(DispositionValue.of("collaborative"))
+                .socialOrient(DispositionValue.of("cooperative"))
                 .build();
 
         var profile = composer.compose(uniformRaw(0.5), disposition, null, List.of(), DriveConfig.defaults(),

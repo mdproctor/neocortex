@@ -634,7 +634,7 @@ class CognitiveDerivationEngineTest {
     @Test
     void deriveAppraisalWeights_strictRuleFollowing_highStrictness() {
         var profile = List.of(new WeightedTerm("fi", 1.0));
-        var axes    = new DispositionAxes("balanced", "strict", "moderate", "balanced", "collaborative");
+        var axes    = new DispositionAxes("balanced", "strict", "moderate", "balanced", "cooperative");
         var w       = CognitiveDerivationEngine.deriveAppraisalWeights(profile, axes);
         assertThat(w.selfStandardsStrictness()).isCloseTo(1.6, within(0.01));
         assertThat(w.otherStandardsStrictness()).isCloseTo(1.4, within(0.01));
@@ -643,7 +643,7 @@ class CognitiveDerivationEngineTest {
     @Test
     void deriveAppraisalWeights_flexibleRuleFollowing_lowStrictness() {
         var profile = List.of(new WeightedTerm("fi", 1.0));
-        var axes    = new DispositionAxes("balanced", "flexible", "moderate", "balanced", "collaborative");
+        var axes    = new DispositionAxes("balanced", "flexible", "moderate", "balanced", "cooperative");
         var w       = CognitiveDerivationEngine.deriveAppraisalWeights(profile, axes);
         assertThat(w.selfStandardsStrictness()).isCloseTo(0.7, within(0.01));
         assertThat(w.otherStandardsStrictness()).isCloseTo(0.6, within(0.01));
@@ -652,7 +652,7 @@ class CognitiveDerivationEngineTest {
     @Test
     void deriveAppraisalWeights_cooperativeSocialOrient_reducesOtherStrictness() {
         var profile = List.of(new WeightedTerm("fi", 1.0));
-        var axes    = new DispositionAxes("cooperative", "strict", "moderate", "balanced", "collaborative");
+        var axes    = new DispositionAxes("cooperative", "strict", "moderate", "balanced", "cooperative");
         var w       = CognitiveDerivationEngine.deriveAppraisalWeights(profile, axes);
         assertThat(w.selfStandardsStrictness()).isCloseTo(1.6, within(0.01));
         assertThat(w.otherStandardsStrictness()).isCloseTo(1.2, within(0.01));
@@ -661,7 +661,7 @@ class CognitiveDerivationEngineTest {
     @Test
     void deriveAppraisalWeights_competitiveSocialOrient_increasesOtherStrictness() {
         var profile = List.of(new WeightedTerm("fi", 1.0));
-        var axes    = new DispositionAxes("competitive", "moderate", "moderate", "balanced", "collaborative");
+        var axes    = new DispositionAxes("competitive", "moderate", "moderate", "balanced", "cooperative");
         var w       = CognitiveDerivationEngine.deriveAppraisalWeights(profile, axes);
         assertThat(w.otherStandardsStrictness()).isCloseTo(1.2, within(0.01));
     }
@@ -677,7 +677,7 @@ class CognitiveDerivationEngineTest {
     @Test
     void deriveAppraisalWeights_strictCompetitive_clampsToMax() {
         var profile = List.of(new WeightedTerm("fi", 1.0));
-        var axes    = new DispositionAxes("competitive", "strict", "moderate", "balanced", "collaborative");
+        var axes    = new DispositionAxes("competitive", "strict", "moderate", "balanced", "cooperative");
         var w       = CognitiveDerivationEngine.deriveAppraisalWeights(profile, axes);
         assertThat(w.otherStandardsStrictness()).isCloseTo(1.6, within(0.01));
         assertThat(w.otherStandardsStrictness()).isLessThanOrEqualTo(2.0);

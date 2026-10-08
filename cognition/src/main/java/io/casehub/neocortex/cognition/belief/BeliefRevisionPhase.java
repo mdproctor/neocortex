@@ -27,7 +27,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @ApplicationScoped
-@Priority(16)
+@Priority(14)
 public class BeliefRevisionPhase implements ConsolidationPhase {
 
     private static final Logger LOG = Logger.getLogger(BeliefRevisionPhase.class.getName());
@@ -111,15 +111,13 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
         if (allBeliefs.isEmpty()) return;
 
         Instant latestTimestamp = lastProcessedAt;
-        boolean anyRevised = false;
         for (var agentId : allBeliefs.keySet()) {
             var beliefs = allBeliefs.get(agentId);
             var evidence = allEvidence.getOrDefault(agentId, List.of());
             var newEvidence = filterNewEvidence(evidence, lastProcessedAt);
             if (newEvidence.isEmpty()) continue;
 
-            boolean revised = processAgent(agentId, beliefs, newEvidence, tenantId);
-            if (revised) anyRevised = true;
+            processAgent(agentId, beliefs, newEvidence, tenantId);
 
             for (var ev : newEvidence) {
                 if (ev.createdAt() != null && (latestTimestamp == null || ev.createdAt().isAfter(latestTimestamp))) {
@@ -128,7 +126,7 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
             }
         }
 
-        if (!anyRevised && latestTimestamp != null && !latestTimestamp.equals(lastProcessedAt)) {
+        if (latestTimestamp != null && !latestTimestamp.equals(lastProcessedAt)) {
             saveCursor(cognitiveSubgraphs.get(0).id(), cursorSubgraphId,
                        cursorNodeId, latestTimestamp, tenantId);
         }
@@ -311,7 +309,7 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
         } else {
             mindMapStore.addNode(
                 NodeInput.of(CURSOR_NODE_NAME, sgId)
-                    .withProvenance(REVISION_PROVENANCE)
+                    .withProvenance("belief-revision-cursor")
                     .withProperties(Map.of(
                         "cognitiveKind", "cursor",
                         "last-processed-timestamp", lastTimestamp.toString())),
