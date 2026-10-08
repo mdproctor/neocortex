@@ -7,10 +7,12 @@ import io.casehub.neocortex.memory.Memory;
 import io.casehub.neocortex.memory.MemoryScanRequest;
 import io.casehub.neocortex.memory.experience.ExperienceEvents;
 import io.casehub.neocortex.memory.experience.SubThoughtAttributeKeys;
+import io.casehub.neocortex.mindmap.AttentionSignal;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.MindMapStore;
 import io.casehub.neocortex.mindmap.NodeInput;
+import io.casehub.neocortex.mindmap.SignalCategory;
 import io.casehub.neocortex.mindmap.NodeUpdate;
 import io.casehub.neocortex.mindmap.NodeRef;
 import io.casehub.neocortex.mindmap.SubThoughtRef;
@@ -37,14 +39,20 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
 
     private static final Logger LOG = Logger.getLogger(SubThoughtConsolidationPhase.class.getName());
     private static final int DEFAULT_THRESHOLD = 3;
+    private static final int DEFAULT_CONCERN_THRESHOLD = 3;
     private static final int MAX_PER_PASS = 50;
     private static final String SENTINEL_NAME = "_sub-thought-consolidation-cursor";
     private static final String CURSOR_PROPERTY = "graduation-cursor";
     private static final String ACCUM_PREFIX = "accum.";
+    private static final Set<String> NEGATIVE_TYPES = Set.of("concern", "evaluative");
+    private static final Set<String> POSITIVE_TYPES = Set.of("affect-observation");
 
     private final CaseMemoryStore memoryStore;
     private final MindMapStore mindMapStore;
     private final int graduationThreshold;
+    private final int concernThreshold;
+    private final List<AttentionSignal> pendingSignals = new ArrayList<>();
+    private final List<String> unresolvedIntentions = new ArrayList<>();
 
     @Inject
     public SubThoughtConsolidationPhase(Instance<CaseMemoryStore> memoryStore,
@@ -52,6 +60,7 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         this.memoryStore = memoryStore.isResolvable() ? memoryStore.get() : null;
         this.mindMapStore = mindMapStore.isResolvable() ? mindMapStore.get() : null;
         this.graduationThreshold = DEFAULT_THRESHOLD;
+        this.concernThreshold = DEFAULT_CONCERN_THRESHOLD;
     }
 
     SubThoughtConsolidationPhase(CaseMemoryStore memoryStore,
@@ -60,13 +69,22 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         this.memoryStore = memoryStore;
         this.mindMapStore = mindMapStore;
         this.graduationThreshold = graduationThreshold;
+        this.concernThreshold = DEFAULT_CONCERN_THRESHOLD;
     }
 
     @Override
     public String name() { return "sub-thought-graduation"; }
 
     @Override
-    public void beginTick() {}
+    public void beginTick() {
+        pendingSignals.clear();
+        unresolvedIntentions.clear();
+    }
+
+    @Override
+    public List<AttentionSignal> signals() { return List.copyOf(pendingSignals); }
+
+    public List<String> unresolvedIntentions() { return List.copyOf(unresolvedIntentions); }
 
     @Override
     public void run(String tenantId, List<String> subgraphPriority) {
@@ -110,6 +128,10 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
             lastProcessedId = memory.memoryId();
         }
 
+        detectConcernEscalation(accumulation, tenantId);
+        detectContradictions(accumulation, tenantId);
+        detectUnresolvedIntentions(accumulation);
+
         var graduated = new ArrayList<EntityTypePair>();
         for (var entry : accumulation.entrySet()) {
             if (entry.getValue().size() >= graduationThreshold) {
@@ -121,6 +143,48 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
 
         saveCursor(tenantId, lastProcessedId);
         saveAccumulation(tenantId, accumulation);
+    }
+
+    private void detectConcernEscalation(Map<EntityTypePair, List<SubThoughtSource>> accumulation,
+                                          String tenantId) {
+        for (var entry : accumulation.entrySet()) {
+            if (!"concern".equals(entry.getKey().type())) continue;
+            if (entry.getValue().size() >= concernThreshold) {
+                pendingSignals.add(new AttentionSignal(
+                    null, tenantId, SignalCategory.URGENCY_SPIKE,
+                    null, entry.getKey().entity(),
+                    Math.min(1.0, entry.getValue().size() * 0.2),
+                    "Concern about " + entry.getKey().entity() + " escalating (" + entry.getValue().size() + " instances)"));
+            }
+        }
+    }
+
+    private void detectContradictions(Map<EntityTypePair, List<SubThoughtSource>> accumulation,
+                                       String tenantId) {
+        var entities = new HashSet<String>();
+        for (var key : accumulation.keySet()) {
+            entities.add(key.entity());
+        }
+        for (String entity : entities) {
+            boolean hasPositive = accumulation.keySet().stream()
+                .anyMatch(k -> entity.equals(k.entity()) && POSITIVE_TYPES.contains(k.type()));
+            boolean hasNegative = accumulation.keySet().stream()
+                .anyMatch(k -> entity.equals(k.entity()) && NEGATIVE_TYPES.contains(k.type()));
+            if (hasPositive && hasNegative) {
+                pendingSignals.add(new AttentionSignal(
+                    null, tenantId, SignalCategory.MERGE_CANDIDATE,
+                    null, entity, 0.6,
+                    "Contradictory sub-thoughts about " + entity + " — positive and negative signals coexist"));
+            }
+        }
+    }
+
+    private void detectUnresolvedIntentions(Map<EntityTypePair, List<SubThoughtSource>> accumulation) {
+        for (var entry : accumulation.entrySet()) {
+            if ("intention".equals(entry.getKey().type()) && entry.getValue().size() >= 2) {
+                unresolvedIntentions.add(entry.getKey().entity());
+            }
+        }
     }
 
     private void graduateSubThought(EntityTypePair pair, List<SubThoughtSource> sources,

@@ -123,6 +123,51 @@ class SubThoughtConsolidationPhaseTest {
         return attrs;
     }
 
+    @Test
+    void concernEscalation_emitsUrgencySpike() {
+        for (int i = 0; i < 3; i++) {
+            storeMemoryWithSubThought(SubThoughtTypes.CONCERN,
+                "Worried about " + i, "Sneekly");
+        }
+
+        phase.beginTick();
+        phase.run(TENANT, List.of());
+
+        assertThat(phase.signals()).anyMatch(s ->
+            s.category() == io.casehub.neocortex.mindmap.SignalCategory.URGENCY_SPIKE
+            && "Sneekly".equals(s.sourceName()));
+    }
+
+    @Test
+    void contradictorySubThoughts_emitsMergeCandidate() {
+        storeMemoryWithSubThought(SubThoughtTypes.AFFECT_OBSERVATION,
+            "Sneekly seemed helpful", "Sneekly");
+        storeMemoryWithSubThought(SubThoughtTypes.AFFECT_OBSERVATION,
+            "Sneekly seemed helpful again", "Sneekly");
+        storeMemoryWithSubThought(SubThoughtTypes.CONCERN,
+            "Something off about Sneekly", "Sneekly");
+
+        phase.beginTick();
+        phase.run(TENANT, List.of());
+
+        assertThat(phase.signals()).anyMatch(s ->
+            s.category() == io.casehub.neocortex.mindmap.SignalCategory.MERGE_CANDIDATE
+            && "Sneekly".equals(s.sourceName()));
+    }
+
+    @Test
+    void unresolvedIntentions_tracked() {
+        storeMemoryWithSubThought(SubThoughtTypes.INTENTION,
+            "Should check on Penelope", "Penelope");
+        storeMemoryWithSubThought(SubThoughtTypes.INTENTION,
+            "Need to talk to Penelope", "Penelope");
+
+        phase.beginTick();
+        phase.run(TENANT, List.of());
+
+        assertThat(phase.unresolvedIntentions()).contains("Penelope");
+    }
+
     private void storeMemoryWithAttrs(String desc, Map<String, String> attrs) {
         memoryStore.store(new MemoryInput(
             SUBJECT, ExperienceEvents.DOMAIN, TENANT,
