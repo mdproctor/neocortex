@@ -306,6 +306,12 @@ connections:
     source: "Gray RST dopaminergic RPE"
     tags: [bas]
   - from: punishment
+    to: BIS_activation
+    weight: 0.35
+    provenance: consensus
+    source: "punishment → behavioral inhibition (guilt, self-restraint)"
+    tags: [bis]
+  - from: punishment
     to: FFFS_activation
     weight: 0.50
     provenance: consensus
@@ -543,6 +549,7 @@ disposition_modifiers:
       _default: 1.0
     strict:
       social_threat_to_BIS_activation: 1.4
+      punishment_to_BIS_activation: 1.3
       schema_connections: 1.3
 
   riskAppetite:

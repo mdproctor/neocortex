@@ -136,4 +136,16 @@ class CapsTopologyLoaderTest {
         assertThat(catastrophizing.effect()).isEqualTo(DistortionEffect.MULTIPLICATIVE);
         assertThat(catastrophizing.targetCategories()).contains("world_model");
     }
+
+    @Test
+    void strictRuleFollowing_boostsInternalInhibition() {
+        var topology = new CapsTopologyLoader().loadFromClasspath("caps-topology.yaml");
+        var strict = topology.dispositionModifiers().get("ruleFollowing")
+            .valueModifiers().get("strict");
+
+        assertThat(strict)
+            .as("strict ruleFollowing should boost an internal self-directed inhibition " +
+                "mechanism (guilt, self-judgment), not just external social threat response")
+            .containsKey("punishment_to_BIS_activation");
+    }
 }

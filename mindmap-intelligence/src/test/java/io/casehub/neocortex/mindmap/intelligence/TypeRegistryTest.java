@@ -94,4 +94,13 @@ class TypeRegistryTest {
         assertThat(registry.typeExists("custom-b", "t2")).isTrue();
         assertThat(registry.typeExists("custom-b", "t1")).isFalse();
     }
+
+    @Test
+    void formativeExperience_mapsToBelieflike() {
+        assertThat(TypeRegistry.COGNITIVE_TYPES)
+            .as("formative-experience should map to Belieflike so BeliefRevisionPhase can revise it")
+            .containsKey("formative-experience");
+        assertThat(TypeRegistry.COGNITIVE_TYPES.get("formative-experience"))
+            .isEqualTo(Belieflike.class);
+    }
 }

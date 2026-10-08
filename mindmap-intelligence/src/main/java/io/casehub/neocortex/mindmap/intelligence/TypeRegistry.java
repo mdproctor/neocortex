@@ -35,15 +35,16 @@ public class TypeRegistry {
         SubgraphTypes.PROJECT, Projectlike.class,
         SubgraphTypes.ORGANISATION, Organisational.class
     );
-    static final Map<String, Class<?>> COGNITIVE_TYPES = Map.of(
-            "belief", Belieflike.class,
-            "goal", Goallike.class,
-            "intention", Goallike.class,
-            "prediction", Predictive.class,
-            "judgment", Evaluative.class,
-            "fear", Fearlike.class,
-            "desire", Goallike.class
-                                                               );
+    static final Map<String, Class<?>> COGNITIVE_TYPES = Map.ofEntries(
+            Map.entry("belief", Belieflike.class),
+            Map.entry("goal", Goallike.class),
+            Map.entry("intention", Goallike.class),
+            Map.entry("prediction", Predictive.class),
+            Map.entry("judgment", Evaluative.class),
+            Map.entry("fear", Fearlike.class),
+            Map.entry("desire", Goallike.class),
+            Map.entry("formative-experience", Belieflike.class)
+                                                                     );
     static final java.util.Set<String> GOAL_SUBTYPES   = java.util.Set.of("intention", "desire");
 
 

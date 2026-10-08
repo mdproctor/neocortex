@@ -116,7 +116,7 @@ class CognitiveLoaderTest {
 
         var subtypes = registry.subtypesOf("cognitive", "default");
         assertThat(subtypes).containsExactlyInAnyOrder(
-                "belief", "goal", "prediction", "judgment", "fear");
+                "belief", "goal", "prediction", "judgment", "fear", "formative-experience");
     }
 
     @Test

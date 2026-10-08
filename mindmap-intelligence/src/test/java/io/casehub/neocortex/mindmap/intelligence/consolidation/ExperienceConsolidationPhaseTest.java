@@ -342,7 +342,7 @@ class ExperienceConsolidationPhaseTest {
         assertTrue(node.property("source-memory-id").isPresent());
         assertEquals("formative", node.property("event-type").orElse(""));
         assertEquals("a1", node.property("agent-id").orElse(""));
-        assertEquals("belief", node.property("cognitiveKind").orElse(""));
+        assertEquals("formative-experience", node.property("cognitiveKind").orElse(""));
         assertEquals("experience-consolidation", node.provenance());
     }
 
