@@ -7,8 +7,11 @@ import io.casehub.neocortex.memory.Memory;
 import io.casehub.neocortex.memory.MemoryScanRequest;
 import io.casehub.neocortex.memory.experience.ExperienceEvents;
 import io.casehub.neocortex.memory.experience.SubThoughtAttributeKeys;
+import io.casehub.neocortex.mindmap.MindMapNode;
+import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.MindMapStore;
 import io.casehub.neocortex.mindmap.NodeInput;
+import io.casehub.neocortex.mindmap.NodeUpdate;
 import io.casehub.neocortex.mindmap.NodeRef;
 import io.casehub.neocortex.mindmap.SubThoughtRef;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
@@ -20,12 +23,12 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 @ApplicationScoped
@@ -35,12 +38,13 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
     private static final Logger LOG = Logger.getLogger(SubThoughtConsolidationPhase.class.getName());
     private static final int DEFAULT_THRESHOLD = 3;
     private static final int MAX_PER_PASS = 50;
+    private static final String SENTINEL_NAME = "_sub-thought-consolidation-cursor";
+    private static final String CURSOR_PROPERTY = "graduation-cursor";
+    private static final String ACCUM_PREFIX = "accum.";
 
     private final CaseMemoryStore memoryStore;
     private final MindMapStore mindMapStore;
     private final int graduationThreshold;
-
-    private final Map<EntityTypePair, List<SubThoughtSource>> accumulation = new ConcurrentHashMap<>();
 
     @Inject
     public SubThoughtConsolidationPhase(Instance<CaseMemoryStore> memoryStore,
@@ -68,17 +72,30 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
     public void run(String tenantId, List<String> subgraphPriority) {
         if (memoryStore == null || mindMapStore == null) return;
 
+        String cursor = loadCursor(tenantId);
+
         List<Memory> memories = memoryStore.scan(
             new MemoryScanRequest(tenantId, ExperienceEvents.DOMAIN.name(),
-                null, null, MAX_PER_PASS, null));
+                null, null, MAX_PER_PASS, cursor));
+
+        if (memories.isEmpty()) return;
+
+        Map<EntityTypePair, List<SubThoughtSource>> accumulation = loadAccumulation(tenantId);
+        String lastProcessedId = cursor;
 
         for (Memory memory : memories) {
             String countStr = memory.attributes().get(SubThoughtAttributeKeys.COUNT);
-            if (countStr == null) continue;
-            if ("biographical-import".equals(memory.attributes().get("provenance"))) continue;
+            if (countStr == null) { lastProcessedId = memory.memoryId(); continue; }
+            if ("biographical-import".equals(memory.attributes().get("provenance"))) {
+                lastProcessedId = memory.memoryId();
+                continue;
+            }
 
             int count;
-            try { count = Integer.parseInt(countStr); } catch (NumberFormatException e) { continue; }
+            try { count = Integer.parseInt(countStr); } catch (NumberFormatException e) {
+                lastProcessedId = memory.memoryId();
+                continue;
+            }
             for (int i = 0; i < count; i++) {
                 if ("true".equals(memory.attributes().get(SubThoughtAttributeKeys.graduated(i)))) continue;
 
@@ -90,6 +107,7 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
                 accumulation.computeIfAbsent(key, k -> new ArrayList<>())
                     .add(new SubThoughtSource(memory.memoryId(), i));
             }
+            lastProcessedId = memory.memoryId();
         }
 
         var graduated = new ArrayList<EntityTypePair>();
@@ -100,6 +118,9 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
             }
         }
         graduated.forEach(accumulation::remove);
+
+        saveCursor(tenantId, lastProcessedId);
+        saveAccumulation(tenantId, accumulation);
     }
 
     private void graduateSubThought(EntityTypePair pair, List<SubThoughtSource> sources,
@@ -133,6 +154,75 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
                     + "#" + source.subThoughtIndex());
             }
         }
+    }
+
+    private String loadCursor(String tenantId) {
+        return findSentinelNode(tenantId)
+            .flatMap(n -> n.property(CURSOR_PROPERTY))
+            .orElse(null);
+    }
+
+    private void saveCursor(String tenantId, String memoryId) {
+        if (memoryId == null) return;
+        Optional<MindMapNode> sentinel = findSentinelNode(tenantId);
+        if (sentinel.isPresent()) {
+            mindMapStore.updateNode(sentinel.get().id(),
+                NodeUpdate.empty().withPropertiesToSet(Map.of(CURSOR_PROPERTY, memoryId)),
+                tenantId);
+        } else {
+            String sgId = SubgraphUtils.ensureSubgraph(
+                mindMapStore, "Type System", SubgraphTypes.TYPE_SYSTEM, tenantId);
+            mindMapStore.addNode(
+                NodeInput.of(SENTINEL_NAME, sgId)
+                    .withProperties(Map.of(CURSOR_PROPERTY, memoryId))
+                    .withProvenance("sub-thought-graduation"),
+                tenantId);
+        }
+    }
+
+    private Map<EntityTypePair, List<SubThoughtSource>> loadAccumulation(String tenantId) {
+        var result = new HashMap<EntityTypePair, List<SubThoughtSource>>();
+        findSentinelNode(tenantId).ifPresent(sentinel ->
+            sentinel.properties().forEach((key, value) -> {
+                if (!key.startsWith(ACCUM_PREFIX)) return;
+                String pairKey = key.substring(ACCUM_PREFIX.length());
+                int sep = pairKey.indexOf(':');
+                if (sep <= 0) return;
+                var pair = new EntityTypePair(pairKey.substring(0, sep), pairKey.substring(sep + 1));
+                int count;
+                try { count = Integer.parseInt(value); } catch (NumberFormatException e) { return; }
+                var sources = new ArrayList<SubThoughtSource>();
+                for (int i = 0; i < count; i++) {
+                    sources.add(new SubThoughtSource("persisted", i));
+                }
+                result.put(pair, sources);
+            }));
+        return result;
+    }
+
+    private void saveAccumulation(String tenantId,
+                                   Map<EntityTypePair, List<SubThoughtSource>> accumulation) {
+        var sentinel = findSentinelNode(tenantId);
+        if (sentinel.isEmpty()) return;
+
+        var props = new HashMap<String, String>();
+        for (var entry : accumulation.entrySet()) {
+            props.put(ACCUM_PREFIX + entry.getKey().entity() + ":" + entry.getKey().type(),
+                String.valueOf(entry.getValue().size()));
+        }
+
+        if (!props.isEmpty()) {
+            mindMapStore.updateNode(sentinel.get().id(),
+                NodeUpdate.empty().withPropertiesToSet(props), tenantId);
+        }
+    }
+
+    private Optional<MindMapNode> findSentinelNode(String tenantId) {
+        return mindMapStore.search(
+                MindMapQuery.of(tenantId, 100).withType(SubgraphTypes.TYPE_SYSTEM))
+            .stream()
+            .filter(n -> SENTINEL_NAME.equals(n.name()))
+            .findFirst();
     }
 
     record EntityTypePair(String entity, String type) {}
