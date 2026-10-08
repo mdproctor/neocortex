@@ -168,6 +168,51 @@ class SubThoughtConsolidationPhaseTest {
         assertThat(phase.unresolvedIntentions()).contains("Penelope");
     }
 
+    @Test
+    void affectPolarityShift_emitsAffectChange() {
+        storeMemoryWithSubThought(SubThoughtTypes.AFFECT_OBSERVATION,
+            "Sneekly was very helpful", "Sneekly");
+
+        phase.beginTick();
+        phase.run(TENANT, List.of());
+
+        storeMemoryWithSubThought(SubThoughtTypes.CONCERN,
+            "Something wrong about Sneekly", "Sneekly");
+
+        phase.beginTick();
+        phase.run(TENANT, List.of());
+
+        assertThat(phase.signals()).anyMatch(s ->
+            s.category() == io.casehub.neocortex.mindmap.SignalCategory.AFFECT_CHANGE
+            && "Sneekly".equals(s.sourceName()));
+    }
+
+    @Test
+    void causalChainGraduation_linksCoGraduatedCausalNodes() {
+        for (int i = 0; i < 3; i++) {
+            storeMemoryWithSubThought(SubThoughtTypes.CAUSAL_INFERENCE,
+                "Because of Sarah " + i, "Sarah");
+        }
+        for (int i = 0; i < 3; i++) {
+            storeMemoryWithSubThought(SubThoughtTypes.CAUSAL_INFERENCE,
+                "Led to Tom " + i, "Tom");
+        }
+
+        phase.beginTick();
+        phase.run(TENANT, List.of());
+
+        var graduatedNodes = mindMapStore.search(
+            MindMapQuery.of(TENANT, 100).withTraits(Set.of("graduated-sub-thought")));
+        assertThat(graduatedNodes).hasSize(2);
+
+        var sarahNode = graduatedNodes.stream()
+            .filter(n -> n.name().contains("Sarah")).findFirst().orElseThrow();
+        var edges = mindMapStore.neighbors(sarahNode.id(), "causal-link", TENANT);
+        assertThat(edges)
+            .as("Co-graduated causal-inference nodes should be linked with causal-link edges")
+            .isNotEmpty();
+    }
+
     private void storeMemoryWithAttrs(String desc, Map<String, String> attrs) {
         memoryStore.store(new MemoryInput(
             SUBJECT, ExperienceEvents.DOMAIN, TENANT,

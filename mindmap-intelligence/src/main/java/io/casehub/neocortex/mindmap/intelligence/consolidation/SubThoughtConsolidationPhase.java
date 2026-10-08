@@ -11,6 +11,7 @@ import io.casehub.neocortex.mindmap.AttentionSignal;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.MindMapStore;
+import io.casehub.neocortex.mindmap.EdgeInput;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SignalCategory;
 import io.casehub.neocortex.mindmap.NodeUpdate;
@@ -53,6 +54,7 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
     private final int concernThreshold;
     private final List<AttentionSignal> pendingSignals = new ArrayList<>();
     private final List<String> unresolvedIntentions = new ArrayList<>();
+    private final Map<String, Boolean> lastAffectPolarity = new HashMap<>();
 
     @Inject
     public SubThoughtConsolidationPhase(Instance<CaseMemoryStore> memoryStore,
@@ -131,15 +133,20 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         detectConcernEscalation(accumulation, tenantId);
         detectContradictions(accumulation, tenantId);
         detectUnresolvedIntentions(accumulation);
+        detectAffectPolarityShifts(accumulation, tenantId);
 
         var graduated = new ArrayList<EntityTypePair>();
+        var graduatedNodeIds = new HashMap<EntityTypePair, String>();
         for (var entry : accumulation.entrySet()) {
             if (entry.getValue().size() >= graduationThreshold) {
-                graduateSubThought(entry.getKey(), entry.getValue(), tenantId);
+                String nodeId = graduateSubThought(entry.getKey(), entry.getValue(), tenantId);
                 graduated.add(entry.getKey());
+                if (nodeId != null) graduatedNodeIds.put(entry.getKey(), nodeId);
             }
         }
         graduated.forEach(accumulation::remove);
+
+        linkCausalChains(graduatedNodeIds, tenantId);
 
         saveCursor(tenantId, lastProcessedId);
         saveAccumulation(tenantId, accumulation);
@@ -187,8 +194,36 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
         }
     }
 
-    private void graduateSubThought(EntityTypePair pair, List<SubThoughtSource> sources,
-                                     String tenantId) {
+    private void detectAffectPolarityShifts(Map<EntityTypePair, List<SubThoughtSource>> accumulation,
+                                             String tenantId) {
+        var entities = new HashSet<String>();
+        for (var key : accumulation.keySet()) {
+            if (POSITIVE_TYPES.contains(key.type()) || NEGATIVE_TYPES.contains(key.type())) {
+                entities.add(key.entity());
+            }
+        }
+        for (String entity : entities) {
+            boolean hasPositive = accumulation.keySet().stream()
+                .anyMatch(k -> entity.equals(k.entity()) && POSITIVE_TYPES.contains(k.type()));
+            boolean hasNegative = accumulation.keySet().stream()
+                .anyMatch(k -> entity.equals(k.entity()) && NEGATIVE_TYPES.contains(k.type()));
+
+            boolean currentPolarity = hasPositive && !hasNegative;
+            Boolean previousPolarity = lastAffectPolarity.get(entity);
+
+            if (previousPolarity != null && previousPolarity != currentPolarity) {
+                String direction = currentPolarity ? "negative → positive" : "positive → negative";
+                pendingSignals.add(new AttentionSignal(
+                    null, tenantId, SignalCategory.AFFECT_CHANGE,
+                    null, entity, 0.7,
+                    "Affect polarity shift for " + entity + ": " + direction));
+            }
+            lastAffectPolarity.put(entity, currentPolarity);
+        }
+    }
+
+    private String graduateSubThought(EntityTypePair pair, List<SubThoughtSource> sources,
+                                       String tenantId) {
         String subgraphId = SubgraphUtils.ensureSubgraph(
             mindMapStore, SubgraphTypes.COGNITIVE, tenantId);
 
@@ -197,7 +232,7 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
             refs.add(SubThoughtRef.of(source.memoryId(), source.subThoughtIndex()));
         }
 
-        mindMapStore.addNode(
+        String nodeId = mindMapStore.addNode(
             NodeInput.of(pair.entity() + " — " + pair.type(), subgraphId)
                 .withConfidence(Confidence.inferred(0.7, Instant.now()))
                 .withProvenance("sub-thought-graduation")
@@ -217,6 +252,21 @@ public class SubThoughtConsolidationPhase implements ConsolidationPhase {
                 LOG.warning("Could not mark sub-thought graduated: " + source.memoryId()
                     + "#" + source.subThoughtIndex());
             }
+        }
+        return nodeId;
+    }
+
+    private void linkCausalChains(Map<EntityTypePair, String> graduatedNodeIds, String tenantId) {
+        var causalEntries = graduatedNodeIds.entrySet().stream()
+            .filter(e -> "causal-inference".equals(e.getKey().type()))
+            .toList();
+        if (causalEntries.size() < 2) return;
+
+        for (int i = 0; i < causalEntries.size() - 1; i++) {
+            mindMapStore.addEdge(
+                EdgeInput.of(causalEntries.get(i).getValue(), causalEntries.get(i + 1).getValue(), "causal-link")
+                    .withProvenance("sub-thought-graduation"),
+                tenantId);
         }
     }
 

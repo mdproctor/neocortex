@@ -40,15 +40,18 @@ public class GoalRecognitionPhase implements ConsolidationPhase {
     private final MindMapStore mindMapStore;
     private final CaseMemoryStore memoryStore;
     private final CognitiveGoalRecognizer recognizer;
+    private final SubThoughtConsolidationPhase subThoughtPhase;
     private final List<AttentionSignal> pendingSignals = new ArrayList<>();
 
     @Inject
     public GoalRecognitionPhase(Instance<MindMapStore> mindMapStore,
                                  Instance<CaseMemoryStore> memoryStore,
-                                 Instance<CognitiveGoalRecognizer> recognizer) {
+                                 Instance<CognitiveGoalRecognizer> recognizer,
+                                 Instance<SubThoughtConsolidationPhase> subThoughtPhase) {
         this.mindMapStore = mindMapStore.isResolvable() ? mindMapStore.get() : null;
         this.memoryStore = memoryStore.isResolvable() ? memoryStore.get() : null;
         this.recognizer = recognizer.isResolvable() ? recognizer.get() : null;
+        this.subThoughtPhase = subThoughtPhase.isResolvable() ? subThoughtPhase.get() : null;
     }
 
     public GoalRecognitionPhase(MindMapStore mindMapStore,
@@ -57,6 +60,7 @@ public class GoalRecognitionPhase implements ConsolidationPhase {
         this.mindMapStore = mindMapStore;
         this.memoryStore = memoryStore;
         this.recognizer = recognizer;
+        this.subThoughtPhase = null;
     }
 
     @Override
@@ -96,6 +100,12 @@ public class GoalRecognitionPhase implements ConsolidationPhase {
                 combinedText.append(mem.text()).append("\n");
             }
         }
+        if (subThoughtPhase != null) {
+            for (String entity : subThoughtPhase.unresolvedIntentions()) {
+                combinedText.append("Unresolved intention regarding ").append(entity).append("\n");
+            }
+        }
+
         if (combinedText.isEmpty()) {return;}
 
         List<RecognizedGoal> recognized = recognizer.recognize(
