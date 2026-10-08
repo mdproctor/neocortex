@@ -80,7 +80,7 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
         var allEvidence = new HashMap<String, List<MindMapNode>>();
         String cursorSubgraphId = null;
         String cursorNodeId = null;
-        String lastProcessedId = null;
+        Instant lastProcessedAt = null;
 
         for (var sg : cognitiveSubgraphs) {
             var nodes = mindMapStore.nodesIn(sg.id(), tenantId);
@@ -88,7 +88,10 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
                 if (CURSOR_NODE_NAME.equals(node.name())) {
                     cursorSubgraphId = sg.id();
                     cursorNodeId = node.id();
-                    lastProcessedId = node.properties().get("last-processed-node-id");
+                    var tsStr = node.properties().get("last-processed-timestamp");
+                    if (tsStr != null) {
+                        lastProcessedAt = Instant.parse(tsStr);
+                    }
                     continue;
                 }
                 if (node.traits().contains(BELIEF_TRAIT)) {
@@ -107,39 +110,42 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
 
         if (allBeliefs.isEmpty()) return;
 
-        String latestProcessedId = lastProcessedId;
+        Instant latestTimestamp = lastProcessedAt;
+        boolean anyRevised = false;
         for (var agentId : allBeliefs.keySet()) {
             var beliefs = allBeliefs.get(agentId);
             var evidence = allEvidence.getOrDefault(agentId, List.of());
-            var newEvidence = filterNewEvidence(evidence, lastProcessedId);
+            var newEvidence = filterNewEvidence(evidence, lastProcessedAt);
             if (newEvidence.isEmpty()) continue;
 
-            processAgent(agentId, beliefs, newEvidence, tenantId);
+            boolean revised = processAgent(agentId, beliefs, newEvidence, tenantId);
+            if (revised) anyRevised = true;
 
-            var lastEvId = newEvidence.get(newEvidence.size() - 1).id();
-            if (latestProcessedId == null || lastEvId.compareTo(latestProcessedId) > 0) {
-                latestProcessedId = lastEvId;
+            for (var ev : newEvidence) {
+                if (ev.createdAt() != null && (latestTimestamp == null || ev.createdAt().isAfter(latestTimestamp))) {
+                    latestTimestamp = ev.createdAt();
+                }
             }
         }
 
-        if (latestProcessedId != null && !latestProcessedId.equals(lastProcessedId)) {
+        if (!anyRevised && latestTimestamp != null && !latestTimestamp.equals(lastProcessedAt)) {
             saveCursor(cognitiveSubgraphs.get(0).id(), cursorSubgraphId,
-                       cursorNodeId, latestProcessedId, tenantId);
+                       cursorNodeId, latestTimestamp, tenantId);
         }
     }
 
-    private List<MindMapNode> filterNewEvidence(List<MindMapNode> evidence, String lastProcessedId) {
-        if (lastProcessedId == null) return evidence;
+    private List<MindMapNode> filterNewEvidence(List<MindMapNode> evidence, Instant lastProcessedAt) {
+        if (lastProcessedAt == null) return evidence;
         return evidence.stream()
-            .filter(n -> n.id().compareTo(lastProcessedId) > 0)
+            .filter(n -> n.createdAt() != null && n.createdAt().isAfter(lastProcessedAt))
             .toList();
     }
 
-    private void processAgent(String agentId, List<MindMapNode> beliefs,
-                              List<MindMapNode> evidence, String tenantId) {
+    private boolean processAgent(String agentId, List<MindMapNode> beliefs,
+                                 List<MindMapNode> evidence, String tenantId) {
         try {
             var contradictions = detectContradictions(agentId, beliefs, evidence);
-            if (contradictions.isEmpty()) return;
+            if (contradictions.isEmpty()) return false;
 
             for (var c : contradictions) {
                 var beliefNode = beliefs.stream()
@@ -169,8 +175,10 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
                         tenantId);
                 }
             }
+            return true;
         } catch (Exception e) {
             LOG.log(Level.WARNING, agentId + ": belief revision failed (non-fatal)", e);
+            return false;
         }
     }
 
@@ -293,12 +301,12 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
     }
 
     private void saveCursor(String defaultSubgraphId, String cursorSubgraphId,
-                            String cursorNodeId, String lastId, String tenantId) {
+                            String cursorNodeId, Instant lastTimestamp, String tenantId) {
         String sgId = cursorSubgraphId != null ? cursorSubgraphId : defaultSubgraphId;
         if (cursorNodeId != null) {
             mindMapStore.updateNode(cursorNodeId,
                 NodeUpdate.empty().withPropertiesToSet(
-                    Map.of("last-processed-node-id", lastId)),
+                    Map.of("last-processed-timestamp", lastTimestamp.toString())),
                 tenantId);
         } else {
             mindMapStore.addNode(
@@ -306,7 +314,7 @@ public class BeliefRevisionPhase implements ConsolidationPhase {
                     .withProvenance(REVISION_PROVENANCE)
                     .withProperties(Map.of(
                         "cognitiveKind", "cursor",
-                        "last-processed-node-id", lastId)),
+                        "last-processed-timestamp", lastTimestamp.toString())),
                 tenantId);
         }
     }
