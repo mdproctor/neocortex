@@ -295,3 +295,65 @@ JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean test -Pexamples
 The inference service is long-running — native image's fast startup provides no benefit, and HotSpot's JIT optimisation outperforms AOT for sustained workloads. `inference-*` modules operate in JVM mode.
 
 The C2 native image gate passed (ONNX Runtime JNI + HuggingFace Tokenizers JNI both work in Quarkus native image on macOS ARM). Reachability metadata ships in `inference-quarkus/src/main/resources/META-INF/native-image/` for downstream consumers that distribute as native binaries (e.g. Hortora CLI).
+
+## Cognitive Corpus Coverage Protocol
+
+The cognitive extraction pipeline (in `blocks-ui/examples/cognitive-workbench/`) produces a biographical corpus that feeds the cognitive engine. The pipeline has four stages, each with a coverage gate. The field registry (#514) is the source of truth for what fields exist.
+
+### Four-Stage Coverage Chain
+
+| Stage | What it checks | Source of truth |
+|-------|---------------|-----------------|
+| **Methodology** | Which fields are prescribed by `cognitive-extraction-methodology.md` | The methodology doc itself |
+| **Script prompts** | Which prescribed fields the LLM prompts actually request | The prompt templates in extraction/enrichment scripts |
+| **Corpus** | Which requested fields are populated in `corpus.json` | `assemble_corpus.py` coverage report |
+| **Importer** | Which corpus fields are wired into the cognitive engine stores | `CorpusImporter.java` import report |
+
+Each stage reports coverage as `N/total (%)` per category. Coverage drops from one stage to the next are gaps — a field prescribed by methodology but not in the prompt is a prompt gap; a field in the prompt but not in the corpus is an extraction failure; a field in the corpus but not wired by the importer is an import gap.
+
+### Field Registry
+
+The exhaustive field list lives in #514. It enumerates 85 declarable fields across 5 categories:
+- Node fields (23): name, type, traits, PAD, confidence, lifecycle, goal properties
+- Memory fields (17): text, domain, event_type, provenance, formative attributes
+- Enrichment fields (24): PAD, OCC, SEC, tendencies, distortions, CAPS, habituation, gut feeling
+- Entity-level fields (9): drive baselines, CAPS patterns, disposition profile, reflections
+- Importer derivations (12): CognitiveDefaults, personality weights, mood baseline, vocabulary
+
+### Verification Agents
+
+Each pipeline stage uses sub-agents (Haiku-class) for coverage verification and pushback:
+
+| Stage | Agent role |
+|-------|-----------|
+| **Post-extraction** | Verify each passage's extracted output against the type-discriminated checklist (§4.0b). Missing fields for the artifact type → retry the extraction with explicit instruction to fill the gap. |
+| **Post-enrichment** | Verify enrichment output covers all applicable checklist items. `checklistCompletion` flags (§5.2) drive retry decisions. Persistent failures (2 consecutive) → log with reason, don't block. |
+| **Post-assembly** | Verify corpus.json field coverage per category against soft thresholds. Fields below threshold without justification → warn, report. |
+| **Post-import** | Verify store contents match corpus expectations. Spot-check: node traits assigned, memories domain-split, vocabulary registered, personality derived. |
+
+**Every gap requires justification. Every justification requires verification.**
+
+The verification agent enforces two rules:
+1. **No unjustified gaps.** When a prescribed field is absent or has poor coverage, the extraction must provide a justification ("no distorted thinking present in this passage", "neutral agency — no dominance signal in text").
+2. **Justifications must be true.** The Haiku agent reads the original passage and verifies the justification against the text. A justification that contradicts the passage is a verification failure → retry.
+
+Examples:
+- "No cognitive distortions" + passage says "Guillermo taught Frida photography" → justification verified, accept
+- "No cognitive distortions" + passage says "I NEVER painted dreams" → justification false ("NEVER" is all-or-nothing thinking) → retry
+- "PAD dominance 0.0" + justification "neutral agency" + passage describes Frida setting conditions for remarriage → justification false (high agency) → retry
+
+### Maintenance Rules
+
+**When adding a new cognitive capability to neocortex:**
+1. Add the field to the methodology doc (`cognitive-extraction-methodology.md`)
+2. Add it to the field registry (#514)
+3. Add it to the extraction/enrichment prompt template
+4. Add it to `assemble_corpus.py` coverage audit
+5. Add it to `CorpusImporter.java` import logic
+6. If intentionally excluded (runtime-only), add justification to `coverage-justifications.json`
+
+**When modifying extraction scripts:**
+- Run the coverage gate after changes: the report shows whether coverage improved or regressed
+- A field dropping from one stage to the next without justification is a bug
+
+**The methodology is prescriptive.** The scripts must be faithful to what it prescribes. If the methodology says a field exists, the scripts must request it, the corpus must contain it, and the importer must wire it. Gaps between methodology and implementation are tracked in #514's field registry.
