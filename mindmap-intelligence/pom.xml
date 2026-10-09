@@ -94,6 +94,17 @@
           <execution>
             <id>make-index</id>
             <goals><goal>jandex</goal></goals>
+            <configuration>
+              <processDefaultFileSet>false</processDefaultFileSet>
+              <fileSets>
+                <fileSet>
+                  <directory>${project.build.outputDirectory}</directory>
+                  <excludes>
+                    <exclude>**/SubThoughtSituationCdiDecorator.class</exclude>
+                  </excludes>
+                </fileSet>
+              </fileSets>
+            </configuration>
           </execution>
         </executions>
       </plugin>
