@@ -8,7 +8,9 @@ import io.casehub.neocortex.memory.Subject;
 import io.casehub.neocortex.memory.relationship.RelationshipAttributeKeys;
 import io.casehub.neocortex.memory.relationship.RelationshipEvents;
 import io.casehub.neocortex.mindmap.MindMapStore;
+import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.NodeUpdate;
+import io.casehub.neocortex.mindmap.SubgraphTypes;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -51,6 +53,8 @@ public class EntityEnrichmentHandler implements BiographyHandler {
 
     @Override
     public void handle(BiographyProfile profile, String agentId, String tenantId) {
+        String behavioralSgId = null;
+
         for (var entry : profile.entityEnrichments()) {
             String nodeId = AssociationProcessor.resolveAcrossSubgraphs(entry.entityRef(), store, tenantId);
             if (nodeId == null) {continue;}
@@ -77,19 +81,37 @@ public class EntityEnrichmentHandler implements BiographyHandler {
                 }
             }
 
-            if (entry.behaviouralAttractors() != null) {
-                props.put("behavioural-attractor-count", String.valueOf(entry.behaviouralAttractors().size()));
-                for (int i = 0; i < entry.behaviouralAttractors().size(); i++) {
-                    var a = entry.behaviouralAttractors().get(i);
-                    props.put("behavioural-attractor-" + i + "-name", a.name());
-                    if (a.description() != null) {
-                        props.put("behavioural-attractor-" + i + "-description", a.description());
-                    }
-                }
-            }
-
             if (!props.isEmpty()) {
                 store.updateNode(nodeId, NodeUpdate.empty().withPropertiesToSet(props), tenantId);
+            }
+
+            if (entry.behaviouralAttractors() != null && !entry.behaviouralAttractors().isEmpty()) {
+                if (behavioralSgId == null) {
+                    behavioralSgId = BiographyUtils.ensureSubgraph(store, SubgraphTypes.BEHAVIORAL, tenantId);
+                }
+                for (var attractor : entry.behaviouralAttractors()) {
+                    var nodeProps = new HashMap<String, String>();
+                    nodeProps.put("category", attractor.name());
+                    nodeProps.put("agent-id", agentId);
+                    nodeProps.put("provenance", "biographical-import");
+                    if (attractor.strength() != null) {
+                        nodeProps.put("strength", String.valueOf(attractor.strength()));
+                    }
+                    if (attractor.description() != null) {
+                        nodeProps.put("description", attractor.description());
+                    }
+                    if (attractor.trigger() != null) {
+                        nodeProps.put("trigger", attractor.trigger());
+                    }
+                    if (attractor.response() != null) {
+                        nodeProps.put("response", attractor.response());
+                    }
+                    store.addNode(
+                            NodeInput.of(attractor.name(), behavioralSgId)
+                                     .withTraits(Set.of("CapsGenerated"))
+                                     .withProperties(nodeProps),
+                            tenantId);
+                }
             }
 
             storeRelationshipStages(entry, agentId, tenantId);

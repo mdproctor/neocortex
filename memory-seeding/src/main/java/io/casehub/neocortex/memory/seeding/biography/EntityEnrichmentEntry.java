@@ -27,7 +27,8 @@ public record EntityEnrichmentEntry(
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record BehaviouralAttractor(String name, String description) {}
+    public record BehaviouralAttractor(String name, String description, String trigger, String response,
+                                       Double strength) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RelationshipStage(

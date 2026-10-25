@@ -1,7 +1,6 @@
 package io.casehub.neocortex.memory.seeding.biography;
 
 import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
-import io.casehub.neocortex.cognitive.index.DispositionAxes;
 import io.casehub.neocortex.memory.inmem.InMemoryMemoryStore;
 import io.casehub.neocortex.memory.relationship.RelationshipQuery;
 import io.casehub.neocortex.mindmap.NodeInput;
@@ -200,6 +199,63 @@ class EntityEnrichmentHandlerTest {
         assertThat(capsEngine.loadState(TENANT, "agent-1")).isNull();
     }
 
+
+    @Test
+    void storesBehaviouralAttractorsAsBehavioralSubgraphNodes() {
+        var store       = new InMemoryMindMapStore();
+        var memoryStore = new InMemoryMemoryStore(principal);
+        var handler     = new EntityEnrichmentHandler(store, memoryStore, true);
+
+        var subgraph = BiographyUtils.ensureSubgraph(store, SubgraphTypes.PERSON, TENANT);
+        store.addNode(NodeInput.of("Frida Kahlo", subgraph).withProvenance("test"), TENANT);
+
+        var attractors = List.of(
+                new EntityEnrichmentEntry.BehaviouralAttractor(
+                        "defiance-through-artistic-authenticity",
+                        "Responded to pain by painting trauma as legitimate subject matter",
+                        "Physical suffering, emotional devastation",
+                        "Paint the precise experience of pain/trauma in visceral detail",
+                        0.9),
+                new EntityEnrichmentEntry.BehaviouralAttractor(
+                        "autonomy-seeking-through-intellectual-equality",
+                        "Pursued recognition as an intellectual and artistic equal",
+                        "Mentorship dynamics, art-world hierarchies",
+                        "Assert intellectual authority, demand recognition",
+                        0.85));
+        var entry = new EntityEnrichmentEntry("enrich-ba", "Frida Kahlo", null, null, attractors, null);
+
+        handler.handle(profileWith(List.of(entry)), "agent-1", TENANT);
+
+        var behavioralSubgraph = store.listSubgraphs(TENANT).stream()
+                                      .filter(s -> SubgraphTypes.BEHAVIORAL.equals(s.type()))
+                                      .findFirst();
+        assertThat(behavioralSubgraph).isPresent();
+
+        var nodes = store.nodesIn(behavioralSubgraph.get().id(), TENANT);
+        assertThat(nodes).hasSize(2);
+
+        var defiance = nodes.stream()
+                            .filter(n -> "defiance-through-artistic-authenticity".equals(n.properties().get("category")))
+                            .findFirst().orElseThrow();
+        assertThat(defiance.traits()).contains("CapsGenerated");
+        assertThat(defiance.properties()).containsEntry("strength", "0.9");
+        assertThat(defiance.properties()).containsEntry("agent-id", "agent-1");
+        assertThat(defiance.properties()).containsEntry("provenance", "biographical-import");
+        assertThat(defiance.properties()).containsEntry("description",
+                                                        "Responded to pain by painting trauma as legitimate subject matter");
+        assertThat(defiance.properties()).containsEntry("trigger",
+                                                        "Physical suffering, emotional devastation");
+        assertThat(defiance.properties()).containsEntry("response",
+                                                        "Paint the precise experience of pain/trauma in visceral detail");
+
+        var autonomy = nodes.stream()
+                            .filter(n -> "autonomy-seeking-through-intellectual-equality".equals(n.properties().get("category")))
+                            .findFirst().orElseThrow();
+        assertThat(autonomy.properties()).containsEntry("strength", "0.85");
+
+        var entityNode = store.resolveNode("Frida Kahlo", subgraph, TENANT);
+        assertThat(entityNode.properties()).doesNotContainKey("behavioural-attractor-count");
+    }
 
     private BiographyProfile profileWith(List<EntityEnrichmentEntry> enrichments) {
         return new BiographyProfile("a1", "t1",
