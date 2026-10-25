@@ -3,6 +3,7 @@ package io.casehub.neocortex.memory.seeding.biography;
 import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
 import io.casehub.neocortex.memory.inmem.InMemoryMemoryStore;
 import io.casehub.neocortex.memory.relationship.RelationshipQuery;
+import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
@@ -255,6 +256,15 @@ class EntityEnrichmentHandlerTest {
 
         var entityNode = store.resolveNode("Frida Kahlo", subgraph, TENANT);
         assertThat(entityNode.properties()).doesNotContainKey("behavioural-attractor-count");
+
+        // Verify nodes are visible via the exact query BehavioralSynthesisPhase uses
+        var searchResults = store.search(MindMapQuery.of(TENANT, 2000).withType("behavioral"));
+        assertThat(searchResults).hasSize(2);
+        assertThat(searchResults).allMatch(n -> n.traits().contains("CapsGenerated"));
+        assertThat(searchResults).extracting(n -> n.properties().get("category"))
+                                 .containsExactlyInAnyOrder(
+                                         "defiance-through-artistic-authenticity",
+                                         "autonomy-seeking-through-intellectual-equality");
     }
 
     private BiographyProfile profileWith(List<EntityEnrichmentEntry> enrichments) {
