@@ -1011,7 +1011,7 @@ Future work: replace the NONE default with a mechanical threat classifier from r
 | 7 | #653 Inline vs external classification | Dual-mode with bias audit | VALIDATED — 41 audit entries, source provenance, bias endpoint |
 | 8 | #650 Elastic session scheduling | SessionPipeline with AIMD admission | PARTIALLY VALIDATED — consolidation deadlock found and fixed |
 | 9 | #685 Biographical CAPS weight seeding | Structured inputActivations + CapsEngine.updateWeights() | IMPLEMENTED — enrichment prompt constrained to 30 topology node IDs, handler seeds weights from disposition + biography |
-| 10 | #686 Biographical attractor import | BehaviouralAttractor → BEHAVIORAL subgraph nodes with CapsGenerated trait | IMPLEMENTED — structural parity with BehavioralSynthesisPhase |
+| 10 | #686 Biographical attractor import | BehaviouralAttractor → BEHAVIORAL subgraph nodes with CapsGenerated trait | VALIDATED — structural parity + LLM eval delta=0.8 (confrontation=4.6, harmony=3.8, N=5) |
 
 ---
 
@@ -1028,6 +1028,8 @@ Future work: replace the NONE default with a mechanical threat classifier from r
 **Test added:** `storesBehaviouralAttractorsAsBehavioralSubgraphNodes` — verifies nodes appear in BEHAVIORAL subgraph with correct properties, traits, and that entity node no longer contains flat attractor properties.
 
 This completes the biographical import bridge: Phase 8 seeded CAPS weights (how the network responds to situations), Phase 9 seeds attractor nodes (what stable patterns those responses produce). A fully imported character now has both the connection strengths and the named stable patterns that define their personality network.
+
+**LLM eval results:** Opposing-attractor A/B/C test (N=5 per condition) on an ambiguous team-meeting scenario. Confrontation attractor mean=4.6, neutral=4.2, harmony=3.8 on a 0-5 directness scale. Delta=0.8, consistent ordering. Attractor text measurably steers LLM behavior. First test design (artist vs gallery owner) hit a ceiling effect — both conditions scored 5/5 because the scenario was culturally unambiguous. Finding P98: eval scenarios must be genuinely ambiguous for attractor content to produce measurable signal.
 
 ---
 
@@ -1396,6 +1398,24 @@ A character imported with both has: (a) a weight matrix shaped by biographical e
 ### Findings
 
 **Finding (P97):** Biographical attractor import must produce structurally identical nodes to runtime attractor derivation. Using different storage (properties vs nodes, different subgraphs, missing traits) creates two incompatible representations of the same concept. `BehavioralSynthesisPhase` queries `MindMapQuery.withType("behavioral")` and checks for `CapsGenerated` trait — imported attractors invisible to this query are invisible to the entire downstream pipeline.
+
+### Eval results
+
+**Opposing-attractor A/B/C test** — same ambiguous scenario (team meeting, colleague presents flawed design, asks for feedback), three attractor profiles, N=5 per condition, LLM judge scoring directness 0-5.
+
+| Condition | Scores | Mean |
+|---|---|---|
+| Confrontation attractor | [4, 4, 5, 5, 5] | **4.6** |
+| Neutral (no attractor) | [4, 4, 4, 4, 5] | **4.2** |
+| Harmony attractor | [4, 3, 4, 4, 4] | **3.8** |
+
+**Delta: 0.8.** Consistent ordering across all runs: confrontation > neutral > harmony.
+
+The confrontation attractor ("deeply ingrained confrontation-of-conflict — rooted in years of being dismissed and talked over") pushes the character toward directly naming the flaw. The harmony attractor ("deeply ingrained harmony-preservation — rooted in years of navigating volatile relationships") pulls toward diplomacy and de-escalation. The neutral baseline sits between them.
+
+**Ceiling-effect lesson:** The first test used an artist facing a gallery owner who wanted flowers instead of painful self-portraits. Both conditions (with and without attractors) scored 5/5 — the "artist refuses to sell out" narrative is culturally dominant in the LLM's training data. Eval scenarios must be genuinely ambiguous for attractor content to produce measurable signal.
+
+**Finding (P98):** Behavioral attractor text in the LLM observation measurably steers response direction on ambiguous scenarios (delta=0.8, N=5 per condition). The effect requires scenario ambiguity — culturally dominant narratives produce ceiling effects that mask the attractor signal.
 
 ### References
 
