@@ -1011,6 +1011,23 @@ Future work: replace the NONE default with a mechanical threat classifier from r
 | 7 | #653 Inline vs external classification | Dual-mode with bias audit | VALIDATED — 41 audit entries, source provenance, bias endpoint |
 | 8 | #650 Elastic session scheduling | SessionPipeline with AIMD admission | PARTIALLY VALIDATED — consolidation deadlock found and fixed |
 | 9 | #685 Biographical CAPS weight seeding | Structured inputActivations + CapsEngine.updateWeights() | IMPLEMENTED — enrichment prompt constrained to 30 topology node IDs, handler seeds weights from disposition + biography |
+| 10 | #686 Biographical attractor import | BehaviouralAttractor → BEHAVIORAL subgraph nodes with CapsGenerated trait | IMPLEMENTED — structural parity with BehavioralSynthesisPhase |
+
+---
+
+### Entry 9 — #686 Behavioural attractor import as subgraph nodes (2026-10-25)
+
+`EntityEnrichmentHandler` was storing `behavioural_attractors` as flat properties on entity nodes: `behavioural-attractor-0-name=defiance-through-artistic-authenticity`, `behavioural-attractor-0-description=...`. The BEHAVIORAL subgraph stayed empty. Any code querying `MindMapQuery.withType("behavioral")` — including `BehavioralSynthesisPhase`, prompt sections, and the 3D CAPS overlay — found nothing from biographical import.
+
+**Data model change:** `BehaviouralAttractor` record extended from `(name, description)` to `(name, description, trigger, response, strength)`. The corpus contains all five fields per attractor — trigger describes what activates the pattern, response describes the characteristic behaviour, strength is the EMA value (0.0-1.0).
+
+**Handler change:** `EntityEnrichmentHandler.handle()` now creates proper BEHAVIORAL subgraph nodes. Uses `BiographyUtils.ensureSubgraph(store, SubgraphTypes.BEHAVIORAL, tenantId)` to find-or-create the subgraph, then `NodeInput.of(name, sgId).withTraits(Set.of("CapsGenerated")).withProperties(props)` per attractor. Properties: category, strength, description, trigger, response, agent-id, provenance=biographical-import.
+
+**Node structure matches runtime.** `BehavioralSynthesisPhase.createOrStrengthenAttractor()` creates nodes with the same subgraph type (`behavioral`), same trait (`CapsGenerated`), and compatible properties. Runtime settling can find and strengthen imported attractors rather than creating duplicates.
+
+**Test added:** `storesBehaviouralAttractorsAsBehavioralSubgraphNodes` — verifies nodes appear in BEHAVIORAL subgraph with correct properties, traits, and that entity node no longer contains flat attractor properties.
+
+This completes the biographical import bridge: Phase 8 seeded CAPS weights (how the network responds to situations), Phase 9 seeds attractor nodes (what stable patterns those responses produce). A fully imported character now has both the connection strengths and the named stable patterns that define their personality network.
 
 ---
 
@@ -1339,6 +1356,51 @@ After: Frida Kahlo's CAPS network arrives at the first runtime event with streng
 - McClelland, D. C. (1961). *The Achieving Society*. Achievement motivation — mastery, failure, competence_recognition nodes.
 - Bandura, A. (1977). *Social Learning Theory*. Self-efficacy, modeling_observed, vicarious learning nodes.
 - Deci, E. L., & Ryan, R. M. (2000). The "what" and "why" of goal pursuits. Self-determination theory — agency_granted, controlled, choice_available nodes.
+
+---
+
+## Phase 9: Biographical Attractor Import (neocortex #686)
+
+### Problem
+
+The corpus.json contains `behavioural_attractors` per entity (5 for Frida Kahlo), but `EntityEnrichmentHandler` stored them as flat key-value properties on the entity node: `behavioural-attractor-0-name=defiance-through-artistic-authenticity`. The BEHAVIORAL subgraph was empty. `BehavioralPromptSection`, the 3D CAPS overlay, and any future tooling that queries behavioral-type nodes found nothing.
+
+### Theory applied
+
+**Mischel & Shoda (1995) — CAPS.** Behavioral attractors are the stable if-then patterns — the characteristic responses a personality network settles toward under specific situation activations. They ARE the personality signature, not metadata about it.
+
+**Read & Miller (2002) — Virtual Personalities.** Attractors are stable states of the constraint-satisfaction network. In our implementation, `BehavioralSynthesisPhase` creates attractor nodes during runtime consolidation by running CAPS settling on graduated cognitive nodes. The settling result's attractor list becomes BEHAVIORAL subgraph nodes with `CapsGenerated` trait, category, strength, agent-id, and source metadata.
+
+**The structural gap:** Phase 8 closed the gap for CAPS *weights* — biographical patterns now shape the weight matrix that settling uses. But the *attractor nodes themselves* — the stable states the system settles toward — were missing from the import pipeline. A character whose biography describes "defiance through artistic authenticity" as a strong attractor (0.9) had that pattern as inert text on a person node, not as a node in the BEHAVIORAL subgraph where runtime attractors live.
+
+### Architecture
+
+Three changes, all in `memory-seeding`:
+
+1. **Data model** (`BehaviouralAttractor` record): Extended with `trigger`, `response`, `strength` (all from corpus). The 2-field record (name, description) couldn't represent the full attractor structure.
+
+2. **Handler** (`EntityEnrichmentHandler.handle()`): Replaced flat property storage with BEHAVIORAL subgraph node creation. Uses `BiographyUtils.ensureSubgraph(store, SubgraphTypes.BEHAVIORAL, tenantId)` to find-or-create the subgraph, then `NodeInput.of(name, sgId).withTraits(Set.of("CapsGenerated")).withProperties(props)` per attractor. Properties: category (=name), strength, description, trigger, response, agent-id, provenance=biographical-import.
+
+3. **Node structure matches runtime.** `BehavioralSynthesisPhase.createOrStrengthenAttractor()` creates nodes with: caps-node-id, category, strength, agent-id, generation, source-count, source-names, dominant-input, personality-label. The import nodes use the same subgraph type (`behavioral`), same trait (`CapsGenerated`), and compatible properties. Runtime settling can find and strengthen these imported attractors rather than creating duplicates.
+
+### Interaction with Phase 8
+
+Phase 8 seeds the CAPS *weight matrix* from biographical patterns — the connection strengths between situation inputs and behavioral outputs. Phase 9 seeds the *attractor nodes* — the named stable states those connections produce.
+
+The two are complementary layers of the same import:
+- Weights (Phase 8) → how the network responds to situations
+- Attractors (Phase 9) → what stable patterns those responses produce
+
+A character imported with both has: (a) a weight matrix shaped by biographical experience, and (b) named attractor nodes that reflect the characteristic behavioral patterns biography describes. Runtime consolidation can then strengthen, weaken, or create new attractors based on lived experience — building on the biographical foundation rather than starting from nothing.
+
+### Findings
+
+**Finding (P97):** Biographical attractor import must produce structurally identical nodes to runtime attractor derivation. Using different storage (properties vs nodes, different subgraphs, missing traits) creates two incompatible representations of the same concept. `BehavioralSynthesisPhase` queries `MindMapQuery.withType("behavioral")` and checks for `CapsGenerated` trait — imported attractors invisible to this query are invisible to the entire downstream pipeline.
+
+### References
+
+- Mischel, W., & Shoda, Y. (1995). A cognitive-affective system theory of personality: Reconceptualizing situations, dispositions, dynamics, and invariance in personality structure. *Psychological Review*, 102(2), 246-268. CAPS theory — personality as situation-response connection patterns.
+- Read, S. J., & Miller, L. C. (2002). Virtual personalities: A neural network model of personality. *Personality and Social Psychology Review*, 6(4), 357-369. Computational implementation — personality as connection weight matrix.
 
 ---
 
