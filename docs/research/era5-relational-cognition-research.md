@@ -1,6 +1,6 @@
 # Era 5: Relational Cognition — WHO Shapes What You Feel
 
-**Status:** STARTING
+**Status:** ACTIVE — attention competition finding, targeted somatic hypothesis
 
 The cognitive pipeline differentiates WHAT agents feel (Barrett somatic channels) and HOW they express it (drive descriptions, thinking-field calibration). Era 4 brought this to ceiling: quality 3.92, register 3.74, differentiation 3.74 — all exceeding V2 prose baseline on aggregate metrics.
 
@@ -138,11 +138,95 @@ The DriveQualityEvalTest from Era 4 provides targeted probes. Era 5 extends it w
 
 ---
 
+## Finding: Attention Competition (2026-10-29)
+
+### The experiment
+
+Three eval runs with #477 relational schemas active, comparing against Era 4 baseline (quality 3.92, register 3.74, differentiation 3.74):
+
+| Run | Events | Quality | Register | Diff |
+|-----|--------|---------|----------|------|
+| Era 4 baseline | 300 | **3.92** | **3.74** | **3.74** |
+| Era 5 + YAML briefing fallback | 30 | 3.84 | 3.27 | 3.70 |
+| Era 5 label+degree only | 30 | 3.88 | 3.34 | 3.61 |
+| Era 5 full pipeline (emerged descriptions) | 105 | 3.84 | 3.13 | 3.57 |
+
+Register degraded progressively: 3.74 → 3.27 → 3.13. More relational context = less somatic expression.
+
+### Bugs found and fixed
+
+1. **SessionPipeline not wired in scripted mode.** `consolidationScheduler.setSessionPipeline()` was inside `if (mode == AUTONOMOUS)`. The CognitiveDerivationEngine's drive-description-generation phase silently skipped — characters got YAML briefing prose (or label+degree after we stripped the fallback) instead of emerged Barrett 4-channel descriptions. TDD: test written, red→green.
+
+2. **YAML briefing prose fallback.** When no generated descriptions existed, `CognitionObservationBuilder` fell back to hand-authored YAML descriptions — cognitive narrative that contaminated the somatic Barrett instruction. Fixed to render label+degree only.
+
+3. **ConditionMatcher NPE.** Trigger conditions referenced cartoon IDs that don't exist after GENERIC ID rewrite. Null-safed.
+
+### Root cause: attention is finite and competitive
+
+The LLM prompt is a priming field. Every token competes for attention during generation. Adding a section doesn't just add information — it takes attention away from every other section.
+
+Era 4's prompt had ONE clear directive:
+- Barrett 4-channel instruction: "notice your body"
+- Drive labels with somatic prose
+- Formation memories
+- Thinking instruction: "you are inside this moment"
+
+Every section reinforced the same message: feel, don't think.
+
+Era 5 added FIVE cognitive sections alongside this:
+1. "How You Feel About Those Present" — relational analysis per person
+2. "How You Bond" — attachment style prose
+3. Trust sections — trust evolution data
+4. OtherModelPromptSection — empathic sensing
+5. CAPS-biased drive filtering
+
+Each directs the LLM toward social *analysis* rather than somatic *experience*. The Barrett instruction says "notice your body" but the relational section says "here's what you think about these people." The character tries to do both and does neither well.
+
+The 105-event run confirmed this is not noise — register degraded consistently at 3.13 across 70 evaluated events with N=14 per character.
+
+### Why separate sections fail
+
+The prompt creates a cognitive interruption pattern:
+
+```
+== What Pulls at You ==
+GLOATING (0.7): [somatic description]          ← somatic
+
+== How You Feel About Those Present ==          ← cognitive interruption
+**Reginald:** Prey. Trust 0.1. Predictable.
+
+== How You Bond ==                              ← cognitive interruption
+You don't need people. Closeness is vulnerability.
+```
+
+The drive doesn't know about Reginald. The relational description doesn't reference the drive. The LLM must independently connect "Reginald is prey" + "gloating activates toward prey" under long-context pressure. That is exactly the connection that fails — the same regression Era 5 was designed to fix.
+
+### Hypothesis: targeted somatic drives
+
+The relational context shouldn't be a separate cognitive section. It should be a directional anchor on the drive itself:
+
+```
+GLOATING (0.7) → Reginald: A warm, effervescent pressure rises behind your sternum...
+```
+
+The somatic sensation stays the same. It just knows WHERE it's pointed. No separate section. No cognitive interruption. Three characters on each relevant drive: `→ Name`.
+
+This mirrors embodied cognition: you don't feel anxiety in the abstract. You feel anxiety *toward* a specific person. The body's response is always directed.
+
+**Implementation:** At render time, `CognitionObservationBuilder` resolves the relational target for social drives (drives with `context: social`) and annotates the label. Non-social drives stay untargeted. The separate relational/attachment/trust/OtherModel sections are removed.
+
+**What to measure:** Register should recover toward Era 4 levels (3.74) because the prompt returns to one clear directive — feel your body — with the relational information folded into the drive labels rather than competing in a separate section.
+
+---
+
 ## Immediate Plan
 
-1. Merge #477 to this slot (do NOT sync to canonical main until validated)
-2. Delete consolidation cache (schemas change the consolidation output)
-3. Run 30-event eval with relational schemas active
-4. Compare reactive drive quality against Era 4 baseline
-5. If reactive drives improve: run 300-tick validation
-6. If not: investigate whether explicit trigger conditions are needed alongside relational context
+1. ~~Merge #477 to this slot~~ ✅ Done
+2. ~~Delete consolidation cache~~ ✅ Done
+3. ~~Run 30-event eval with relational schemas active~~ ✅ Done — quality 3.84, register 3.27
+4. ~~Compare reactive drive quality against Era 4 baseline~~ ✅ Done — regressed
+5. ~~Investigate whether explicit trigger conditions are needed~~ ✅ Done — found attention competition
+6. Implement targeted somatic drives (`→ Name` annotation)
+7. Remove separate cognitive sections from prompt
+8. Run 30-event eval — expect register recovery
+9. If register recovers → 300-tick validation
