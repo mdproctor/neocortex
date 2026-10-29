@@ -338,6 +338,98 @@ public class CognitionObservationBuilder {
         return included;
     }
 
+    public List<TargetedDrive> resolveRelationalTargets(
+            List<DriveSnapshot> filteredDrives,
+            Collection<String> nearbyAgentIds,
+            Map<String, String> agentNames) {
+        if (mindMapStore == null || tenantId == null || nearbyAgentIds.isEmpty()) {
+            return filteredDrives.stream().map(TargetedDrive::untargeted).toList();
+        }
+
+        Map<String, io.casehub.neocortex.cognitive.index.RelationalSchema> nearbySchemas = new HashMap<>();
+        var peopleSg = mindMapStore.listSubgraphs(tenantId).stream()
+                                   .filter(sg -> "people".equals(sg.type()) || "people".equals(sg.name()))
+                                   .findFirst();
+        if (peopleSg.isPresent()) {
+            var                 nodes         = mindMapStore.nodesIn(peopleSg.get().id(), tenantId);
+            Map<String, String> agentToNodeId = new HashMap<>();
+            for (var node : nodes) {
+                if (node.traits().contains("overlay")) {continue;}
+                node.property("agentId").ifPresent(aid -> {
+                    if (nearbyAgentIds.contains(aid)) {agentToNodeId.put(aid, node.id());}
+                });
+            }
+            for (var overlay : nodes) {
+                if (!overlay.traits().contains("overlay")) {continue;}
+                if (!agentId.equals(overlay.property(io.casehub.neocortex.mindmap.OverlayRef.AGENT_ID).orElse(null))) {
+                    continue;
+                }
+                var sharedId = io.casehub.neocortex.mindmap.OverlayRef.sharedNodeId(overlay).orElse(null);
+                for (var entry : agentToNodeId.entrySet()) {
+                    if (entry.getValue().equals(sharedId)) {
+                        var schema = io.casehub.neocortex.cognitive.index.RelationalSchema.fromProperties(overlay.properties());
+                        if (schema != null) {nearbySchemas.put(entry.getKey(), schema);}
+                    }
+                }
+            }
+        }
+
+        if (nearbySchemas.isEmpty()) {
+            return filteredDrives.stream().map(TargetedDrive::untargeted).toList();
+        }
+
+        var result = new ArrayList<TargetedDrive>();
+        for (var drive : filteredDrives) {
+            TargetedDrive best = findBestTarget(drive, nearbySchemas, agentNames);
+            result.add(best != null ? best : TargetedDrive.untargeted(drive));
+        }
+        return result;
+    }
+
+    private TargetedDrive findBestTarget(DriveSnapshot drive,
+                                         Map<String, io.casehub.neocortex.cognitive.index.RelationalSchema> nearbySchemas,
+                                         Map<String, String> agentNames) {
+        String                                                bestAgentId  = null;
+        io.casehub.neocortex.cognitive.index.RelationalSchema bestSchema   = null;
+        double                                                bestSalience = 0.0;
+
+        for (var entry : nearbySchemas.entrySet()) {
+            var    schema   = entry.getValue();
+            double salience = computeDriveRoleSalience(drive.type(), schema);
+            if (salience > bestSalience) {
+                bestSalience = salience;
+                bestAgentId  = entry.getKey();
+                bestSchema   = schema;
+            }
+        }
+        if (bestSchema == null || bestSalience <= 0.0) {return null;}
+
+        String displayName = agentNames.getOrDefault(bestAgentId, bestAgentId);
+        return new TargetedDrive(drive, bestAgentId, displayName, bestSchema.role());
+    }
+
+    private double computeDriveRoleSalience(String driveType, io.casehub.neocortex.cognitive.index.RelationalSchema schema) {
+        String role     = schema.role();
+        double salience = Math.abs(schema.trust()) + schema.utility();
+
+        return switch (driveType) {
+            case "gloating", "dominance" -> "prey".equals(role) || "rival".equals(role) ? salience + 1.0 : 0.0;
+            case "scheming" -> "obstacle".equals(role) || "threat".equals(role) || "rival".equals(role) || "prey".equals(role)
+                               ? salience + 1.0 : 0.0;
+            case "gallantry" -> "beloved".equals(role) || "romantic-interest".equals(role) || "ward".equals(role)
+                                ? salience + 1.0 : 0.0;
+            case "protection" -> "ward".equals(role) || "beloved".equals(role) || "family".equals(role)
+                                 ? salience + 1.0 : 0.0;
+            case "loyalty" -> "ally".equals(role) || "family".equals(role) || "guardian".equals(role)
+                              ? salience + 1.0 : 0.0;
+            case "recognition",
+                 "proving-worth" -> "rival".equals(role) || "obstacle".equals(role) || "suspected-rival".equals(role)
+                                    ? salience + 1.0 : 0.0;
+            default -> 0.0;
+        };
+    }
+
+
     // --- Situation classification ---
 
     public SituationContext classifySituation(String situationText, Map<String, String> metadata) {
