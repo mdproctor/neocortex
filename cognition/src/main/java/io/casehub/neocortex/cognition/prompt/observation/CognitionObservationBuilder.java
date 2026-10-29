@@ -130,13 +130,21 @@ public class CognitionObservationBuilder {
     // --- Internal State (drives, attractors, differentiation, priority signatures) ---
 
     public ObservationSection renderInternalState(List<String> activatedCategories,
-                                                   String situationText,
-                                                   Collection<String> nearbyAgentIds,
-                                                   SituationContext situationContext) {
-        var drives = resolveAdaptedDrives();
+                                                  String situationText,
+                                                  Collection<String> nearbyAgentIds,
+                                                  SituationContext situationContext) {
+        return renderInternalState(activatedCategories, situationText, nearbyAgentIds, situationContext, Map.of());
+    }
+
+    public ObservationSection renderInternalState(List<String> activatedCategories,
+                                                  String situationText,
+                                                  Collection<String> nearbyAgentIds,
+                                                  SituationContext situationContext,
+                                                  Map<String, String> agentNames) {
+        var drives                = resolveAdaptedDrives();
         var generatedDescriptions = readGeneratedDriveDescriptions();
 
-        Function<DriveSnapshot, String> descriptionFor = d -> {
+        Function<DriveSnapshot, String> untargetedDescriptionFor = d -> {
             String label = d.type().toUpperCase().replace('-', ' ')
                            + " (" + String.format("%.1f", d.intensity()) + ")";
             String generated = generatedDescriptions.get(d.type());
@@ -147,23 +155,45 @@ public class CognitionObservationBuilder {
         };
 
         var eligible = drives.stream()
-                .filter(d -> d.intensity() > 0.2 && !descriptionFor.apply(d).isBlank())
-                .toList();
+                             .filter(d -> d.intensity() > 0.2 && !untargetedDescriptionFor.apply(d).isBlank())
+                             .toList();
 
         var filtered = appraisalFilterDrives(eligible, situationContext, nearbyAgentIds);
 
-        var driveDescriptions = filtered.stream()
-                .sorted(Comparator.comparingDouble(DriveSnapshot::intensity).reversed())
-                .map(descriptionFor)
-                .toList();
+        var targeted = resolveRelationalTargets(filtered, nearbyAgentIds, agentNames);
+
+        Function<TargetedDrive, String> targetedDescriptionFor = td -> {
+            var d = td.drive();
+            String label = d.type().toUpperCase().replace('-', ' ')
+                           + " (" + String.format("%.1f", d.intensity()) + ")";
+            if (td.hasTarget()) {
+                label += " → " + td.targetDisplayName();
+            }
+            String generated = null;
+            if (td.hasTarget() && td.role() != null) {
+                generated = generatedDescriptions.get(d.type() + "-" + td.role());
+            }
+            if (generated == null) {
+                generated = generatedDescriptions.get(d.type());
+            }
+            if (generated != null) {
+                return label + ": " + generated;
+            }
+            return label;
+        };
+
+        var driveDescriptions = targeted.stream()
+                                        .sorted(Comparator.comparingDouble((TargetedDrive td) -> td.drive().intensity()).reversed())
+                                        .map(targetedDescriptionFor)
+                                        .toList();
 
         var parts = new ArrayList<>(driveDescriptions);
 
-        int memoryCount = 0;
-        int attractorCount = 0;
-        int diffTextCount = 0;
+        int memoryCount       = 0;
+        int attractorCount    = 0;
+        int diffTextCount     = 0;
         int selfStandardCount = 0;
-        int prioritySigCount = 0;
+        int prioritySigCount  = 0;
 
         if (mindMapStore != null && tenantId != null) {
             var subgraphs = mindMapStore.listSubgraphs(tenantId);
@@ -184,22 +214,22 @@ public class CognitionObservationBuilder {
             }
 
             var attractorLines = subgraphs.stream()
-                    .filter(s -> "behavioral".equals(s.type()))
-                    .flatMap(s -> mindMapStore.nodesIn(s.id(), tenantId).stream())
-                    .filter(n -> n.traits().contains("CapsGenerated"))
-                    .filter(n -> agentId.equals(n.properties().get("agent-id")))
-                    .filter(n -> {
-                        var str = n.properties().get("strength");
-                        return str != null && Double.parseDouble(str) > 0.1;
-                    })
-                    .sorted(Comparator.comparingDouble(
-                            (MindMapNode n) -> {
-                                var str = n.properties().get("strength");
-                                return str != null ? Double.parseDouble(str) : 0.0;
-                            }).reversed())
-                    .limit(5)
-                    .map(this::renderAttractorAsFelt)
-                    .toList();
+                                          .filter(s -> "behavioral".equals(s.type()))
+                                          .flatMap(s -> mindMapStore.nodesIn(s.id(), tenantId).stream())
+                                          .filter(n -> n.traits().contains("CapsGenerated"))
+                                          .filter(n -> agentId.equals(n.properties().get("agent-id")))
+                                          .filter(n -> {
+                                              var str = n.properties().get("strength");
+                                              return str != null && Double.parseDouble(str) > 0.1;
+                                          })
+                                          .sorted(Comparator.comparingDouble(
+                                                  (MindMapNode n) -> {
+                                                      var str = n.properties().get("strength");
+                                                      return str != null ? Double.parseDouble(str) : 0.0;
+                                                  }).reversed())
+                                          .limit(5)
+                                          .map(this::renderAttractorAsFelt)
+                                          .toList();
             if (!attractorLines.isEmpty()) {
                 parts.addAll(attractorLines);
                 attractorCount = attractorLines.size();
@@ -207,7 +237,7 @@ public class CognitionObservationBuilder {
 
             if (lastClassifierActive) {
                 var activeDriveTypes = filtered.stream().map(DriveSnapshot::type).collect(Collectors.toSet());
-                var diffTexts = readDriveDifferentiation(subgraphs, activeDriveTypes);
+                var diffTexts        = readDriveDifferentiation(subgraphs, activeDriveTypes);
                 parts.addAll(diffTexts);
                 diffTextCount = diffTexts.size();
             }
@@ -219,14 +249,15 @@ public class CognitionObservationBuilder {
             }
         }
 
-        if (parts.isEmpty()) { return null; }
+        if (parts.isEmpty()) {return null;}
 
         var driveNames = filtered.stream().map(DriveSnapshot::type).collect(Collectors.joining(", "));
         System.out.printf("[observation-assembly] %s | drives=%d [%s] | selfStandards=%d | diffTexts=%d | prioritySigs=%d | memories=%d | attractors=%d | totalParts=%d%n",
-                agentId, filtered.size(), driveNames, selfStandardCount, diffTextCount, prioritySigCount, memoryCount, attractorCount, parts.size());
+                          agentId, filtered.size(), driveNames, selfStandardCount, diffTextCount, prioritySigCount, memoryCount, attractorCount, parts.size());
 
         return ObservationSection.text("What Pulls at You", String.join("\n\n", parts));
     }
+
 
     // Russell (1980) circumplex distance-from-origin
     private String renderAttractorAsFelt(MindMapNode node) {
@@ -570,20 +601,22 @@ public class CognitionObservationBuilder {
     // --- Internal helpers ---
 
     private Map<String, String> readGeneratedDriveDescriptions() {
-        if (mindMapStore == null || tenantId == null) { return Map.of(); }
+        if (mindMapStore == null || tenantId == null) {return Map.of();}
         var result = new HashMap<String, String>();
         mindMapStore.listSubgraphs(tenantId).stream()
-                .filter(s -> "cognitive".equals(s.type()))
-                .flatMap(s -> mindMapStore.nodesIn(s.id(), tenantId).stream())
-                .filter(n -> n.traits().contains("DriveDescriptionGenerated"))
-                .filter(n -> agentId.equals(n.properties().get("agent-id")))
-                .forEach(n -> {
-                    String driveType = n.properties().get("drive-type");
-                    String desc = n.properties().get("generated-description");
-                    if (driveType != null && desc != null && !desc.isBlank()) {
-                        result.put(driveType, desc);
-                    }
-                });
+                    .filter(s -> "cognitive".equals(s.type()))
+                    .flatMap(s -> mindMapStore.nodesIn(s.id(), tenantId).stream())
+                    .filter(n -> n.traits().contains("DriveDescriptionGenerated"))
+                    .filter(n -> agentId.equals(n.properties().get("agent-id")))
+                    .forEach(n -> {
+                        String driveType = n.properties().get("drive-type");
+                        String desc      = n.properties().get("generated-description");
+                        String role      = n.properties().get("role");
+                        if (driveType != null && desc != null && !desc.isBlank()) {
+                            String key = role != null ? driveType + "-" + role : driveType;
+                            result.put(key, desc);
+                        }
+                    });
         return result;
     }
 

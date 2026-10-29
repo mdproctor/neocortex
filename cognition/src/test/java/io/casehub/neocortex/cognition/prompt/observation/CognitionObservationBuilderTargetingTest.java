@@ -94,6 +94,68 @@ class CognitionObservationBuilderTargetingTest {
             .isEqualTo(TARGET);
     }
 
+
+    @Test
+    void renderInternalStateIncludesTargetAnnotation() {
+        String cogSgId = store.createSubgraph(
+                new SubgraphInput("cognitive-" + OBSERVER, "cognitive", null), TENANT);
+        store.addNode(
+                NodeInput.of("drive-description-gloating-prey", cogSgId)
+                         .withTraits(java.util.Set.of("DriveDescriptionGenerated"))
+                         .withProperties(Map.of(
+                                 "agent-id", OBSERVER,
+                                 "drive-type", "gloating",
+                                 "role", "prey",
+                                 "generated-description", "Your jaw loosens watching them fumble")),
+                TENANT);
+        store.addNode(
+                NodeInput.of("drive-description-gloating", cogSgId)
+                         .withTraits(java.util.Set.of("DriveDescriptionGenerated"))
+                         .withProperties(Map.of(
+                                 "agent-id", OBSERVER,
+                                 "drive-type", "gloating",
+                                 "generated-description", "Your jaw loosens, lazy warmth")),
+                TENANT);
+
+        var builder = createBuilder(List.of(
+                new DriveSnapshot("gloating", 0.7, "gloating desc")));
+
+        var section = builder.renderInternalState(
+                List.of(), "", Set.of(TARGET), io.casehub.neocortex.caps.SituationContext.EMPTY, Map.of(TARGET, "Penelope"));
+
+        assertThat(section).isNotNull();
+        String text = ((ObservationSection.TextBlock) section).content();
+        assertThat(text).contains("→ Penelope");
+        assertThat(text).contains("Your jaw loosens watching them fumble");
+        assertThat(text).as("uses targeted description, not untargeted")
+                        .doesNotContain("lazy warmth");
+    }
+
+    @Test
+    void renderInternalStateFallsBackToUntargetedDescription() {
+        String cogSgId = store.createSubgraph(
+                new SubgraphInput("cognitive-" + OBSERVER, "cognitive", null), TENANT);
+        store.addNode(
+                NodeInput.of("drive-description-gloating", cogSgId)
+                         .withTraits(java.util.Set.of("DriveDescriptionGenerated"))
+                         .withProperties(Map.of(
+                                 "agent-id", OBSERVER,
+                                 "drive-type", "gloating",
+                                 "generated-description", "Your jaw loosens, lazy warmth")),
+                TENANT);
+
+        var builder = createBuilder(List.of(
+                new DriveSnapshot("gloating", 0.7, "gloating desc")));
+
+        var section = builder.renderInternalState(
+                List.of(), "", Set.of(TARGET), io.casehub.neocortex.caps.SituationContext.EMPTY, Map.of(TARGET, "Penelope"));
+
+        assertThat(section).isNotNull();
+        String text = ((ObservationSection.TextBlock) section).content();
+        assertThat(text).contains("→ Penelope");
+        assertThat(text).contains("lazy warmth");
+    }
+
     private CognitionObservationBuilder createBuilder(List<DriveSnapshot> drives) {
         return new CognitionObservationBuilder(OBSERVER, TENANT, store, null, null, drives);
     }
