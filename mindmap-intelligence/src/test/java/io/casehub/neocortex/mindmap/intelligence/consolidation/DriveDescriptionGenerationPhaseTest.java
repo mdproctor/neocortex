@@ -1,12 +1,12 @@
 package io.casehub.neocortex.mindmap.intelligence.consolidation;
 
-import io.casehub.neocortex.session.testing.StubPipelines;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
+import io.casehub.neocortex.session.testing.StubPipelines;
 import io.casehub.platform.agent.AgentEvent;
 import io.casehub.platform.agent.AgentSession;
 import io.casehub.platform.agent.AgentSessionInit;
@@ -49,6 +49,13 @@ class DriveDescriptionGenerationPhaseTest {
                         return Multi.createFrom().items(
                                 new AgentEvent.TextDelta("{\"discrimination\": \"How they differ: One pull is about what your hands say. "),
                                 new AgentEvent.TextDelta("The other is about what your hands can do. Notice which one moved your hands.\"}"));
+                    }
+                    boolean hasRelationships = userPrompt.contains("Relationships");
+                    if (hasRelationships) {
+                        return Multi.createFrom().items(
+                                new AgentEvent.TextDelta("{\"description\": \"A warmth rises through your chest, "),
+                                new AgentEvent.TextDelta("spreading into your shoulders.\", \"targeted\": {\"beloved\": \""),
+                                new AgentEvent.TextDelta("Something warm and fierce rises when she is near.\"}}"));
                     }
                     return Multi.createFrom().items(
                             new AgentEvent.TextDelta("{\"description\": \"A warmth rises through your chest, "),
@@ -374,6 +381,82 @@ class DriveDescriptionGenerationPhaseTest {
 
     // --- helpers ---
 
+
+    @Test
+    void generatesTargetedDescriptionWhenRelationalSchemasPresent() {
+        seedDriveNode("gallantry", 0.9);
+        seedFormationMemory("Your father knelt to help the stranger", "gallantry");
+        seedRelationalSchema(AGENT, "penelope-pitstop", "beloved",
+                             "She means everything — when she smiles, something in you settles");
+
+        phase.run(TENANT, List.of());
+
+        var targetedDescriptions = findDescriptionNodes().stream()
+                                                         .filter(n -> "beloved".equals(n.properties().get("role")))
+                                                         .toList();
+        assertThat(targetedDescriptions).hasSize(1);
+        assertThat(targetedDescriptions.getFirst().property("drive-type")).hasValue("gallantry");
+        assertThat(targetedDescriptions.getFirst().property("role")).hasValue("beloved");
+        assertThat(targetedDescriptions.getFirst().property("generated-description")).isPresent();
+    }
+
+    @Test
+    void untargetedDescriptionStillGeneratedAlongsideTargeted() {
+        seedDriveNode("gallantry", 0.9);
+        seedFormationMemory("Your father knelt to help the stranger", "gallantry");
+        seedRelationalSchema(AGENT, "penelope-pitstop", "beloved",
+                             "She means everything");
+
+        phase.run(TENANT, List.of());
+
+        var untargeted = findDescriptionNodes().stream()
+                                               .filter(n -> n.properties().get("role") == null)
+                                               .filter(n -> "gallantry".equals(n.properties().get("drive-type")))
+                                               .toList();
+        assertThat(untargeted).as("untargeted description must still be generated").hasSize(1);
+
+        var targeted = findDescriptionNodes().stream()
+                                             .filter(n -> "beloved".equals(n.properties().get("role")))
+                                             .toList();
+        assertThat(targeted).as("targeted description also generated").hasSize(1);
+    }
+
+    @Test
+    void promptIncludesRelationalSchemaContext() {
+        seedDriveNode("gallantry", 0.9);
+        seedFormationMemory("Your father knelt to help the stranger", "gallantry");
+        seedRelationalSchema(AGENT, "penelope-pitstop", "beloved",
+                             "She means everything");
+
+        phase.run(TENANT, List.of());
+
+        var descPrompts = capturedUserPrompts.stream()
+                                             .filter(p -> p.contains("gallantry"))
+                                             .toList();
+        assertThat(descPrompts).isNotEmpty();
+        assertThat(descPrompts.getFirst()).contains("beloved");
+        assertThat(descPrompts.getFirst()).contains("She means everything");
+    }
+
+    @Test
+    void skipsTargetedDescriptionsOnIdempotentRerun() {
+        seedDriveNode("gallantry", 0.9);
+        seedFormationMemory("Your father knelt to help the stranger", "gallantry");
+        seedRelationalSchema(AGENT, "penelope-pitstop", "beloved",
+                             "She means everything");
+
+        phase.run(TENANT, List.of());
+        int firstRunCalls = capturedUserPrompts.size();
+        assertThat(findDescriptionNodes().stream()
+                                         .filter(n -> "beloved".equals(n.properties().get("role")))
+                                         .toList()).hasSize(1);
+
+        phase.run(TENANT, List.of());
+        assertThat(capturedUserPrompts).as("no new LLM calls on rerun")
+                                       .hasSize(firstRunCalls);
+    }
+
+
     private void seedDriveNode(String driveType, double intensity) {
         store.addNode(
             NodeInput.of(driveType, cognitiveSubgraphId)
@@ -410,6 +493,18 @@ class DriveDescriptionGenerationPhaseTest {
                 TENANT);
     }
 
+
+    private void seedRelationalSchema(String agentId, String targetId, String role, String description) {
+        store.addNode(
+                NodeInput.of("rel-" + agentId + "-" + targetId, cognitiveSubgraphId)
+                         .withProperties(Map.of(
+                                 "cognitiveKind", "relational-schema",
+                                 "agent-id", agentId,
+                                 "target-id", targetId,
+                                 "rel.role", role,
+                                 "rel.description", description)),
+                TENANT);
+    }
 
     private List<MindMapNode> findDescriptionNodes() {
         return store.search(MindMapQuery.of(TENANT, 200).withType(SubgraphTypes.COGNITIVE))
