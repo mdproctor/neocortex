@@ -137,12 +137,13 @@ public class CognitionObservationBuilder {
         var generatedDescriptions = readGeneratedDriveDescriptions();
 
         Function<DriveSnapshot, String> descriptionFor = d -> {
+            String label = d.type().toUpperCase().replace('-', ' ')
+                           + " (" + String.format("%.1f", d.intensity()) + ")";
             String generated = generatedDescriptions.get(d.type());
             if (generated != null) {
-                return d.type().toUpperCase().replace('-', ' ')
-                       + " (" + String.format("%.1f", d.intensity()) + "): " + generated;
+                return label + ": " + generated;
             }
-            return d.description();
+            return label;
         };
 
         var eligible = drives.stream()
