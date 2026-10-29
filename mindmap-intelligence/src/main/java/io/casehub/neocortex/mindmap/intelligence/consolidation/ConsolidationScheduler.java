@@ -164,6 +164,10 @@ public class ConsolidationScheduler {
         this.sessionPipeline = pipeline;
     }
 
+    public boolean hasSessionPipeline() {
+        return this.sessionPipeline != null;
+    }
+
 
     private void runPhases(String tenantId) {
         List<String>                priority     = subgraphPriority(tenantId);
