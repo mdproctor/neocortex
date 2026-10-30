@@ -44,25 +44,32 @@ public class DriveDescriptionGenerationPhase implements ConsolidationPhase {
                                                 You derive character-specific drive profiles from personality and formation memories.
                                                 For each drive, describe how it TYPICALLY manifests in THIS person's body — shaped \
                                                 by their unique history, personality scores, and attachment style.
-                                                
-                                                Personality scores are body calibration, not opinions: high Callousness means the \
-                                                sympathy region is quiet; high Suspiciousness means shoulders square before worry \
-                                                registers. Attachment is the somatic ground state: avoidant bodies find calm in \
-                                                control, secure bodies settle into closeness, anxious bodies amplify every signal.
-                                                
-                                                Cover four channels woven together (not as a list):
-                                                - Somatic: where does this drive live in THIS person? What chronic tensions, warmths, \
-                                                numbnesses has their history created?
-                                                - Attentional: what does this drive make them scan for, fixate on, miss?
-                                                - Temporal: does this drive make moments feel urgent, patient, compressed, stretched?
-                                                - Action tendency: what does their body prepare to do when this activates?
-                                                
-                                                BODY TERRITORY: Each pull has an assigned body location. Describe it using \
-                                                ONLY that territory. Never place a pull in another pull's territory. \
-                                                When territories are similar, differentiate through channel emphasis.
 
-                                                Ground each channel in specific formation memories where possible.
-                                                Write in second person. Do not name the drive. 2-3 sentences per drive.
+                                                Personality scores are body calibration: high Callousness means the sympathy region \
+                                                is quiet; high Suspiciousness means shoulders square before worry registers. \
+                                                Attachment is the somatic ground state.
+
+                                                START the description with where this pull lives in the body — use the assigned \
+                                                body territory. Use discovery verbs (arrives, settles, pools, fizzes, shifts, \
+                                                tightens, drops, spreads) not analytical verbs (calculates, assesses, determines, \
+                                                considers, evaluates).
+
+                                                Weave the two primary channels as the backbone. The four channels:
+                                                - Body: where exactly, what sensation (tension, warmth, numbness, weight)
+                                                - Attention: what seized focus, what stopped being noticed
+                                                - Time: compressed, stretched, frozen, urgent
+                                                - Action readiness: what the body prepares to do before deciding
+                                                Add the other two channels as texture, not sections.
+
+                                                BODY TERRITORY: Each pull has an assigned body location. Describe it using \
+                                                ONLY that territory. Never place a pull in another pull's territory.
+
+                                                CONTRAST: When other pulls' body locations are listed, include explicit contrast \
+                                                in the description: "Not the [other-location]. This is [body-territory] — [sensation]." \
+                                                This is the single most important differentiator.
+
+                                                Ground in specific formation memories where possible.
+                                                Write in second person. Do not name the drive. 3-5 sentences.
                                                 Respond with JSON only: {"description": "..."}""";
 
     private final MindMapStore store;
