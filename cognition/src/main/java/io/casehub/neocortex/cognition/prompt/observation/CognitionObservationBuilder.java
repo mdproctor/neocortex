@@ -30,6 +30,23 @@ public class CognitionObservationBuilder {
     private static final double OVERLAP_THRESHOLD = 0.15;
     private static final double RESTING_WEIGHT = 0.22;
 
+    // Mechanical body-location assignment per drive (golden prose rendering methodology, era5)
+    private static final Map<String, String> DRIVE_BODY_LOCATIONS = Map.ofEntries(
+            Map.entry("scheming", "fingertips, periphery, visual field"),
+            Map.entry("gloating", "sternum, breastbone"),
+            Map.entry("greed", "gut, navel, ribs"),
+            Map.entry("recognition", "upper chest, spine"),
+            Map.entry("dominance", "spine, jaw, feet"),
+            Map.entry("self-preservation", "ears, hearing, peripheral awareness"),
+            Map.entry("protection", "legs, neck, positioning"),
+            Map.entry("gallantry", "hands, chest warmth"),
+            Map.entry("proving-worth", "shoulders, jaw, grip"),
+            Map.entry("loyalty", "chest ache, alignment"),
+            Map.entry("suspicion", "neck prickling, gut knowing"),
+            Map.entry("curiosity", "fingertips tracing, chest fizzing"),
+            Map.entry("social-harmony", "chest settling, jaw softening")
+    );
+
     private final String agentId;
     private final @Nullable String tenantId;
     private final @Nullable MindMapStore mindMapStore;
@@ -164,11 +181,17 @@ public class CognitionObservationBuilder {
 
         Function<TargetedDrive, String> targetedDescriptionFor = td -> {
             var d = td.drive();
+            String bodyLocation = DRIVE_BODY_LOCATIONS.get(d.type());
             String label = d.type().toUpperCase().replace('-', ' ')
                            + " (" + String.format("%.1f", d.intensity()) + ")";
             if (td.hasTarget()) {
                 label += " → " + td.targetDisplayName();
             }
+            var sb = new StringBuilder();
+            if (bodyLocation != null) {
+                sb.append("**").append(bodyLocation).append("** — ");
+            }
+            sb.append(label);
             String generated = null;
             if (td.hasTarget() && td.role() != null) {
                 generated = generatedDescriptions.get(d.type() + "-" + td.role());
@@ -177,9 +200,9 @@ public class CognitionObservationBuilder {
                 generated = generatedDescriptions.get(d.type());
             }
             if (generated != null) {
-                return label + ": " + generated;
+                sb.append("\n").append(generated);
             }
-            return label;
+            return sb.toString();
         };
 
         var driveDescriptions = targeted.stream()
