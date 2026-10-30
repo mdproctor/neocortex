@@ -653,9 +653,12 @@ Step 5: Eval against golden corpus
 11. ~~Update DriveDescriptionGenerationPhase — channel emphasis, body-location constraints, contrast text generation~~ ✅ Done — system prompt includes body territory, contrast formula, discovery verbs, 3-5 sentences
 12. ~~Add structural rendering to thinking field~~ ✅ Done — Barrett instruction updated with "STRUCTURE IN YOUR ASIDE" section
 13. ~~Run eval~~ ✅ Done — pipeline v1: Q=3.83 R=3.33 D=3.66; pipeline v2: Q=3.86 R=3.47 D=3.72
-14. ~~Iterate on single golden prose event until LLM output matches~~ ✅ Done — Barrett v3 single-event: Q=4.25 R=4.50 D=4.0, all at or above golden targets (see §Barrett v3)
-15. Multi-event validation — extend smoke test to 3-5 events, validate on production model (Gemini)
-16. If multi-event holds → full 300-tick validation
+14. ~~Iterate on HC aside entrance hall (event 1)~~ ✅ Done — Barrett v3: Q=4.25 R=4.50 D=4.0 (see §Barrett v3)
+15. Iterate on HC dialogue entrance hall (event 0) — body-first discovery in dialogue
+16. Iterate on HC confrontation entrance hall (event 5) — self-preservation under threat
+17. Iterate on HC in different room — instruction generalisation
+18. Iterate on different character (PP or AHM) — different personality/attachment
+19. After 5+ events at golden standard → full 300-tick eval
 
 ---
 
@@ -802,8 +805,14 @@ The generated aside matches all golden prose patterns:
 
 #### Next steps
 
-1. **Full fast test suite** — run `PipelineToRenderingTest` (all tests) to check for regressions from the Barrett v3 change
-2. **Multi-event validation** — extend the smoke test to cover 3-5 golden prose events (HC entrance-hall events 0, 1, 5; a library event; a different character) and classify all of them
-3. **Production model validation** — run the same prompt through Gemini via Vertex API to confirm the instruction works cross-model
-4. **Gloating D fix** — add explicit contrast clause to gloating's P22 description to raise D from 3 to 4+
-5. **Full 300-tick eval** — if multi-event validation holds, run a full scenario and classify to get aggregate scores comparable to pipeline v2's 858-event eval
+Iterate one golden prose event at a time. For each event: reproduce the scenario as a smoke test, iterate on the pipeline until the LLM output matches golden prose, classify, confirm Q/R/D ≥ 4.0, move to the next.
+
+**Event queue** (ordered by coverage — each event exercises a different gap):
+
+1. ~~HC aside, entrance hall (event 1)~~ ✅ Done — Q=4.25 R=4.50 D=4.0
+2. HC dialogue, entrance hall (event 0) — tests body-first discovery in DIALOGUE (not aside). Does the scene-discovery instruction carry through to spoken output?
+3. HC confrontation, entrance hall (event 5) — tests self-preservation under THREAT. Brixton Boys corner HC. Does the instruction produce armoured-readiness prose or analytical threat assessment?
+4. HC aside, library or drawing room — tests a DIFFERENT ROOM. Does the instruction generalise beyond entrance-hall-with-everyone-present?
+5. Different character (Peter Perfect or Ant Hill Mob) — tests a DIFFERENT PERSONALITY. Does scene-discovery work for secure/anxious attachment, not just avoidant?
+
+After each event hits golden standard, address any recurring gaps (e.g. gloating D=3 appeared in event 1 — if it recurs, fix the P22 contrast clause). Only run a full 300-tick eval after 5+ events confirm the pattern holds across characters and situations.
