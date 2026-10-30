@@ -219,6 +219,120 @@ This mirrors embodied cognition: you don't feel anxiety in the abstract. You fee
 
 ---
 
+## Finding: Register Recovery with Targeted Drives (2026-10-30)
+
+### Eval run: targeted somatic drives
+
+After implementing 5-arg `renderInternalState` with `agentNames` and fixing `renderRelationalSchemas` to read evolved overlay data:
+
+| Run | Events | Quality | Register | Diff |
+|-----|--------|---------|----------|------|
+| Era 4 baseline | 300 | 3.92 | 3.74 | 3.74 |
+| Era 5 full pipeline | 105 | 3.84 | 3.13 | 3.57 |
+| **Era 5 targeted** | **30** | **3.87** | **3.46** | **3.53** |
+
+Register recovered +0.33 (3.13 → 3.46) from targeted drive wiring alone, even WITHOUT per-role descriptions (0 schemas in MindMap → generation fell back to untargeted).
+
+### Root cause: relational schemas not seeded into MindMap
+
+Server log evidence:
+```
+DriveDescriptionGenerationPhase: 5 agents, 17 drives, 26 formative memories, 0 relational schemas
+RelationalSchemaEvolutionPhase: 0ms (nothing to evolve)
+```
+
+`ManorCognitiveSeeder.seedPeople()` creates overlay nodes with only PAD values (pleasure, arousal, dominance). It does NOT include `rel.role`, `rel.trust`, `rel.intimacy`, `rel.utility`, `rel.description` from `socialConfig.relationalSchemas()`. Consequence: the entire relational schema pipeline (P20 evolution, P22 per-role generation) is inert.
+
+### Deep diagnostic: why register dropped (7-layer investigation)
+
+1. **Section structure is identical** between Era 4 and Era 5. All 15 section slots existed in Era 4. The problem is content, not structure.
+
+2. **"What Pulls at You" grows from 9→25 parts** after consolidation. 4 drives + 4 self-standards + 5 CAPS attractors + 6 differentiation texts + 6 priority signatures. But the added content IS somatic (Barrett-quality differentiation), not analytical. Volume dilutes attention but doesn't change register directly.
+
+3. **Action readiness channel drops to zero.** Era 4 early asides: body=2.6, attention=2.2, time=0.3, action=1.9. Era 5: body=3, attention=3, time=0, action=0. The generated descriptions contain action readiness vocabulary (3-4 markers each) — the palette is there, the LLM just doesn't use it.
+
+4. **Ready-made labels short-circuit action readiness.** Trust ("LOW"), relational schemas ("prey"), social awareness ("more cooperative") give the LLM classification shortcuts. Era 4 forced the LLM to construct understanding through body ("my weight shifts when he moves"). Era 5 lets it classify ("he's the bookish type").
+
+5. **Era 4 also degrades over time.** 300-tick baseline: early body=2.6 attn=2.2 action=1.9 → late body=1.4 attn=0.4 action=1.0. Consolidation-added content dilutes register in BOTH eras. Era 5 starts from a worse position.
+
+### Barrett 4-channel selection framework
+
+The 4 channels are NOT a checklist — they're a selection space. Each drive×role×situation activates 1-2 channels:
+
+**Drive → primary/secondary channel:**
+
+| Drive | Primary | Secondary |
+|-------|---------|-----------|
+| scheming | attention | action-readiness |
+| suspicion | attention | body |
+| curiosity | attention | action-readiness |
+| protection | action-readiness | attention |
+| gallantry | action-readiness | body |
+| gloating | body | time |
+| dominance | body | attention |
+| self-preservation | body | attention |
+| loyalty | body | action-readiness |
+| social-harmony | body | attention |
+| greed | body | attention |
+| recognition | body | time |
+| proving-worth | body | time |
+| adventure | body | time |
+
+**Target role → channel boost:**
+
+| Role | Boosts |
+|------|--------|
+| prey | attention |
+| obstacle | action-readiness |
+| threat | body + attention |
+| ward/beloved | body + action-readiness |
+| tool | attention |
+| rival | action-readiness + time |
+| ally | body |
+
+These are mechanical lookup tables — no LLM needed for selection.
+
+### Body-location differentiation principle
+
+Each drive needs a unique body LOCATION. When two drives share a location, differentiation drops:
+
+- Scheming: hands/periphery (fizzing fingers, attention narrowing)
+- Gloating: central-spreading (warmth behind sternum, frame expanding, time stretching)
+- Greed: gut-deep (below sternum, hollow, fingers curling downward)
+- Recognition: chest-high (spine reaching upward, chest filling)
+- Dominance: postural-vertical (spine, shoulders squared, jaw set)
+- Self-preservation: armored (peripheral scanning, neck-prickle, constant hum)
+- Protection: legs/positioning (weight dropping, interposing)
+- Gallantry: warm-reaching (chest opening, hands extending)
+- Proving-worth: tense-hands (grip, engine that won't idle, the gap before recognition)
+
+### Trigger-rate principle and its limits
+
+A drive that triggers in 90% of events with D=3 drags the average worse than one that triggers 60% with D=4-5. Reducing trigger rate by letting events be OWNED by fewer drives improves differentiation.
+
+**Limit:** Identity-level drives (scheming for both villains, self-preservation for hooded-claw) cannot be subtracted. Three independent agents confirmed this — subtraction degraded all scores. These drives need improvement through ADDITION (new events with genuinely different content) or REFRAMING (sub-types, per-target variation).
+
+### Golden prose methodology
+
+Development pattern established for cognitive extensions:
+
+1. **Describe** — hand-craft ideal rendered output when the capability is exercised
+2. **Test** — run classifier, verify Q/R/D ≥ 4.0
+3. **Implement** — build/modify backend to generate equivalent
+4. **Iterate** — pipeline converges toward golden target
+
+Golden corpus: 51 events, 5 characters, Q=4.35, R=4.37, D=4.12. Four per-drive scores remain below 4.0 (villain scheming differentiation — see HANDOFF for approaches).
+
+### Scoring principles (from deep analysis agent, effort:max)
+
+1. **Temporal discovery ordering** — "the prickle arrived first, then something different — slower, warmer" (R=4-5) beats co-present description (R=3)
+2. **Drives peak when owning events** — pure savoring (one drive) scores R=5; competing with 3 others scores R=3
+3. **Desc/thinking alignment** — classifier reads desc for relevance, thinking for register; misalignment penalises both
+4. **Suspicion has the highest natural register** (R=4.9) — body-knowing (neck-prickle, gut-knowledge, hands-watching) has no analytical equivalent
+5. **Secure attachment is hardest to express** — it's the absence of anxiety; needs positive felt states (body's ease, breath deepening near trusted person)
+
+---
+
 ## Immediate Plan
 
 1. ~~Merge #477 to this slot~~ ✅ Done
@@ -226,7 +340,11 @@ This mirrors embodied cognition: you don't feel anxiety in the abstract. You fee
 3. ~~Run 30-event eval with relational schemas active~~ ✅ Done — quality 3.84, register 3.27
 4. ~~Compare reactive drive quality against Era 4 baseline~~ ✅ Done — regressed
 5. ~~Investigate whether explicit trigger conditions are needed~~ ✅ Done — found attention competition
-6. Implement targeted somatic drives (`→ Name` annotation)
-7. Remove separate cognitive sections from prompt
-8. Run 30-event eval — expect register recovery
-9. If register recovers → 300-tick validation
+6. ~~Implement targeted somatic drives (`→ Name` annotation)~~ ✅ Done — register recovered +0.33
+7. ~~Create golden prose target~~ ✅ Done — Q=4.35, R=4.37, D=4.12
+8. Fix villain scheming differentiation in golden prose (4 per-drive scores below 4.0)
+9. Seed relational schemas into MindMap (`seedPeople` fix)
+10. Restructure renderCognitiveSections to drive-first integrated blocks
+11. Update DriveDescriptionGenerationPhase with channel emphasis hints
+12. Run eval — compare pipeline output against golden corpus scores
+13. If scores match → 300-tick validation
