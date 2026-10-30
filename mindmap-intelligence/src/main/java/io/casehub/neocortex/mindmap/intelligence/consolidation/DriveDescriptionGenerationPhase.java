@@ -57,6 +57,10 @@ public class DriveDescriptionGenerationPhase implements ConsolidationPhase {
                                                 - Temporal: does this drive make moments feel urgent, patient, compressed, stretched?
                                                 - Action tendency: what does their body prepare to do when this activates?
                                                 
+                                                BODY TERRITORY: Each pull has an assigned body location. Describe it using \
+                                                ONLY that territory. Never place a pull in another pull's territory. \
+                                                When territories are similar, differentiate through channel emphasis.
+
                                                 Ground each channel in specific formation memories where possible.
                                                 Write in second person. Do not name the drive. 2-3 sentences per drive.
                                                 Respond with JSON only: {"description": "..."}""";
@@ -187,6 +191,13 @@ public class DriveDescriptionGenerationPhase implements ConsolidationPhase {
             String subgraphId = findCognitiveSubgraph(tenantId, agentId);
             if (subgraphId == null) {continue;}
 
+            var allDriveLocations = new java.util.HashMap<String, String>();
+            for (var dn : driveNodes) {
+                String dt = dn.properties().get("drive-type");
+                String bl = dn.properties().get("body-location");
+                if (dt != null && bl != null) { allDriveLocations.put(dt, bl); }
+            }
+
             for (MindMapNode driveNode : driveNodes) {
                 String driveType = driveNode.properties().get("drive-type");
                 if (driveType == null || describedKeys.contains(driveType)) {continue;}
@@ -196,11 +207,17 @@ public class DriveDescriptionGenerationPhase implements ConsolidationPhase {
                                                                  .toList();
 
                 String intensity = driveNode.properties().getOrDefault("intensity", "0.5");
+                String bodyLocation = driveNode.properties().get("body-location");
+                String channelEmphasis = driveNode.properties().get("channel-emphasis");
+
+                var otherLocations = new java.util.HashMap<>(allDriveLocations);
+                otherLocations.remove(driveType);
 
                 descTasks.add(session -> {
                     long start = System.currentTimeMillis();
                     generateAndStore(session, tenantId, agentId, subgraphId,
-                                     driveType, intensity, servingMemories, personalityNodes, attachmentNode, agentSchemas);
+                                     driveType, intensity, servingMemories, personalityNodes, attachmentNode, agentSchemas,
+                                     bodyLocation, channelEmphasis, otherLocations);
                     LOG.info("  " + agentId + "/" + driveType + " (" + servingMemories.size()
                              + " memories, " + personalityNodes.size() + " facets, "
                              + agentSchemas.size() + " schemas, "
@@ -229,10 +246,13 @@ public class DriveDescriptionGenerationPhase implements ConsolidationPhase {
                                   String driveType, String intensity,
                                   List<MindMapNode> servingMemories,
                                   List<MindMapNode> personalityNodes, MindMapNode attachmentNode,
-                                  List<MindMapNode> agentSchemas) {
+                                  List<MindMapNode> agentSchemas,
+                                  String bodyLocation, String channelEmphasis,
+                                  Map<String, String> otherDriveLocations) {
         try {
             String rawResponse = callLlm(session, driveType, intensity, servingMemories,
-                                         personalityNodes, attachmentNode, agentSchemas);
+                                         personalityNodes, attachmentNode, agentSchemas,
+                                         bodyLocation, channelEmphasis, otherDriveLocations);
             if (rawResponse == null || rawResponse.isBlank()) {return;}
 
             String description = parseDescription(rawResponse);
@@ -275,10 +295,27 @@ public class DriveDescriptionGenerationPhase implements ConsolidationPhase {
     private String callLlm(AgentSession session, String driveType, String intensity,
                            List<MindMapNode> servingMemories,
                            List<MindMapNode> personalityNodes, MindMapNode attachmentNode,
-                           List<MindMapNode> agentSchemas) {
+                           List<MindMapNode> agentSchemas,
+                           String bodyLocation, String channelEmphasis,
+                           Map<String, String> otherDriveLocations) {
         var promptBuilder = new StringBuilder();
         promptBuilder.append("Drive type: ").append(driveType).append("\n");
-        promptBuilder.append("Intensity: ").append(intensity).append(" (scale 0.0 to 1.0)\n\n");
+        promptBuilder.append("Intensity: ").append(intensity).append(" (scale 0.0 to 1.0)\n");
+        if (bodyLocation != null) {
+            promptBuilder.append("Body territory: ").append(bodyLocation).append("\n");
+        }
+        if (channelEmphasis != null) {
+            promptBuilder.append("Primary channels: ").append(channelEmphasis).append("\n");
+        }
+        promptBuilder.append("\n");
+
+        if (!otherDriveLocations.isEmpty()) {
+            promptBuilder.append("Other pulls this character has (for contrast — use ONLY this pull's territory):\n");
+            for (var e : otherDriveLocations.entrySet()) {
+                promptBuilder.append("  ").append(e.getKey()).append(" → ").append(e.getValue()).append("\n");
+            }
+            promptBuilder.append("\n");
+        }
 
         if (!personalityNodes.isEmpty()) {
             promptBuilder.append("Personality profile:\n");
