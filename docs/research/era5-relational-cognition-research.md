@@ -654,11 +654,12 @@ Step 5: Eval against golden corpus
 12. ~~Add structural rendering to thinking field~~ ✅ Done — Barrett instruction updated with "STRUCTURE IN YOUR ASIDE" section
 13. ~~Run eval~~ ✅ Done — pipeline v1: Q=3.83 R=3.33 D=3.66; pipeline v2: Q=3.86 R=3.47 D=3.72
 14. ~~Iterate on HC aside entrance hall (event 1)~~ ✅ Done — Barrett v3: Q=4.25 R=4.50 D=4.0 (see §Barrett v3)
-15. Iterate on HC dialogue entrance hall (event 0) — body-first discovery in dialogue
-16. Iterate on HC confrontation entrance hall (event 5) — self-preservation under threat
-17. Iterate on HC in different room — instruction generalisation
-18. Iterate on different character (PP or AHM) — different personality/attachment
-19. After 5+ events at golden standard → full 300-tick eval
+15. ~~Iterate on HC dialogue entrance hall (event 0)~~ ✅ Done — Barrett v5: structure fixed (single paragraph, no bold anchors), performance cost shown. Full-transcript comparison at ~85% golden.
+16. ~~Iterate on HC confrontation entrance hall (event 5)~~ ✅ Done — Barrett v5c: near-golden when gloating drive removed. Key finding: drive suppression under threat needs pipeline-level dynamic activation. (see §Barrett v4-v5)
+17. Implement dynamic drive activation — pipeline modulates presented drives based on situation (threat → suppress gloating, reduce to near-zero)
+18. Iterate on HC in different room — instruction generalisation
+19. Iterate on different character (PP or AHM) — different personality/attachment
+20. After 5+ events at golden standard → full 300-tick eval
 
 ---
 
@@ -816,3 +817,100 @@ Iterate one golden prose event at a time. For each event: reproduce the scenario
 5. Different character (Peter Perfect or Ant Hill Mob) — tests a DIFFERENT PERSONALITY. Does scene-discovery work for secure/anxious attachment, not just avoidant?
 
 After each event hits golden standard, address any recurring gaps (e.g. gloating D=3 appeared in event 1 — if it recurs, fix the P22 contrast clause). Only run a full 300-tick eval after 5+ events confirm the pattern holds across characters and situations.
+
+### Finding: Barrett v4-v5 — Full-Transcript Structural Iteration (2026-10-30)
+
+#### The methodology shift
+
+Barrett v3 was validated using the classifier — Q/R/D scores per drive per event. These scores measure whether the classifier can detect each drive and rate its quality, differentiation, and register. They are necessary but not sufficient. A transcript can score Q=4.25 R=4.50 D=4.0 and still be structurally wrong — wrong paragraph form, wrong bold anchor usage, wrong length, drives catalogued rather than blended, conclusions stated rather than discoveries made.
+
+This session introduced **full-transcript structural comparison**: reading the entire generated thinking field side-by-side with the golden prose and evaluating across dimensions the classifier cannot see:
+
+| Dimension | What the classifier measures | What full-transcript comparison adds |
+|---|---|---|
+| Quality | Is the drive expressed well? | Is the prose as a whole well-written? |
+| Differentiation | Is this drive distinct from others? | Do drives blend within paragraphs the way real experience blends? |
+| Register | Is the expression somatic or analytical? | Is the character discovering or concluding? |
+| — | — | Paragraph structure (single vs multi) |
+| — | — | Bold anchor presence and placement |
+| — | — | Word count / density |
+| — | — | Performance cost (mask maintenance) |
+| — | — | Formation memory echoes |
+| — | — | P22 description literalism vs original language |
+| — | — | Conclusions about others vs staying in the body |
+
+The classifier scores are a gate. Full-transcript comparison is calibration. Both are needed.
+
+#### Five structural gaps in Barrett v3
+
+Full-transcript comparison of the v3 aside (event 1) against golden prose confirmed all three golden patterns matched (body-first discovery, scene-anchored bold paragraphs, drives surface from reactions). But when the same prompt was used for event 0 (dialogue) and event 5 (confrontation), five structural gaps emerged that the classifier could not detect:
+
+**Gap 1: Dialogue vs aside form.** The golden prose has a clear structural pattern:
+
+| Event type | Golden structure | V3 structure |
+|---|---|---|
+| HC dialogue | Single dense paragraph, no bold anchors, ~200-230 words | Multi-paragraph with bold anchors, ~270-280 words |
+| HC aside | Bold anchors, multi-paragraph, ~230-290 words | Bold anchors, multi-paragraph (correct) |
+
+Root cause: the Barrett instruction said "Bold the scene anchor" as a universal command. For dialogue events, the character is speaking — the internal monologue is a rushing undercurrent that doesn't pause to organise into anchored sections.
+
+**Gap 2: Bold anchors are character-specific, not event-type-specific.** Analysis of the full golden transcript (51 events across HC, DD, PP) revealed:
+
+| Character | Dialogue | Aside | Pattern |
+|---|---|---|---|
+| HC (hooded-claw) | No bold anchors, single paragraph | Bold anchors, multi-paragraph | Compartmentalised — settles attention on each stimulus sequentially |
+| DD (dick-dastardly) | No bold anchors, single paragraph | No bold anchors, single paragraph | Continuous flow — experience rushes, attention reactive |
+| PP (penelope-pitstop) | No bold anchors, single paragraph | No bold anchors, single paragraph | Emotional flow — everything connects |
+
+Bold anchors are HC's cognitive signature: the hypervigilant, compartmentalising mind that registers each person as a separate tracked variable. DD and PP don't section their experience.
+
+**Gap 3: Drive cataloguing despite anti-catalog instruction.** V3 gave each PERSON their own paragraph with their own associated drive — which IS a catalog with better prose. Golden blends drives within paragraphs — when spine straightens AND sternum warms, that's one moment.
+
+**Gap 4: P22 description literalism.** V3 echoed P22 descriptions near-verbatim ("warmth pools behind my sternum"). Golden uses the same body territories but invents language specific to each moment ("the slow private sweetness of holding what she has not yet earned enough to see").
+
+**Gap 5: No performance cost.** V3 never surfaced the Pemberton/Vincent split. Golden prose's strongest lines are all performance cost: "My hands want to close but Pemberton's hands must stay open," "The smile reaches my eyes because I make it reach my eyes."
+
+#### Instruction evolution: v3 → v4 → v5
+
+| Version | Key additions | What improved | What remained |
+|---|---|---|---|
+| **v3** | Scene-discovery framing, "not as a catalog," discovery verbs, ambiguity, "do not conclude" | Q/R/D ≥ 4.0 on classifier. Body-first discovery. Scene-anchored paragraphs. | All 5 structural gaps |
+| **v4** | Renamed ASIDE→THINKING. Dialogue/aside form distinction. "Blend what the body blends." "Palette, do not echo back." Anti-conclusion example. | Structure fixed. P22 echo eliminated. Drive blending improved. | Conclusions about others. Gloating under threat. No performance cost. |
+| **v5** | "Never state what others think, know, or fail to see." "When performing a face... notice the cost." "If territory is quiet, simply not there." | Performance cost shown. Conclusions reduced. | Gloating still appears under threat. Occasional analytical moments. |
+
+#### The v5c experiment: drive suppression is a pipeline problem
+
+Hypothesis: the model activates gloating under threat because the gloating drive description (0.7 intensity) is PRESENT in the prompt. The instruction says "if a territory is quiet, it is simply not there" — but the drive IS there, described, with an intensity of 0.7.
+
+Test: regenerated event 5 with gloating drive removed from "What Pulls at You." Self-preservation elevated to 0.9.
+
+Result: **gloating completely absent.** No sternum warmth. No conclusions about what others know. Pure survival + performance cost:
+
+> "Hands want to close. Hands want to become fists. Hands stay open, soft, Pemberton's hands, a butler's hands, and the effort of keeping them that way sends a tremor up both forearms."
+
+> "The fine hairs on both arms are fully erect and the ears have gone cathedral-wide, pulling in Tommy's breathing, the leather creak of Knuckles shifting his weight, a tap dripping somewhere in the kitchen that shouldn't be audible from here but is."
+
+Near-golden quality (~95%). Three v5 regenerations WITH gloating present all produced gloating under threat — three different framings (tactical awareness, private recognition, "not fear, something older"). The model kept finding channels for HC's superiority. Removing the drive from the prompt eliminated it instantly.
+
+**Conclusion: when a drive description is present in the prompt at significant intensity, the model activates it regardless of instruction-level prohibitions.** Drive suppression under threat is a pipeline-level concern.
+
+#### What the instruction can and cannot fix
+
+**Instruction-addressable (v5 achieves):**
+- Dialogue vs aside structure
+- Drive blending
+- Own language (palette not script)
+- Performance cost
+- Anti-conclusion (self-labeling and others — mostly effective)
+- Discovery verbs, ambiguity
+
+**Pipeline-addressable (instruction cannot fix):**
+- Drive suppression under threat — model activates any drive present at significant intensity
+- Character-specific bold anchor patterns — "you may bold" doesn't vary by personality
+- Occasional analytical moments — diminishing returns on additional rules
+
+#### Next steps
+
+1. **Dynamic drive activation** — the pipeline must modulate which drives are presented based on situational context. When threat is high, suppress gloating/recognition by removing from "What Pulls at You" or reducing rendered intensity below visibility threshold.
+2. **Continue event queue** — HC in different room, then different character (DD or PP).
+3. **Subagent architecture** — delegate generation and comparison to subagents, keep main context for instruction design.
