@@ -1,6 +1,6 @@
 # Era 5: Relational Cognition — WHO Shapes What You Feel
 
-**Status:** ACTIVE — attention competition finding, targeted somatic hypothesis
+**Status:** ACTIVE — Barrett v3 scene-discovery instruction breaks compliance gap (R=4.50 single-event, golden target 4.20)
 
 The cognitive pipeline differentiates WHAT agents feel (Barrett somatic channels) and HOW they express it (drive descriptions, thinking-field calibration). Era 4 brought this to ceiling: quality 3.92, register 3.74, differentiation 3.74 — all exceeding V2 prose baseline on aggregate metrics.
 
@@ -653,8 +653,9 @@ Step 5: Eval against golden corpus
 11. ~~Update DriveDescriptionGenerationPhase — channel emphasis, body-location constraints, contrast text generation~~ ✅ Done — system prompt includes body territory, contrast formula, discovery verbs, 3-5 sentences
 12. ~~Add structural rendering to thinking field~~ ✅ Done — Barrett instruction updated with "STRUCTURE IN YOUR ASIDE" section
 13. ~~Run eval~~ ✅ Done — pipeline v1: Q=3.83 R=3.33 D=3.66; pipeline v2: Q=3.86 R=3.47 D=3.72
-14. Iterate on single golden prose event until LLM output matches (see §Pipeline Iteration Findings below)
-15. If single-event output matches → full 300-tick validation
+14. ~~Iterate on single golden prose event until LLM output matches~~ ✅ Done — Barrett v3 single-event: Q=4.25 R=4.50 D=4.0, all at or above golden targets (see §Barrett v3)
+15. Multi-event validation — extend smoke test to 3-5 events, validate on production model (Gemini)
+16. If multi-event holds → full 300-tick validation
 
 ---
 
@@ -699,6 +700,110 @@ This means all events in the first 5 minutes have NO generated descriptions — 
 | Era 5 baseline | 3.13 | — |
 | Pipeline v1 (body-location anchors) | 3.33 | +0.20 |
 | Pipeline v2 (contrast + discovery verbs) | 3.47 | +0.14 |
+| **Barrett v3 (scene-discovery, single event)** | **4.50** | **+1.03** |
 | Golden target | 4.20 | — |
 
-Each iteration that adds body-specific structural guidance improves register. The approach works — the rate of improvement suggests the remaining gap (0.73) is achievable with further prompt refinement, but the LLM compliance finding shows the current approach is hitting diminishing returns. The next lever is not MORE body-location data in the prompt — it's making the LLM actually USE what's already there.
+Pipeline v1–v2 improved register incrementally by adding more body-location data. Barrett v3 broke through the compliance gap by changing HOW the LLM is instructed to write — not what data it receives. See §Barrett v3 below.
+
+### Finding: Barrett v3 — Scene-Discovery Instruction Breaks the Compliance Gap (2026-10-30)
+
+#### The problem
+
+Pipeline v2 achieved R=3.47 — a +0.34 improvement over baseline but still 0.73 below the golden target (4.20). The bottleneck was identified as an LLM compliance gap: descriptions were golden quality, but the LLM ignored the structural guidance and wrote analytical prose. Each pipeline iteration added more body-location data, but the rate of improvement was diminishing. The next lever was making the LLM actually USE what was already there.
+
+#### Root cause: the Barrett instruction fought the golden prose style
+
+The "STRUCTURE IN YOUR ASIDE" section of the Barrett instruction said:
+
+> "Each pull below has a body territory marked in **bold**. In your aside, give each active pull its own paragraph starting with its bold body-location anchor."
+
+This asked for a **drive catalog** — one paragraph per drive, body-location label as header. The golden prose does something fundamentally different:
+
+| Golden prose pattern | Barrett v2 instruction |
+|---|---|
+| **Scene anchors** (`**Clara signs the guest book**`) | **Body-location anchors** (`**fingertips, periphery**`) |
+| Drives surface from person reactions | One drive per paragraph, cataloged |
+| Multiple drives can share a paragraph | Rigid drive-per-paragraph structure |
+| Body discovers the scene | Body reports its state |
+
+The instruction was asking the LLM to produce a format the golden prose never used. The LLM had two options: follow the rigid instruction (producing a catalog that scores well on D but poorly on R) or ignore it (writing its natural analytical style). It chose to ignore it.
+
+#### The fix
+
+Rewrote "STRUCTURE IN YOUR ASIDE" to describe the golden prose pattern:
+
+```
+STRUCTURE IN YOUR ASIDE
+Write as the body discovering this scene — not as a mind analysing it.
+Start with what your body notices first, before you have words for it.
+
+Each person present changes something in your posture, breathing, or
+attention. Bold the scene anchor — **a person acting**, **a sensation
+arriving**, **a body territory waking** — and let the drives surface
+as reactions to what is happening, not as a catalog.
+
+Each pull below names a body territory. When that territory activates,
+it is because someone or something in the scene triggered it. Multiple
+drives can share a paragraph when the body cannot separate them.
+
+Use discovery verbs — arrives, settles, pools, fizzes, shifts, tightens
+— not analytical verbs like calculates, assesses, determines.
+```
+
+Three key shifts:
+1. **"Write as the body discovering" vs "give each pull its own paragraph"** — reframes the task from cataloging to experiencing
+2. **"Bold the scene anchor" vs "bold body-location anchor"** — anchors paragraphs to what's happening in the scene, not to drive labels
+3. **"Multiple drives can share a paragraph"** — removes the rigid one-drive-per-paragraph constraint that conflicted with golden prose weaving
+
+#### Evidence: single-event smoke test
+
+Test: `PipelineToRenderingTest#goldenScenario_hcEntranceHall_fullPromptDump` — HC aside, entrance hall, 4 drives (scheming 0.9, self-preservation 0.7, gloating 0.7, dominance 0.6), all characters present. Prompt dumped from test, sent to LLM (Opus 4.6), aside classified via `classify_emotions.py --mode full`.
+
+| Drive | Q | D | R | Golden target |
+|---|:-:|:-:|:-:|:-:|
+| scheming | 4 | 4 | 4 | Q≥4 D≥4 R≥4 |
+| self-preservation | **5** | **5** | **5** | Q≥4 D≥4 R≥4 |
+| dominance | 4 | 4 | 4 | Q≥4 D≥4 R≥4 |
+| gloating | 4 | 3 | **5** | Q≥4 D≥4 R≥4 |
+| **Average** | **4.25** | **4.0** | **4.5** | **Q≥4 D≥4 R≥4** |
+
+All dimensions at or above golden target except gloating D=3.
+
+**Comparison to pipeline v2 (858-event eval):**
+
+| Dimension | Pipeline v2 | Barrett v3 (1 event) | Delta |
+|---|:-:|:-:|:-:|
+| Quality | 3.86 | 4.25 | +0.39 |
+| Differentiation | 3.72 | 4.00 | +0.28 |
+| Register | 3.47 | **4.50** | **+1.03** |
+
+Register jumped from 3.47 to 4.50 — exceeding the golden target of 4.20.
+
+#### What's working
+
+The generated aside matches all golden prose patterns:
+
+1. **Body-first discovery** — "The banister finds my palm before I have decided to touch it" (not "The entrance hall. Dusty, grand...")
+2. **Scene-anchored bold paragraphs** — `**Clara bends over the guest book**`, `**Hartwell shifts his weight near the doorframe**` (not `**fingertips** — SCHEMING`)
+3. **Drives surface from reactions** — gloating emerges from watching Clara's trust, scheming from Hartwell's military scanning (not cataloged separately)
+4. **Cross-drive contrast** — "Not the sternum's warm knowing, not the spine's territorial claim. This is older, colder"
+5. **Formative memory weaving** — "The same narcotic stillness I first felt at twelve, watching the housekeeper do exactly what I wanted without knowing why"
+6. **Discovery verbs throughout** — settles, pools, loosens, sharpens, tightens, prickling
+
+#### What's not working
+
+1. **Gloating differentiation D=3** — the gloating paragraph (Clara watching) blends into the dominance paragraph without a sharp contrast clause. The Brixton Boys paragraph explicitly contrasts ("Not the sternum's warm knowing, not the spine's territorial claim") but gloating doesn't get the same treatment. Fix: add contrast to gloating's drive description in P22 — "not the fingertips' mapping, not the ears' vigilance, this is..."
+
+2. **N=1** — single event, single character, single model. The classifier has ±0.2 noise. These scores need validation across a broader event set and ideally multiple classifier passes.
+
+3. **Model mismatch** — the smoke test sent the prompt to Opus 4.6 (Claude). The production pipeline uses Gemini (Vertex). Different models respond differently to the same instruction. The Barrett v3 instruction needs validation on the production model.
+
+4. **Section ordering not addressed** — the prompt still front-loads analytical content (Social Rules, personality scores) before the embodied Barrett instruction. The Barrett v3 change shows that instruction framing matters more than section ordering for this event, but ordering may still matter for weaker models or longer contexts.
+
+#### Next steps
+
+1. **Full fast test suite** — run `PipelineToRenderingTest` (all tests) to check for regressions from the Barrett v3 change
+2. **Multi-event validation** — extend the smoke test to cover 3-5 golden prose events (HC entrance-hall events 0, 1, 5; a library event; a different character) and classify all of them
+3. **Production model validation** — run the same prompt through Gemini via Vertex API to confirm the instruction works cross-model
+4. **Gloating D fix** — add explicit contrast clause to gloating's P22 description to raise D from 3 to 4+
+5. **Full 300-tick eval** — if multi-event validation holds, run a full scenario and classify to get aggregate scores comparable to pipeline v2's 858-event eval
