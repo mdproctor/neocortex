@@ -648,9 +648,57 @@ Step 5: Eval against golden corpus
 6. ~~Implement targeted somatic drives (`→ Name` annotation)~~ ✅ Done — register recovered +0.33
 7. ~~Create golden prose target~~ ✅ Done — Q=4.35, R=4.37, D=4.12
 8. ~~Fix drive differentiation in golden prose~~ ✅ Done — all 5 targets fixed, 6 techniques documented (see §Golden Prose Rendering Methodology)
-9. Seed relational schemas into MindMap (`seedPeople` fix)
-10. Restructure renderCognitiveSections to drive-first paragraph blocks with bold anchors
-11. Update DriveDescriptionGenerationPhase — channel emphasis, body-location constraints, contrast text generation, pervasive-drive threading
-12. Add structural rendering to thinking field — paragraph breaks, bold anchors, woven subordinate clauses
-13. Run eval — compare pipeline output against golden corpus scores (target: within 0.2 of golden)
-14. If scores match → 300-tick validation
+9. ~~Seed relational schemas into MindMap (`seedPeople` fix)~~ ✅ Done — overlay nodes carry `rel.*` properties, cognitive nodes carry `cognitiveKind=relational-schema`, subgraph name mismatch fixed
+10. ~~Restructure renderCognitiveSections to drive-first paragraph blocks with bold anchors~~ ✅ Done — `DRIVE_BODY_LOCATIONS` table, `**body-location** — DRIVE` format
+11. ~~Update DriveDescriptionGenerationPhase — channel emphasis, body-location constraints, contrast text generation~~ ✅ Done — system prompt includes body territory, contrast formula, discovery verbs, 3-5 sentences
+12. ~~Add structural rendering to thinking field~~ ✅ Done — Barrett instruction updated with "STRUCTURE IN YOUR ASIDE" section
+13. ~~Run eval~~ ✅ Done — pipeline v1: Q=3.83 R=3.33 D=3.66; pipeline v2: Q=3.86 R=3.47 D=3.72
+14. Iterate on single golden prose event until LLM output matches (see §Pipeline Iteration Findings below)
+15. If single-event output matches → full 300-tick validation
+
+---
+
+## Pipeline Iteration Findings
+
+### Finding: P22 prompt produces golden-quality descriptions (verified)
+
+The updated P22 system prompt — with body territory constraint, explicit contrast formula ("Not the [other-location]. This is [territory]"), discovery verbs, and 3-5 sentence target — produces descriptions that match golden prose quality when called directly via Vertex API.
+
+Example for HC gloating: "A warmth settles across your sternum—not the spine's rigid satisfaction or the fingertips' electric scheming. This is deeper, slower, a heavy pleasure that pools behind your breastbone..."
+
+All 5 golden prose patterns present: sternum body territory ✓, contrast against fingertips and spine ✓, discovery verbs (settles, pools, stretches) ✓, formation memory grounding ✓, targeted role variants ✓.
+
+**Implication:** Description quality is NOT the bottleneck. The P22 descriptions are golden-prose-quality. The bottleneck is downstream — how the LLM uses them.
+
+### Finding: LLM compliance gap — structural guidance not followed
+
+The Barrett instruction tells the LLM: "give each active pull its own paragraph starting with its bold body-location anchor. Use discovery verbs." The "What Pulls at You" section provides descriptions with `**sternum, breastbone** — GLOATING` anchors.
+
+The LLM ignores both. Pipeline v2 HC thinking output:
+> "The entrance hall. Dusty, grand, full of people I need to manage... My jaw tightens. She's standing in the foyer of a house that should have been mine..."
+
+Golden prose target for the same scenario:
+> "My chest settles into that architectural stillness — the same quality of calm I first felt at eighteen... My spine finds its vertical before I've decided to stand straight... My weight shifts slightly — his competence is a wall I need to route around..."
+
+The golden prose is BODY-FIRST (chest, spine, weight). The pipeline output is THOUGHT-FIRST (dusty, grand, people to manage). The descriptions are available in the prompt but the LLM generates its natural analytical narrative instead of echoing the somatic vocabulary.
+
+**Implication:** The Barrett instruction is a suggestion, not a constraint. Making the LLM follow structural guidance requires stronger directive framing — possibly restructuring which section comes last (primacy/recency effects), or making the instruction imperative rather than descriptive.
+
+### Finding: Consolidation timing creates description gap
+
+P22 (`DriveDescriptionGenerationPhase`) skips on the first consolidation tick at scenario startup: "Drive description generation skipped — no SessionPipeline." The `SessionPipeline` is not wired until after the initial consolidation. Descriptions are only generated on consolidation tick 2 (5 minutes into the run).
+
+This means all events in the first 5 minutes have NO generated descriptions — the "What Pulls at You" section shows only `SCHEMING (0.9)` (label + intensity) with no somatic prose. These early events score poorly, dragging the eval average down.
+
+**Implication:** For fair eval comparison against golden prose, either: (a) force P22 to run before scenario start by ensuring SessionPipeline is wired during initial consolidation, or (b) filter eval to only score events after tick 2, or (c) pre-populate descriptions via the consolidation cache file.
+
+### Finding: Register recovery trajectory confirms body-location approach
+
+| Run | R | Delta |
+|-----|:-:|:---:|
+| Era 5 baseline | 3.13 | — |
+| Pipeline v1 (body-location anchors) | 3.33 | +0.20 |
+| Pipeline v2 (contrast + discovery verbs) | 3.47 | +0.14 |
+| Golden target | 4.20 | — |
+
+Each iteration that adds body-specific structural guidance improves register. The approach works — the rate of improvement suggests the remaining gap (0.73) is achievable with further prompt refinement, but the LLM compliance finding shows the current approach is hitting diminishing returns. The next lever is not MORE body-location data in the prompt — it's making the LLM actually USE what's already there.
