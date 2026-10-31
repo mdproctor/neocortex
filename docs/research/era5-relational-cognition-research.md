@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE — Barrett v5 pipeline validated across 8 scenarios, 2 characters, 3 forms, 4 conditions. All drives Q≥4 on Opus CLI. Comprehensive 8+8 cognitive instrument built. Ready for 300-tick eval.
 
-The cognitive pipeline differentiates WHAT agents feel (Barrett somatic channels) and HOW they express it (drive descriptions, thinking-field calibration). Era 4 brought this to ceiling: quality 3.92, register 3.74, differentiation 3.74 — all exceeding V2 prose baseline on aggregate metrics.
+The cognitive pipeline differentiates WHAT agents feel (Barrett four channels: body, attention, time, action readiness) and HOW they express it (drive descriptions, thinking-field calibration). Era 4 brought this to ceiling: quality 3.92, register 3.74, differentiation 3.74 — all exceeding V2 prose baseline on aggregate metrics.
 
 The ceiling is reactive drives. Gloating, gallantry, protection — drives that activate toward SPECIFIC people in SPECIFIC situations — regress because the pipeline is blind to WHO the agent interacts with. The Barrett instruction says "notice your body." The drive description says "warm pressure behind your sternum." Neither says "this activates because Reginald just failed and he is prey."
 
@@ -368,7 +368,7 @@ Key discipline: never assume a change worked — measure it. The classifier is a
 
 ### Technique 1: Body-location separation
 
-**Principle:** Each drive must own a unique body territory. When two drives share somatic location, differentiation (D) drops because the classifier can't distinguish them.
+**Principle:** Each drive must own a unique body territory AND primary channel combination. When two drives share body territory, differentiation (D) drops. The four channels (body, attention, time, action readiness) provide additional separation — scheming lives in attention+fingertips, gloating in body+time+sternum, self-preservation in attention+ears.
 
 **Evidence:** DD scheming shared jaw/shoulders/hands with gloating and recognition. D=3.38. After relocating scheming to fingertips/periphery/visual-field (distinct from gloating's sternum and recognition's chest/spine), D jumped to 4.5. Event 13 went from D=3 to D=5 in a single edit.
 
@@ -533,7 +533,7 @@ The drive content is identical (evaluating whether to help). The register change
 | R=4 | Discovery | "My weight shifts before I've decided to move" |
 | R=5 | Full immersion | "The warmth arrives. No name for it yet. Just the spreading." |
 
-**Pipeline implication:** Drive description generation should use discovery verbs (arrives, settles, pools, fizzes, sharpens, catches) not analytical verbs (calculates, assesses, determines, considers). The Barrett somatic instruction already aims for this, but the relational context sections can reintroduce analytical language. Every text surface must be audited for register.
+**Pipeline implication:** Drive description generation should use discovery verbs (arrives, settles, pools, fizzes, sharpens, catches) not analytical verbs (calculates, assesses, determines, considers). The Barrett four-channel instruction already aims for this, but the relational context sections can reintroduce analytical language. Every text surface must be audited for register.
 
 ### The structural tradeoff and its resolution
 
@@ -830,7 +830,7 @@ This session introduced **full-transcript structural comparison**: reading the e
 |---|---|---|
 | Quality | Is the drive expressed well? | Is the prose as a whole well-written? |
 | Differentiation | Is this drive distinct from others? | Do drives blend within paragraphs the way real experience blends? |
-| Register | Is the expression somatic or analytical? | Is the character discovering or concluding? |
+| Register | Is the expression embodied or analytical? | Is the character discovering or concluding? |
 | — | — | Paragraph structure (single vs multi) |
 | — | — | Bold anchor presence and placement |
 | — | — | Word count / density |
@@ -967,9 +967,9 @@ Most iteration this session fixed HOW we measured, not WHAT the pipeline produce
 
 | Problem | Impact | Fix |
 |---------|--------|-----|
-| Classifier scored ACTION, not thinking | Gloating (internal warmth) marked irrelevant | Relevance criterion: "somatic signature in ANY channel" |
+| Classifier scored ACTION, not thinking | Gloating (internal warmth) marked irrelevant | Relevance criterion: "distinct signature in ANY of the four channels" |
 | Haiku missed drive blends | DD gloating Q=3 where Opus scores Q=4 | CLI backend: `claude -p --agent drive-classifier` |
-| Classifier scored somatic channel only | Attention, time, action readiness invisible | 4-channel rubric in quality criteria |
+| Classifier scored body channel only | Attention, time, action readiness channels invisible | 4-channel rubric in quality criteria |
 | No holistic dimensions | Formation echo, performance cost, ToM invisible | 8 cross-cutting cognitive dimensions added |
 | Coach bias in generation | Supplementary instructions in fork prompts inflated quality | Clean pipeline-only tests (identical scores — pipeline carries the load) |
 
@@ -980,7 +980,7 @@ The golden prose itself scored below our generated versions on the original clas
 The iteration process revealed principles about what makes each drive score well:
 
 1. **Self-preservation threads as background monitoring** — subordinate clauses in every paragraph ("my hearing confirming the corridor's silence beneath the warmth"), not a one-shot final coda. Confirms woven-thread pattern from §Golden Prose Rendering Methodology.
-2. **Gloating needs distinct somatic territory from recognition** — "lower than the recognition flush, heavier, the distance between what I just said and what is true." The sternum (gloating) vs upper chest (recognition) separation is critical when both drives are active.
+2. **Gloating needs distinct body territory from recognition** — "lower than the recognition flush, heavier, the distance between what I just said and what is true." The sternum (gloating) vs upper chest (recognition) separation is critical when both drives are active.
 3. **Scheming in ownership contexts needs architectural framing** — "Not placed — positioned. Each spine is a line of sight I blocked or opened." Scheming is not just forward-planning; it's recognising your OWN past architecture in the physical environment.
 4. **Noisy scenes produce better output than clean solos** — more characters = more stimuli = more opportunities for each drive to differentiate. The pipeline is strongest under complexity, weakest in quiet moments where drives compete for limited scene material.
 
