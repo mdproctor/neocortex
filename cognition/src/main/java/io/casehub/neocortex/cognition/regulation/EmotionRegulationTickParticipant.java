@@ -103,21 +103,20 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
         double currentFatigue = fatigueTracker.currentFatigue(context.agentId(), context.tenantId());
         var pendingSignal = failureSignals.remove(context.agentId() + ":" + context.tenantId());
 
-        // Petter 2025: try personality-driven mechanical prediction before LLM
-        EmotionRegulationResult result = null;
+        if (generationPhase == null) {return;}
+
+        // Petter 2025: try personality-driven strategy prediction before LLM
+        EmotionRegulationStrategy pinnedStrategy = null;
         if (strategyPredictor != null && defaultsRegistry != null && pendingSignal == null) {
-            result = tryMechanicalPrediction(context, appraisal.get(), maxDiscrepancy, currentFatigue);
+            pinnedStrategy = tryPredictStrategy(context, appraisal.get(), currentFatigue);
         }
 
-        if (result == null) {
-            if (generationPhase == null) {return;}
-            var history = (mindMapStore != null)
-                          ? EmotionRegulationMindMapAdapter.loadHistory(
-                    mindMapStore, context.agentId(), context.tenantId(), HISTORY_LIMIT)
-                          : List.<EmotionRegulationResult>of();
-            result = generationPhase.generate(context, appraisal.get(), history,
-                    regulationEffort, currentFatigue, pendingSignal);
-        }
+        var history = (mindMapStore != null)
+                      ? EmotionRegulationMindMapAdapter.loadHistory(
+                mindMapStore, context.agentId(), context.tenantId(), HISTORY_LIMIT)
+                      : List.<EmotionRegulationResult>of();
+        var result = generationPhase.generate(context, appraisal.get(), history,
+                regulationEffort, currentFatigue, pendingSignal, pinnedStrategy);
         if (result != null) {
             String key = context.agentId() + ":" + context.tenantId();
             results.put(key, result);
@@ -136,10 +135,9 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
         }
     }
 
-    private @Nullable EmotionRegulationResult tryMechanicalPrediction(
+    private @Nullable EmotionRegulationStrategy tryPredictStrategy(
             CognitionTickContext context,
             io.casehub.neocortex.cognition.appraisal.AppraisalResult appraisal,
-            double maxDiscrepancy,
             double currentFatigue) {
         var defaults = defaultsRegistry.forAgent(context.agentId());
         if (defaults.isEmpty() || defaults.get().descriptor() == null) return null;
@@ -155,15 +153,10 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
                 ? loadEstimator.estimate(context.agentId(), context.tenantId()).level()
                 : null;
 
-        var prediction = strategyPredictor.predict(
-                axes, peakEmotion.type(), peakEmotion.intensity(), currentFatigue, loadLevel);
-        if (prediction.isEmpty()) return null;
-
-        var targetEmotions = appraisal.emotions().stream()
-                .map(e -> e.type().name()).toList();
-
-        return RegulationStrategyPredictor.toResult(
-                prediction.get(), targetEmotions, List.of(), peakEmotion.intensity());
+        return strategyPredictor.predict(
+                axes, peakEmotion.type(), peakEmotion.intensity(), currentFatigue, loadLevel)
+                .map(RegulationPrediction::strategy)
+                .orElse(null);
     }
 
     public Optional<EmotionRegulationResult> currentResult(String agentId, String tenantId) {

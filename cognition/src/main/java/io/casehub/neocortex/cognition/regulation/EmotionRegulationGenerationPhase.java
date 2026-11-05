@@ -110,11 +110,21 @@ public class EmotionRegulationGenerationPhase {
                                                        double regulationEffort,
                                                        double regulationFatigue,
                                                        @Nullable StrategyFailureSignal failureSignal) {
+        return generate(context, appraisal, history, regulationEffort, regulationFatigue, failureSignal, null);
+    }
+
+    public @Nullable EmotionRegulationResult generate(CognitionTickContext context,
+                                                       AppraisalResult appraisal,
+                                                       List<EmotionRegulationResult> history,
+                                                       double regulationEffort,
+                                                       double regulationFatigue,
+                                                       @Nullable StrategyFailureSignal failureSignal,
+                                                       @Nullable EmotionRegulationStrategy pinnedStrategy) {
         if (sessionPipeline == null) return null;
 
         try {
             String response = invokeLlm(context, appraisal, history, regulationEffort,
-                    regulationFatigue, failureSignal);
+                    regulationFatigue, failureSignal, pinnedStrategy);
             if (response == null) return null;
             return parseResponse(response);
         } catch (Exception e) {
@@ -126,13 +136,14 @@ public class EmotionRegulationGenerationPhase {
     private String invokeLlm(CognitionTickContext context, AppraisalResult appraisal,
                               List<EmotionRegulationResult> history, double regulationEffort,
                               double regulationFatigue,
-                              @Nullable StrategyFailureSignal failureSignal) {
+                              @Nullable StrategyFailureSignal failureSignal,
+                              @Nullable EmotionRegulationStrategy pinnedStrategy) {
         var session = sessionPipeline.openSession("emotion-regulation", AgentSessionInit.of(SYSTEM_PROMPT));
         var loadEstimate = (loadEstimator != null)
                 ? loadEstimator.estimate(context.agentId(), context.tenantId())
                 : null;
         var userMessage = buildUserMessage(context, appraisal, history, regulationEffort, loadEstimate,
-                regulationFatigue, failureSignal);
+                regulationFatigue, failureSignal, pinnedStrategy);
         var responseText = new StringBuilder();
         session.query(userMessage).subscribe().asStream()
                 .filter(e -> e instanceof AgentEvent.TextDelta)
@@ -146,7 +157,22 @@ public class EmotionRegulationGenerationPhase {
                                      @Nullable CognitiveLoadEstimate loadEstimate,
                                      double regulationFatigue,
                                      @Nullable StrategyFailureSignal failureSignal) {
+        return buildUserMessage(context, appraisal, history, regulationEffort, loadEstimate,
+                regulationFatigue, failureSignal, null);
+    }
+
+    static String buildUserMessage(CognitionTickContext context, AppraisalResult appraisal,
+                                     List<EmotionRegulationResult> history, double regulationEffort,
+                                     @Nullable CognitiveLoadEstimate loadEstimate,
+                                     double regulationFatigue,
+                                     @Nullable StrategyFailureSignal failureSignal,
+                                     @Nullable EmotionRegulationStrategy pinnedStrategy) {
         var sb = new StringBuilder();
+
+        if (pinnedStrategy != null) {
+            sb.append("Strategy: ").append(pinnedStrategy.name())
+                    .append(" (personality-derived — generate the embodied experience for this strategy)\n\n");
+        }
 
         sb.append("Regulation effort: ").append(String.format("%.2f", regulationEffort))
                 .append(" (0=negligible, 1=maximum urgency)\n\n");

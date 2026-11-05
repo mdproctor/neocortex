@@ -4,8 +4,6 @@ import io.casehub.neocortex.cognitive.EmotionType;
 import io.casehub.neocortex.cognitive.index.DispositionAxes;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RegulationStrategyPredictorTest {
@@ -114,18 +112,6 @@ class RegulationStrategyPredictorTest {
         assertThat(result.get().strategy()).satisfiesAnyOf(
                 s -> assertThat(s).isEqualTo(EmotionRegulationStrategy.RESPONSE_MODULATION),
                 s -> assertThat(s).isEqualTo(EmotionRegulationStrategy.ATTENTIONAL_DEPLOYMENT));
-    }
-
-    // --- toResult ---
-
-    @Test
-    void toResult_producesCorrectResult() {
-        var prediction = new RegulationPrediction(
-                EmotionRegulationStrategy.COGNITIVE_CHANGE, 0.75, 0.55);
-        var result = RegulationStrategyPredictor.toResult(
-                prediction, List.of("ANGER"), List.of("COMPETENCE"), 0.8);
-        assertThat(result.strategy()).isEqualTo(EmotionRegulationStrategy.COGNITIVE_CHANGE);
-        assertThat(result.regulatedIntensity()).isCloseTo(0.36, org.assertj.core.data.Offset.offset(0.01));
     }
 
     // --- Emotion category ---

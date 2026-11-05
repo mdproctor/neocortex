@@ -101,8 +101,9 @@ class EmotionRegulationTickParticipantTest {
     }
 
     @Test
-    void mechanicalPrediction_usesPersonalityWhenRegistryPresent() {
-        // coherent suppressor: avoidant + conservative, no CC-enabling traits
+    void strategyPrediction_requiresGenerationPhaseForNarrative() {
+        // Predictor provides strategy hint, but generation phase produces the result.
+        // Without a generation phase, no regulation result even when predictor fires.
         var axes = new DispositionAxes("cooperative", "moderate", "conservative", "low", "avoidant");
         var descriptor = DescriptorView.of("a1", axes, List.of(), List.of());
         var defaults = CognitiveDefaults.empty("a1").withDescriptor(descriptor);
@@ -116,14 +117,12 @@ class EmotionRegulationTickParticipantTest {
         when(appraisalParticipant.currentResult("a1", "t1")).thenReturn(Optional.of(appraisal));
 
         var config = CognitionConfig.none().with("regulation", true).with("appraisal", true);
+        // registry present (predictor active) but no generation phase → no result
         var participant = new EmotionRegulationTickParticipant(
                 appraisalParticipant, config, null, null, null, registry, null);
         participant.tick(context);
 
-        var result = participant.currentResult("a1", "t1");
-        assertThat(result).isPresent();
-        assertThat(result.get().strategy()).isEqualTo(EmotionRegulationStrategy.RESPONSE_MODULATION);
-        assertThat(result.get().narrative()).contains("hold");
+        assertThat(participant.currentResult("a1", "t1")).isEmpty();
     }
 
     @Test

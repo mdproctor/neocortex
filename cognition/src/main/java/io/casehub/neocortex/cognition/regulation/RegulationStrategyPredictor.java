@@ -196,33 +196,4 @@ public class RegulationStrategyPredictor {
         };
     }
 
-    static EmotionRegulationResult toResult(RegulationPrediction prediction,
-                                             List<String> targetEmotions,
-                                             List<String> targetDrives,
-                                             double peakOriginalIntensity) {
-        double regulated = peakOriginalIntensity * (1.0 - prediction.predictedEffectiveness());
-        return new EmotionRegulationResult(
-                prediction.strategy(),
-                targetEmotions,
-                targetDrives,
-                peakOriginalIntensity,
-                regulated,
-                prediction.predictedEffectiveness(),
-                narrativeFor(prediction.strategy()),
-                null,
-                null);
-    }
-
-    private static String narrativeFor(EmotionRegulationStrategy strategy) {
-        return switch (strategy) {
-            case COGNITIVE_CHANGE ->
-                    "You reframe the situation, finding a different perspective that softens the emotional impact.";
-            case RESPONSE_MODULATION ->
-                    "You hold the feeling in check, keeping your expression steady despite the inner turbulence.";
-            case ATTENTIONAL_DEPLOYMENT ->
-                    "You redirect your focus, turning your attention away from what stirred the feeling.";
-            case SITUATION_SELECTION, SITUATION_MODIFICATION ->
-                    throw new IllegalArgumentException("Environmental strategies are not mechanically predicted");
-        };
-    }
 }
