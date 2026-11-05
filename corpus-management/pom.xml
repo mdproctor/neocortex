@@ -20,6 +20,10 @@
       <artifactId>casehub-neocortex-corpus-management-api</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-neocortex-sqlite-support</artifactId>
       <version>${project.version}</version>
