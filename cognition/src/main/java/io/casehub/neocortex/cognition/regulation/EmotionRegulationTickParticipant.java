@@ -11,8 +11,11 @@ import org.jspecify.annotations.Nullable;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 public class EmotionRegulationTickParticipant implements CognitionTickParticipant {
+
+    private static final Logger LOG = Logger.getLogger(EmotionRegulationTickParticipant.class.getName());
 
     private final           AppraisalTickParticipant         appraisalParticipant;
     private final           CognitionConfig                  config;
@@ -109,6 +112,14 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
         EmotionRegulationStrategy pinnedStrategy = null;
         if (strategyPredictor != null && defaultsRegistry != null && pendingSignal == null) {
             pinnedStrategy = tryPredictStrategy(context, appraisal.get(), currentFatigue);
+            if (pinnedStrategy != null) {
+                var pinned = pinnedStrategy;
+                LOG.fine(() -> String.format("regulation predictor: agent=%s strategy=%s (pinned)",
+                        context.agentId(), pinned));
+            } else {
+                LOG.fine(() -> String.format("regulation predictor: agent=%s fell-through → LLM",
+                        context.agentId()));
+            }
         }
 
         var history = (mindMapStore != null)
@@ -153,10 +164,23 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
                 ? loadEstimator.estimate(context.agentId(), context.tenantId()).level()
                 : null;
 
-        return strategyPredictor.predict(
-                axes, peakEmotion.type(), peakEmotion.intensity(), currentFatigue, loadLevel)
-                .map(RegulationPrediction::strategy)
-                .orElse(null);
+        var prediction = strategyPredictor.predict(
+                axes, peakEmotion.type(), peakEmotion.intensity(), currentFatigue, loadLevel);
+
+        if (LOG.isLoggable(java.util.logging.Level.FINE)) {
+            if (prediction.isPresent()) {
+                LOG.fine(String.format("regulation predictor detail: agent=%s emotion=%s intensity=%.2f → %s (confidence=%.2f)",
+                        context.agentId(), peakEmotion.type(), peakEmotion.intensity(),
+                        prediction.get().strategy(), prediction.get().confidence()));
+            } else {
+                LOG.fine(String.format("regulation predictor detail: agent=%s emotion=%s intensity=%.2f → fell-through (personality=%s/%s/%s/%s/%s)",
+                        context.agentId(), peakEmotion.type(), peakEmotion.intensity(),
+                        axes.socialOrient(), axes.ruleFollowing(), axes.riskAppetite(),
+                        axes.autonomy(), axes.conflictMode()));
+            }
+        }
+
+        return prediction.map(RegulationPrediction::strategy).orElse(null);
     }
 
     public Optional<EmotionRegulationResult> currentResult(String agentId, String tenantId) {
