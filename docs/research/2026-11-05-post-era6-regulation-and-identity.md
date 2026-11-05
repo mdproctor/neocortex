@@ -31,14 +31,18 @@ The regulation system adds a decision layer between appraisal (feeling an emotio
 | `CognitiveLoadEstimator` | #815 | Per-tick cognitive load proxy (drives + goals + ToM targets) |
 | `RegulationFatigueTracker` | #817 | Bosse Eq. 8-9 — fatigue accumulation and recovery |
 | `RegulationMonitor` | #820 | Gross 2015 control loop — effectiveness decline detection, strategy failure signals |
-| `RegulationStrategyPredictor` | #818 | Personality-driven mechanical defaults (Petter 2025 correlations via DispositionAxes) |
+| `RegulationStrategyPredictor` | #818 | Emotion-type × personality strategy prediction — constrains (not replaces) LLM generation |
 | EmotionMapper intensity fix | #816 | Removed redundant controllability multiplier from ANGER/FEAR intensity |
 
 ### Architecture
 
-Regulation is a unified decision system with distributed execution. One participant selects from all five strategies via LLM (or mechanical prediction for confident personality matches). Internal strategies (distraction, reappraisal, suppression) modify drive rendering — a suppressed drive gets somatic cost text. Environmental strategies (situation selection, situation modification) create DriveGoalProposal instances that enter the goal pipeline.
+Regulation is a unified decision system with distributed execution. One participant selects from all five strategies via LLM. Internal strategies (distraction, reappraisal, suppression) modify drive rendering — a suppressed drive gets somatic cost text. Environmental strategies (situation selection, situation modification) create DriveGoalProposal instances that enter the goal pipeline.
 
-The mechanical predictor (#818) maps DispositionAxes to strategy votes, with contextual overrides: high intensity → attentional deployment, high cognitive load → low-cost strategies only, high fatigue → attentional deployment. Environmental strategies are never predicted mechanically. The quality gate (≥80% agreement with LLM selections) is not yet validated.
+The predictor (#818) provides a **strategy constraint** to the LLM generation phase, not a replacement for it. When personality and emotion type together predict a strategy with high confidence, the predictor pins the strategy and the LLM generates the embodied narrative for that strategy — emergent from personality signals through Barrett four-channel rendering. The predictor decides HOW to regulate; the LLM generates WHAT that feels like. No templates, no briefings — 100% emergent narrative.
+
+The predictor uses categorical DispositionAxes values (set membership, not keyword matching) combined with OCC emotion type to determine strategy. Emotion type encodes controllability: ANGER = controllable (agent can act), FEAR = uncontrollable (agent is powerless), SHAME = self-evaluative (failed own standards), REPROACH = other-directed (someone else failed). Contextual overrides handle extreme states: high intensity → attentional deployment, high cognitive load → low-cost strategies only, high fatigue → attentional deployment.
+
+**Quality gate:** LLM-judge plausibility scoring. Floor: 4/5, Mean: 4.6/5, Gate: 4.0. Distribution: [4, 5, 4, 5, 5] across 5 scored predictions, 3 documented fall-throughs. See findings below.
 
 ### Cascade dynamics
 
@@ -51,6 +55,34 @@ The EmotionMapper's three-factor product for anger (`relevance × |conduciveness
 ### Key finding: silent failure in LLM response parsing
 
 The appraisal strategy passed raw LLM response to Jackson. Claude's session mode wraps JSON in markdown code fences. Jackson threw on the backtick prefix, caught silently, returned empty. The regulation generation phase already handled this (extracts JSON between `{` and `}`). A one-line fix to the appraisal strategy. The lesson: `catch (Exception e) { return empty(); }` makes wiring bugs indistinguishable from "nothing to produce."
+
+### Key finding: LLM strategy selection is non-deterministic
+
+Back-testing the predictor against LLM regulation revealed that the LLM produces different strategies for identical inputs across runs. Same avoidant disposition + same public confrontation scenario → RESPONSE_MODULATION in one run, ATTENTIONAL_DEPLOYMENT in the next. This makes LLM-agreement an unreliable quality gate — the reference itself is unstable.
+
+The solution: replace agreement-based testing with LLM-judge plausibility scoring. A separate LLM acts as a psychology expert and scores whether each prediction is appropriate for the given personality + emotion combination (1-5 scale). This evaluates whether the predictor's choice is psychologically defensible, not whether it matches a non-deterministic LLM's arbitrary selection.
+
+### Key finding: personality coherence determines predictability
+
+Personalities with mixed signals — avoidant conflict BUT flexible rules, competitive orientation BUT avoidant conflict — produce inconsistent judge scores (2-3) regardless of which strategy is predicted. The judge correctly detects the tension: "flexible rules" and "independent" enable reappraisal, while "avoidant" pushes toward suppression. When a personality pulls in two directions, the resolution depends on situational nuance that the predictor doesn't have access to.
+
+Coherent personalities — all signals pointing the same direction — score 4-5 consistently. A coherent suppressor (cooperative, moderate, conservative, low, avoidant) with no CC-enabling traits scores RM at 4/5 for anger. A coherent reappraiser (cooperative, strict, calculated, high, analytical) scores CC at 5/5 for anger.
+
+The predictor enforces coherence: `isSuppressor` requires suppressor signals ≥ 3 AND CC-enabling signals < 2. `isReappraiser` requires CC-enabling signals ≥ 3 AND suppressor signals < 2. Mixed-signal personalities fall through to the LLM. CC-enabling traits: analytical, strict, cooperative, high autonomy, bold, flexible, independent.
+
+### Key finding: shame is mechanically unresolvable for suppressors
+
+Across 7 LLM judge runs with 3 different strategies, no strategy scores ≥ 4 for suppressor + shame:
+
+| Strategy | Score | Judge reasoning |
+|----------|-------|----------------|
+| RESPONSE_MODULATION | 2-3 | "Shame festers when suppressed — suppressing without reframing the self-judgment is less effective even for avoidant types" |
+| COGNITIVE_CHANGE | 2-5 | Unstable — depends on whether judge weights avoidant (blocks CC) or flexible/independent (enables CC) |
+| ATTENTIONAL_DEPLOYMENT | 3 | "Avoidance reflex, second-choice coping mechanism" |
+
+Shame is a self-evaluative emotion: the agent failed their own standards. The only healthy regulation engages with the self-evaluation (CC). But a coherent suppressor personality — defined by the absence of CC-enabling traits — cannot execute CC. The personality's natural strategy (RM) is psychologically counterproductive for this specific emotion.
+
+This is the one personality × emotion combination where no mechanical prediction is reliably appropriate. The LLM handles it by reading the specific situation — what standard was violated, how public the failure was, what social context applies.
 
 ## Stream 2: Entity Identity Infrastructure
 
@@ -110,9 +142,9 @@ Domain abstraction audit (#785) validated corpus-management as genuinely domain-
 
 ## What's Next
 
-- **Regulation quality gate**: Back-test RegulationStrategyPredictor against existing eval transcripts (≥80% agreement target)
-- **Proactive regulation**: Situation selection before appraisal — emotional memory driving spatial avoidance
-- **Social regulation**: Interpersonal strategies (confiding, provocation, withdrawal) — requires intrapersonal system as foundation
-- **CAPS integration**: Encode stable regulation patterns as CAPS nodes for personality-consistent regulation without per-tick LLM calls
+- **Scenario validation**: Run wacky-manor scenario with predictor active, verify output quality matches LLM-only regulation
+- **Proactive regulation** (#819): Situation selection before appraisal — emotional memory driving spatial avoidance
+- **Social regulation** (#805): Interpersonal strategies (confiding, provocation, withdrawal) — requires intrapersonal system as foundation
+- **CAPS integration** (#806): Encode stable regulation patterns as CAPS nodes for personality-consistent regulation without per-tick LLM calls
 - **Era 6 Phase 4**: Condensation chains, persistent entity index, ACT-R decay (deferred, not blocked)
 - **Era 7 definition**: Regulate the era boundary — regulation + identity + pipeline wiring may constitute era 7, or may fold into era 6 Phase 4+
