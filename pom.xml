@@ -102,6 +102,7 @@
     <module>knowledge-pipeline</module>
     <module>corpus-management-api</module>
     <module>corpus-management</module>
+    <module>corpus-management-spring</module>
 
     <module>examples/example-text-analysis</module>
     <module>examples/example-rag-pipeline</module>
@@ -540,6 +541,11 @@
       <dependency>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-neocortex-corpus-management</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-neocortex-corpus-management-spring</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
