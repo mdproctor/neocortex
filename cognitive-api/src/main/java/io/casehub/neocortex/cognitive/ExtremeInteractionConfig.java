@@ -13,20 +13,20 @@ package io.casehub.neocortex.cognitive;
  * peak at lower arousal than simple tasks). When a per-parameter peak is null,
  * the global {@link SearchBudgetConfig#extremePeak()} is used as fallback.
  *
- * @param depthDecay               exponential decay rate for depth past peak (Yerkes-Dodson)
- * @param breadthDecay             exponential decay rate for breadth past peak (Easterbrook 1959)
- * @param lateralityDecay          exponential decay rate for laterality past peak
- * @param convergenceDecay         exponential decay rate for convergence past peak
- * @param depthAmplification       drive modulation scaling rate for depth
- * @param breadthAmplification     drive modulation scaling rate for breadth
- * @param lateralityAmplification  drive modulation scaling rate for laterality
- * @param convergenceAmplification drive modulation scaling rate for convergence
- * @param depthPeak                per-parameter peak for depth, null = use global
- * @param breadthPeak              per-parameter peak for breadth, null = use global
- * @param lateralityPeak           per-parameter peak for laterality, null = use global
- * @param convergencePeak          per-parameter peak for convergence, null = use global
+ * @param depthDecay               exponential decay rate for depth past peak; Yerkes-Dodson (calibrated empirically)
+ * @param breadthDecay             exponential decay rate for breadth past peak; Easterbrook (1959) cue-utilization (calibrated empirically)
+ * @param lateralityDecay          exponential decay rate for laterality past peak (calibrated empirically)
+ * @param convergenceDecay         exponential decay rate for convergence past peak (calibrated empirically)
+ * @param depthAmplification       drive modulation scaling rate for depth (calibrated empirically)
+ * @param breadthAmplification     drive modulation scaling rate for breadth (calibrated empirically)
+ * @param lateralityAmplification  drive modulation scaling rate for laterality (calibrated empirically)
+ * @param convergenceAmplification drive modulation scaling rate for convergence (calibrated empirically)
+ * @param depthPeak                per-parameter peak for depth, null = use global (calibrated empirically)
+ * @param breadthPeak              per-parameter peak for breadth, null = use global (calibrated empirically)
+ * @param lateralityPeak           per-parameter peak for laterality, null = use global (calibrated empirically)
+ * @param convergencePeak          per-parameter peak for convergence, null = use global (calibrated empirically)
  * @param amplificationThreshold   intensity threshold where drive modulation scaling
- *                                 activates, null = use resolved per-parameter peak
+ *                                 activates, null = use resolved per-parameter peak (calibrated empirically)
  */
 public record ExtremeInteractionConfig(
         double depthDecay,
@@ -57,10 +57,17 @@ public record ExtremeInteractionConfig(
 
     /**
      * Approximates a moderate personality: conscientiousness ~0.5,
-     * openness ~0.5, anxiousness ~0.3. Depth protected (decay=0),
-     * breadth narrows moderately (1.5), laterality narrows faster (2.0),
-     * convergence slightly compressed (0.5). All per-parameter peaks null
-     * (fall back to global extremePeak).
+     * openness ~0.5, anxiousness ~0.3. All magnitudes calibrated empirically;
+     * personality-specific values derived by CDE.
+     * <p>
+     * Decay values (Yerkes-Dodson / Easterbrook 1959 cue-utilization):
+     * depth protected (0.0), breadth narrows moderately (1.5),
+     * laterality narrows faster (2.0), convergence slightly compressed (0.5).
+     * <p>
+     * Amplification values (situational strength modulation, calibrated empirically):
+     * depth modest boost (0.5), breadth compresses (-1.0),
+     * laterality compresses (-0.8), convergence compresses strongly (-1.5).
+     * All per-parameter peaks null (fall back to global extremePeak).
      */
     public static ExtremeInteractionConfig defaults() {
         return new ExtremeInteractionConfig(

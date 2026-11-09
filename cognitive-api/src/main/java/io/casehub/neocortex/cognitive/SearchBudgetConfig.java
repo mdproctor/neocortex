@@ -62,6 +62,17 @@ public record SearchBudgetConfig(
         }
     }
 
+    /**
+     * Balanced defaults for a moderate personality profile.
+     * <p>
+     * Steepness k=6.0 for breadth/laterality/convergence — calibrated from CapsSettler logistic range.
+     * Depth uses k=3.0 for near-linear mid-range. All midpoints 0.5 from AppraisalThresholds.
+     * lateralityThreatFloor 0.7 — Frijda (1986) approach/avoidance, calibrated empirically.
+     * pathologicalThreshold 1.4 — Davis &amp; Nolen-Hoeksema (1998), calibrated to trigger when
+     * combined anxiousness + habituation failure indicate perseverative processing.
+     * extremePeak 0.85 — Yerkes-Dodson inverted-U, calibrated empirically;
+     * personality-specific peaks derived by CDE.
+     */
     public static SearchBudgetConfig defaults() {
         return new SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.5, 1.4, null, 0.85, null, null);
     }

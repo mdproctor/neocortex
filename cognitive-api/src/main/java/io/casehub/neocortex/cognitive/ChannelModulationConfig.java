@@ -24,6 +24,11 @@ public record ChannelModulationConfig(
         double lowComprehensionLateralityBoost,
         double highComprehensionConvergenceBoost) {
 
+    /**
+     * Magnitudes calibrated empirically — small values (0.08–0.12) produce subtle
+     * channel-specific modulation without dominating the base search budget.
+     * Personality-specific values derived by CDE.
+     */
     public static ChannelModulationConfig defaults() {
         return new ChannelModulationConfig(0.12, 0.08, 0.12, 0.10, 0.08, 0.10, 0.10, 0.10);
     }
