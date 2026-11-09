@@ -38,6 +38,8 @@ import java.util.Set;
 
 public final class CognitiveDerivationEngine {
 
+    // Jungian cognitive function → MemoryDomain weight mappings (Jung 1921). Weights reflect
+    // semantic alignment between function and domain — calibrated empirically.
     private static final Map<String, Map<String, Double>> FUNCTION_WEIGHTS = Map.of(
         "ni", Map.of("reflection", 1.5, "experience", 0.8),
         "te", Map.of("experience", 1.3, "reflection", 1.0),
@@ -49,6 +51,7 @@ public final class CognitiveDerivationEngine {
         "ti", Map.of("reflection", 1.4, "experience", 0.9)
     );
 
+    // Disposition → PAD baseline mappings (Mehrabian 1996). Values calibrated empirically.
     private static final Map<String, Double> RISK_PLEASURE = Map.of(
         "conservative", -0.1,
         "calculated", 0.1,
@@ -66,6 +69,7 @@ public final class CognitiveDerivationEngine {
         "moderate", 0.2,
         "high", 0.4
     );
+    // Disposition → curiosity SignalCategory weights (Berlyne 1960). Calibrated empirically.
     private static final Map<String, Double> AUTONOMY_STRUCTURAL = Map.of(
         "low", 0.8,
         "moderate", 1.0,
@@ -84,6 +88,7 @@ public final class CognitiveDerivationEngine {
         "competitive", 1.0
     );
 
+    // Goal keyword → MindMap subgraph type. Operational mapping, calibrated empirically.
     private static final Map<String, String> GOAL_SUBGRAPH_MAPPING = Map.of(
         "career", "PROJECT",
         "professional", "PROJECT",
@@ -96,6 +101,7 @@ public final class CognitiveDerivationEngine {
         "business", "ORGANISATION"
     );
 
+    // CBR retrieval parameters from disposition. Calibrated empirically.
     private static final Map<String, Double> RULE_MIN_SIMILARITY = Map.of(
         "flexible", 0.35,
         "moderate", 0.5,
@@ -107,6 +113,7 @@ public final class CognitiveDerivationEngine {
         "calculated", 90,
         "bold", 180
     );
+    // Habituation parameters from disposition. Calibrated empirically.
     private static final Map<String, Double>  RISK_HABITUATION_RATE = Map.of(
             "conservative", 0.1,
             "calculated", 0.2,
@@ -130,6 +137,7 @@ public final class CognitiveDerivationEngine {
         "strict", RetrievalMode.FEATURE_ONLY
     );
 
+    // Social cognition parameters from disposition. Calibrated empirically.
     private static final Map<String, Double> SOCIAL_TRUST_RATE = Map.of(
         "independent", 0.3,
         "cooperative", 0.7,
@@ -142,6 +150,8 @@ public final class CognitiveDerivationEngine {
         "analytical", ConflictInterpretation.NEUTRAL,
         "avoidant", ConflictInterpretation.DISENGAGE
     );
+    // Regulation strategy capacity weight tables. Grounded in Barańczuk (2019) meta-analysis
+    // of Big Five → emotion regulation correlations. Calibrated post-eval (Phase 2, #830).
     private static final Map<String, Double>                 REAPPRAISAL_CONFLICT    = Map.of(
             "analytical", 0.30, "cooperative", 0.15, "avoidant", -0.15, "competitive", 0.05);
     private static final Map<String, Double>                 REAPPRAISAL_AUTONOMY    = Map.of(
@@ -301,6 +311,7 @@ public final class CognitiveDerivationEngine {
     }
 
 
+    /** Maps Jungian cognitive functions to MemoryDomain weights (Jung 1921). Values calibrated empirically. */
     static PersonalityWeights derivePersonality(List<WeightedTerm> profile) {
         if (profile == null || profile.isEmpty()) {
             return null;
@@ -337,6 +348,7 @@ public final class CognitiveDerivationEngine {
         return domainWeights.isEmpty() ? null : new PersonalityWeights(domainWeights);
     }
 
+    /** Maps disposition axes to PAD emotional baseline (Mehrabian 1996). riskAppetite→pleasure, socialOrient→arousal, autonomy→dominance. */
     static MoodBaseline deriveMoodBaseline(DispositionAxes axes) {
         if (axes == null) return null;
 
@@ -350,6 +362,7 @@ public final class CognitiveDerivationEngine {
         return new MoodBaseline(pleasure, arousal, dominance);
     }
 
+    /** Maps disposition to curiosity SignalCategory weights (Berlyne 1960). Goal boost calibrated empirically. */
     static CuriosityConfig deriveCuriosity(DispositionAxes axes, List<String> goals) {
         if (axes == null) {return null;}
 
@@ -371,6 +384,7 @@ public final class CognitiveDerivationEngine {
         return CuriosityConfig.defaults().withCategoryWeights(weights);
     }
 
+    /** Maps goal keywords to subgraph proximity weights. Operational mapping, calibrated empirically. */
     static TemporalFocusConfig deriveTemporalFocus(List<String> goals) {
         if (goals == null || goals.isEmpty()) {return null;}
 
@@ -391,6 +405,7 @@ public final class CognitiveDerivationEngine {
         return TemporalFocusConfig.defaults().withSubgraphProximityWeights(weights);
     }
 
+    /** Maps rule-following and risk appetite to CBR retrieval parameters. Calibrated empirically. */
     static CbrStrategyDefaults deriveCbrStrategy(DispositionAxes axes) {
         if (axes == null) return null;
 
@@ -401,6 +416,7 @@ public final class CognitiveDerivationEngine {
         return new CbrStrategyDefaults(minSimilarity, decayDays, mode);
     }
 
+    /** Maps social orientation to trust formation rate and conflict interpretation. Calibrated empirically. */
     static SocialCognitionDefaults deriveSocialCognition(DispositionAxes axes) {
         if (axes == null) return null;
 
@@ -412,6 +428,7 @@ public final class CognitiveDerivationEngine {
 
     private static final Set<String> HOLISTIC_FUNCTIONS = Set.of("ni", "fe", "ne", "fi");
 
+    /** Maps Jungian function distribution to inference style. Holistic (ni/fe/ne/fi) proportion drives connectiveBias; thresholds calibrated empirically. */
     static GraphStructureDefaults deriveGraphStructure(List<WeightedTerm> profile) {
         if (profile == null || profile.isEmpty()) return null;
 
@@ -441,6 +458,7 @@ public final class CognitiveDerivationEngine {
     private static final Set<String> ANALYTICAL_FUNCTIONS = Set.of("ni", "te", "ti", "si");
     private static final Set<String> EMPATHETIC_FUNCTIONS = Set.of("fe", "fi");
 
+    /** Maps analytical/empathetic function proportions to extraction emphasis. Formula 0.8 + 0.6 * ratio calibrated empirically. */
     static ExtractionBiasDefaults deriveExtractionBias(List<WeightedTerm> profile) {
         if (profile == null || profile.isEmpty()) return null;
 
@@ -461,6 +479,8 @@ public final class CognitiveDerivationEngine {
         return new ExtractionBiasDefaults(relationshipBias, affectSensitivity);
     }
 
+    // JPAF function → appraisal dimension contribution weights. Calibrated empirically
+    // via JPAF→Big Five→appraisal chain. SCALE_FACTOR produces weights in [0,1] range.
     private static final double SCALE_FACTOR = 1.5;
 
     private static final Map<String, Double> URGENCY_CONTRIBUTION = Map.of(
@@ -478,6 +498,7 @@ public final class CognitiveDerivationEngine {
         "si", 0.747,  "se", 1.0
     );
 
+    /** Maps JPAF functions to appraisal weight contributions via Big Five intermediary. SCALE_FACTOR=1.5 calibrated to produce weights in [0,1]. */
     static AppraisalWeights deriveAppraisalWeights(List<WeightedTerm> profile, DispositionAxes axes) {
         if (profile == null || profile.isEmpty()) {return null;}
 
@@ -533,6 +554,7 @@ public final class CognitiveDerivationEngine {
         );
     }
 
+    /** Maps risk appetite and rule-following to habituation parameters. Calibrated empirically. */
     static HabituationConfig deriveHabituationConfig(DispositionAxes axes, List<String> goals) {
         if (axes == null) {return null;}
 
@@ -560,6 +582,7 @@ public final class CognitiveDerivationEngine {
         return new HabituationConfig(habRate, novelty, Math.max(2.0, repTol), domainMod);
     }
 
+    /** Maps 5 disposition axes to regulation strategy capacities. Grounded in Barańczuk (2019) meta-analysis of Big Five→regulation. Weight tables calibrated post-eval (Phase 2, #830). */
     public static RegulationDefaults deriveRegulationDefaults(DispositionAxes axes) {
         if (axes == null) {return null;}
         double reappraisal = 0.5
@@ -651,6 +674,7 @@ public final class CognitiveDerivationEngine {
     }
 
 
+    /** Derives personality dominance from formation PAD summary (dominance-weighted reward ratio). Calibrated empirically. */
     static double derivePersonalityDominance(FormationPadSummary summary) {
         if (summary == null || summary.memoryCount() == 0 || summary.totalPositivePleasure() == 0.0) {
             return 0.5;
@@ -744,6 +768,7 @@ public final class CognitiveDerivationEngine {
         return styles.isEmpty() ? null : new ExpressionStyleDefaults(styles);
     }
 
+    // Ordinal ruleFollowing → numeric proxy for continuous derivation formulas.
     private static final Map<String, Double> RULE_FOLLOWING_NUMERIC = Map.of(
             "strict", 0.8, "moderate", 0.5, "flexible", 0.2
     );
@@ -797,6 +822,7 @@ public final class CognitiveDerivationEngine {
 
         var channelModulation = deriveChannelModulationDefaults(facets, axes);
 
+        // Yerkes-Dodson inverted-U peak — personality-specific optimal activation. Calibrated empirically.
         double extremePeak = 0.85 - (anxiousness - 0.5) * 0.3 - (emotionalLability - 0.5) * 0.2;
         extremePeak = Math.max(0.5, Math.min(0.95, extremePeak));
 
@@ -805,6 +831,7 @@ public final class CognitiveDerivationEngine {
         double lateralityPeak  = clampPeak(extremePeak - 0.1 + openness * 0.08);
         double convergencePeak = clampPeak(extremePeak + conscientiousness * 0.08);
 
+        // Easterbrook (1959) cue-utilization: extreme intensity narrows attention. Rates calibrated empirically.
         double depthDecay               = Math.max(0, (anxiousness - 0.3) * 2.0 - conscientiousness * 1.5);
         double breadthDecay             = 1.0 + (1.0 - openness) * 2.0;
         double lateralityDecay          = 1.5 + (1.0 - openness) * 1.5 + impulsivity * 1.0;
@@ -820,6 +847,7 @@ public final class CognitiveDerivationEngine {
                                                               depthPeak, breadthPeak, lateralityPeak, convergencePeak,
                                                               amplificationThreshold);
 
+        // Hockey (1997) compensatory control: fatigue depletes secondary-task resources. Rates calibrated empirically.
         double fatigueDepth    = Math.min(0.0, -0.08 * (1.0 - conscientiousness));
         double fatigueBreadth  = -(0.15 + (1.0 - openness) * 0.15);
         double fatigueLat      = -(0.1 + (1.0 - openness) * 0.1) + impulsivity * 0.15;
@@ -854,7 +882,7 @@ public final class CognitiveDerivationEngine {
         return new CognitiveResourcePoolConfig(maxEffort, recoveryRate);
     }
 
-
+    /** Derives personality-modulated channel modulation magnitudes. Coefficients calibrated empirically. */
     private static ChannelModulationConfig deriveChannelModulationDefaults(
             List<PersonalityFacet> facets, DispositionAxes axes) {
         double withdrawal = facetScore(facets, PersonalityFacet.WITHDRAWAL, 0.5);

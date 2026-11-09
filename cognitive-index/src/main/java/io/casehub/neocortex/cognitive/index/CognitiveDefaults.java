@@ -32,6 +32,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Per-agent cognitive configuration record. Derived from personality via {@link CognitiveDerivationEngine}
+ * or loaded from YAML cognitive profiles. Explicit YAML values override derived values via
+ * {@link CognitiveDerivationEngine#deriveAndMerge}.
+ *
+ * @param agentId agent identifier (required)
+ * @param tenantId tenant scope (nullable)
+ * @param personalityProfile personality weights, dominance, expression styles, attachment, PID-5 facets
+ * @param moodBaseline PAD emotional resting point for decay (Mehrabian 1996)
+ * @param curiosity per-SignalCategory curiosity weights (Berlyne 1960)
+ * @param temporalFocus subgraph proximity weights from goals
+ * @param cbrStrategy CBR retrieval parameters (minSimilarity, decayDays, retrievalMode)
+ * @param socialCognition trust formation rate and conflict interpretation
+ * @param graphStructure knowledge graph inference style (CONNECTIVE/CATEGORICAL/BALANCED)
+ * @param extractionBias LLM extraction emphasis (relationship bias, affect sensitivity)
+ * @param vocabulary registered MindMap edge type vocabularies
+ * @param services named SPI selection map
+ * @param traitRules declarative trait rules (nullable for global-only)
+ * @param derivedEdgeRules declarative derived-edge rules (nullable for global-only)
+ * @param descriptor source eidos identity view for re-derivation
+ * @param appraisalWeights SEC appraisal dimension weights
+ * @param habituationConfig habituation rate, novelty threshold, repetition tolerance
+ * @param regulationDefaults reappraisal/suppression/redirect capacities (Barańczuk 2019)
+ * @param searchBudgetConfig 4D search budget activation tuning (Mischel and Shoda 1995)
+ * @param recurringThoughtConfig fixation/obsession/rumination thresholds (Nolen-Hoeksema 1991)
+ */
 public record CognitiveDefaults(
         String agentId,
         String tenantId,
