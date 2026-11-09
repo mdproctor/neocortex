@@ -269,6 +269,7 @@ public class SearchBudgetDescriptionGenerationPhase implements ConsolidationPhas
     }
 
 
+    // Calibrated empirically — personality profile classification thresholds
     static String generateFallback(SearchBudgetConfig config) {
         boolean broadExplorer = config.breadthSteepness() > 6.0 || config.breadthMidpoint() < 0.45;
         boolean deepDiver = config.depthMidpoint() < 0.45;

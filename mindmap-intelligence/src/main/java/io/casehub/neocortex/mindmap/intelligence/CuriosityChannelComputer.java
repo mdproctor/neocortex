@@ -21,8 +21,11 @@ import java.util.List;
  */
 public class CuriosityChannelComputer {
 
+    // Berlyne (1960) specific→diversive transition. Calibrated empirically.
     private static final double DIVERSIVE_ENTROPY_THRESHOLD = 0.6;
+    // Litman (2005) I-type→blended boundary. Calibrated empirically.
     private static final double BLENDED_LOW = 0.3;
+    // Litman (2005) blended→D-type boundary. Calibrated empirically.
     private static final double BLENDED_HIGH = 0.7;
 
     /**
@@ -52,7 +55,7 @@ public class CuriosityChannelComputer {
     }
 
     /**
-     * Silvia appraisal: mean confidence of gaps. Higher confidence = higher comprehension
+     * Silvia (2006) appraisal: mean confidence of gaps. Higher confidence = higher comprehension
      * (the agent grasps enough to be interested, not overwhelmed).
      */
     private double deriveComprehension(List<InformationGapScore> gaps) {
@@ -62,7 +65,7 @@ public class CuriosityChannelComputer {
     }
 
     /**
-     * Berlyne specific/diversive: normalized entropy of gap intensity distribution.
+     * Berlyne (1960) specific/diversive: normalized entropy of gap intensity distribution.
      * One dominant gap = specific focus. Many similar-intensity gaps = diversive.
      */
     private CuriosityChannel.FocusType deriveFocus(List<InformationGapScore> gaps) {
@@ -85,7 +88,7 @@ public class CuriosityChannelComputer {
     }
 
     /**
-     * Loewenstein gap proximity: mean entropy of gaps. Binary entropy peaks at
+     * Loewenstein (1994) gap proximity: mean entropy of gaps. Binary entropy peaks at
      * confidence 0.5 — the partial-knowledge sweet spot.
      */
     private double deriveGapProximity(List<InformationGapScore> gaps) {

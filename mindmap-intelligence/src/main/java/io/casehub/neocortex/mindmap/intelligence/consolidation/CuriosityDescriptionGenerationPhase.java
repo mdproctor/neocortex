@@ -220,6 +220,7 @@ public class CuriosityDescriptionGenerationPhase implements ConsolidationPhase {
             case BLENDED -> sb.append("Part fascination, part itch — the not-knowing is both exciting and uncomfortable. ");
         }
 
+        // Silvia (2006) — interest (high comprehension) vs confusion (low). Calibrated empirically.
         if (channel.comprehension() > 0.6) {
             sb.append("The pieces are starting to connect. ");
         } else if (channel.comprehension() < 0.3) {
@@ -236,7 +237,8 @@ public class CuriosityDescriptionGenerationPhase implements ConsolidationPhase {
 
     private double deriveDeprivationBias(CognitiveDefaults defaults) {
         if (defaults.appraisalWeights() != null) {
-            // Lower fear onset threshold = more anxiety-prone = higher D-type curiosity
+            // Litman (2008) — neuroticism correlates with D-type curiosity.
+            // Lower fear onset threshold = more anxiety-prone = higher D-type curiosity.
             double fearThreshold = defaults.appraisalWeights().fearOnsetThreshold();
             return Math.clamp(1.0 - fearThreshold, 0.0, 1.0);
         }

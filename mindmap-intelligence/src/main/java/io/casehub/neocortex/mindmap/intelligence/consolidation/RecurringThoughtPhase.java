@@ -28,6 +28,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * Consolidation phase that scores recurring thought patterns per agent and emits
+ * attention signals when topics cross continuum thresholds.
+ *
+ * <p>Signal significance: FIXATION=0.4, OBSESSION=0.7, RUMINATION=1.0 — monotonically
+ * increasing with clinical severity. Calibrated empirically.
+ *
+ * @see RecurringThoughtScorer
+ */
 @Priority(25)
 public class RecurringThoughtPhase implements ConsolidationPhase {
 

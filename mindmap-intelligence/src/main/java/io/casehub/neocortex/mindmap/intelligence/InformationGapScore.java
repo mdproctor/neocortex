@@ -29,9 +29,9 @@ public record InformationGapScore(
     public enum GapType {
         /** Moderate confidence with connections — the sweet spot (Loewenstein 1994). */
         PARTIAL_KNOWLEDGE,
-        /** High confidence + many connections but gap not quite closed. */
+        /** High confidence + many connections but gap not quite closed. Brown &amp; McNeill (1966). */
         TIP_OF_TONGUE,
-        /** Low confidence but connected to known concepts — aware of ignorance. */
+        /** Low confidence but connected — aware of the gap. Loewenstein (1994). */
         CONNECTED_UNKNOWN
     }
 

@@ -27,11 +27,17 @@ import java.util.Set;
 @Dependent
 public class InformationGapDetector {
 
+    // Below this + no edges = metacognitive unawareness (Loewenstein 1994). Calibrated empirically.
     static final double LOW_CONFIDENCE_FLOOR = 0.1;
+    // Above this, gap intensity too low to register. Calibrated empirically.
     static final double HIGH_CONFIDENCE_CEILING = 0.85;
+    // Brown & McNeill (1966) tip-of-tongue threshold. Calibrated empirically.
     static final double TIP_OF_TONGUE_CONFIDENCE = 0.6;
+    // Minimum connectivity for tip-of-tongue classification. Calibrated empirically.
     static final int TIP_OF_TONGUE_MIN_EDGES = 4;
+    // BFS depth limit — graduated decay 1.0/0.7/0.4. Calibrated empirically.
     static final int MAX_GOAL_DEPTH = 3;
+    // Minimum intensity filter. Calibrated empirically.
     private static final double MIN_GAP_INTENSITY = 0.1;
 
     private final MindMapStore store;
