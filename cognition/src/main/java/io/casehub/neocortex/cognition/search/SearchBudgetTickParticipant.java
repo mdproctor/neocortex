@@ -123,7 +123,7 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
                 if (channel.hedonic() == CuriosityChannel.HedonicType.D_TYPE) {
                     convergence += mod.deprivationConvergenceBoost();
                 } else if (channel.hedonic() == CuriosityChannel.HedonicType.BLENDED) {
-                    convergence += mod.deprivationConvergenceBoost() * 0.5;
+                    convergence += mod.deprivationConvergenceBoost() * 0.5; // D-type halves modulation — Litman (2008) deprivation curiosity is narrower
                 }
                 laterality += (1.0 - channel.comprehension()) * mod.lowComprehensionLateralityBoost();
                 convergence += channel.comprehension() * mod.highComprehensionConvergenceBoost();
@@ -187,6 +187,8 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
 
     // --- per-parameter computation ---
 
+    // Drive modulation magnitudes calibrated empirically. Relative ordering grounded in
+    // Guilford (1967) fluency and DeYoung (2015) Openness/Intellect.
     private double computeBreadth(double intensity, DriveAxis dominant,
                                   SearchBudgetConfig config, double moodPleasure,
                                   @Nullable GutValence gut) {
@@ -204,6 +206,7 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
         return base;
     }
 
+    // Drive modulations calibrated empirically. Threat collapse grounded in Frijda (1986).
     private double computeLaterality(double intensity, DriveAxis dominant,
                                      SearchBudgetConfig config, double threatIntensity) {
         if (threatIntensity > config.lateralityThreatFloor()) {return 0.0;}
@@ -219,6 +222,8 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
         return base;
     }
 
+    // Drive modulations calibrated empirically. Conscientiousness→depth grounded in
+    // Krueger et al. (2012) Disinhibition factor.
     private double computeDepth(double intensity, DriveAxis dominant, SearchBudgetConfig config) {
         ExtremeInteractionConfig ext  = config.extremeInteraction();
         double                   peak = ext != null ? ext.depthPeakOrDefault(config.extremePeak()) : config.extremePeak();
@@ -233,6 +238,8 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
         return base;
     }
 
+    // Drive modulations calibrated empirically. Perseveration grounding:
+    // Davis & Nolen-Hoeksema (1998).
     private double computeConvergence(double intensity, DriveAxis dominant,
                                       SearchBudgetConfig config, @Nullable GutValence gut,
                                       @Nullable HabituationState habituation,

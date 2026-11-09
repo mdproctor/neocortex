@@ -14,15 +14,18 @@ import java.util.Optional;
  */
 public class RegulationStrategyPredictor {
 
-    static final double HIGH_INTENSITY_THRESHOLD = 0.75;
-    static final double ALIGNED_EFFECTIVENESS = 0.55;
-    static final double MISALIGNED_EFFECTIVENESS = 0.35;
-    static final double REAPPRAISAL_THRESHOLD    = 0.65;
-    static final double SUPPRESSION_THRESHOLD    = 0.65;
-    static final double DOMINANCE_MARGIN         = 0.10;
-    static final double VIABLE_REAPPRAISAL       = 0.40;
-    static final double VIABLE_ALTERNATIVE       = 0.45;
-    static final double OVERWHELMING_DOMINANCE   = 0.30;
+    // Thresholds calibrated in Phase 2 eval (#830). The predictor constrains the LLM,
+    // not replaces it — these values were iterated through 6 eval runs until stable 4+
+    // scores across 8 of 11 cases. See docs/research/2026-11-06-regulation-predictor-quality-phase1-findings.md
+    static final double HIGH_INTENSITY_THRESHOLD = 0.75;  // Above this → attentional deployment. Calibrated empirically.
+    static final double ALIGNED_EFFECTIVENESS = 0.55;     // Personality-aligned strategy confidence. Calibrated empirically.
+    static final double MISALIGNED_EFFECTIVENESS = 0.35;  // Personality-misaligned strategy confidence. Calibrated empirically.
+    static final double REAPPRAISAL_THRESHOLD    = 0.65;  // Minimum reappraisal capacity to pin RM. Barańczuk (2019) basis, calibrated.
+    static final double SUPPRESSION_THRESHOLD    = 0.65;  // Minimum suppression capacity to pin SS. Barańczuk (2019) basis, calibrated.
+    static final double DOMINANCE_MARGIN         = 0.10;  // Minimum margin for dominant strategy. Calibrated empirically.
+    static final double VIABLE_REAPPRAISAL       = 0.40;  // Phase 2 calibration — don't pin SS when RM this viable.
+    static final double VIABLE_ALTERNATIVE       = 0.45;  // Phase 2 calibration — alternative strategy viability floor.
+    static final double OVERWHELMING_DOMINANCE   = 0.30;  // Phase 2 calibration — margin for pin with temporal staging.
     static final double MILD_DISTRESS_THRESHOLD  = 0.40;
 
 
@@ -34,7 +37,7 @@ public class RegulationStrategyPredictor {
                                                   double peakIntensity,
                                                   double regulationFatigue,
                                                   @Nullable CognitiveLoadLevel cognitiveLoad) {
-        if (regulationFatigue > 0.7) {
+        if (regulationFatigue > 0.7) { // Fatigue threshold for AD override. Calibrated empirically.
             return Optional.of(new RegulationPrediction(
                     EmotionRegulationStrategy.ATTENTIONAL_DEPLOYMENT, 0.85, MISALIGNED_EFFECTIVENESS));
         }

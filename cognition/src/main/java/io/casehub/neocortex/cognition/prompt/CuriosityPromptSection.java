@@ -16,6 +16,17 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Renders curiosity state for the cognitive prompt via crystallised prose or
+ * programmatic four-channel rendering.
+ *
+ * <p>Channels grounded in: Loewenstein (1994) information-gap theory,
+ * Litman (2005/2008) I/D curiosity types, Silvia (2006) appraisal theory of interest,
+ * Berlyne (1960) specific/diversive exploration.
+ *
+ * <p>Rendering style: Anthropic "Functional Emotions" (2026) — cognitive state
+ * descriptions that causally influence LLM behaviour through internal representations.
+ */
 public class CuriosityPromptSection implements CognitionPromptRenderer {
 
     static final String GENERATED_TRAIT = "CuriosityDescriptionGenerated";
@@ -34,7 +45,7 @@ public class CuriosityPromptSection implements CognitionPromptRenderer {
                                   @Nullable DriveOrchestrator driveOrchestrator,
                                   @Nullable MindMapStore mindMapStore,
                                   double deprivationBias) {
-        this(curiosityDrive, channelComputer, driveOrchestrator, mindMapStore, deprivationBias, 0.5, null);
+        this(curiosityDrive, channelComputer, driveOrchestrator, mindMapStore, deprivationBias, 0.5, null); // Default midpoint intensity. Calibrated empirically.
     }
 
     public CuriosityPromptSection(CuriosityDrive curiosityDrive,
@@ -110,16 +121,16 @@ public class CuriosityPromptSection implements CognitionPromptRenderer {
             case BLENDED -> sb.append("Part fascination, part itch — the not-knowing is both exciting and uncomfortable. ");
         }
 
-        if (channel.comprehension() > 0.6) {
+        if (channel.comprehension() > 0.6) { // Silvia (2006) — high comprehension → interest. Calibrated empirically.
             sb.append("The pieces are starting to connect. ");
-        } else if (channel.comprehension() < 0.3) {
+        } else if (channel.comprehension() < 0.3) { // Silvia (2006) — low comprehension → confusion. Calibrated empirically.
             sb.append("The more you look, the less you understand. ");
         }
 
         if (channel.focus() == CuriosityChannel.FocusType.SPECIFIC && !gaps.isEmpty()) {
             var topGap = gaps.getFirst();
             sb.append("Your attention keeps returning to ").append(topGap.nodeName());
-            if (topGap.goalRelevance() >= 0.7) {
+            if (topGap.goalRelevance() >= 0.7) { // Goal relevance rendering thresholds. Calibrated empirically.
                 sb.append(" — closely related to an active goal");
             } else if (topGap.goalRelevance() >= 0.4) {
                 sb.append(" — connected to an active goal");
@@ -147,7 +158,7 @@ public class CuriosityPromptSection implements CognitionPromptRenderer {
                                                 .average().orElse(0.0);
 
         double deviation = currentIntensity - baselineIntensity;
-        if (deviation > 0.15) {
+        if (deviation > 0.15) { // Minimum deviation to report. Calibrated empirically.
             sb.append("This is stronger than your usual curiosity. ");
         } else if (deviation < -0.15) {
             sb.append("Quieter than usual — the pull to explore is muted. ");
