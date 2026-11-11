@@ -249,7 +249,7 @@ class DriveProfilePipelineTest {
             default -> internalState.toString();
         };
         return data.drives().stream()
-                .filter(d -> !d.description().isBlank() && sectionText.contains(d.description()))
+                .filter(d -> sectionText.contains(d.type().toUpperCase().replace('-', ' ')))
                 .map(EvalCharacterData.Drive::type)
                 .collect(Collectors.toSet());
     }
