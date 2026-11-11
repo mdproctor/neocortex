@@ -1,0 +1,53 @@
+{
+  "issue": "#937",
+  "date": "2026-11-11",
+  "branch": "issue-937-process-constraint-eval",
+  "dependency": "#933 — process constraint implementation",
+  "summary": {
+    "totalTests": 11,
+    "passed": 10,
+    "failed": 1,
+    "passRate": 0.91,
+    "gate": 0.80,
+    "gateResult": "PASSED"
+  },
+  "classes": {
+    "CognitiveLoadStrategyEvalTest": {
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "results": {
+        "highLoad_prefersSimpleStrategies": {"status": "PASSED", "timeSeconds": 57.5},
+        "lowLoad_permitsComplexStrategies": {"status": "PASSED", "timeSeconds": 48.3, "detail": "3/3 runs picked COGNITIVE_CHANGE"}
+      }
+    },
+    "PerModalityRegulationEvalTest": {
+      "tests": 4,
+      "passed": 3,
+      "failed": 1,
+      "results": {
+        "fatigue_sustainedRegulation_overridesToAttentionalDeployment": {"status": "PASSED", "timeSeconds": 2128.8},
+        "automatic_predictorMatchesLlmFreeChoice": {"status": "PASSED", "timeSeconds": 152.3},
+        "monitoring_decliningEffectiveness_triggersStrategySwitch": {"status": "PASSED", "timeSeconds": 325.4},
+        "proactive_memoryBasedAvoidance_producesAvoidanceGoal": {
+          "status": "FAILED",
+          "timeSeconds": 175.9,
+          "detail": "0/3 runs produced avoidance goals — unrelated to #933 process constraints",
+          "note": "Pre-existing failure in proactive regulation feature, not process constraint related"
+        }
+      }
+    },
+    "PerStrategyRegulationEvalTest": {
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "results": {
+        "situationSelection_shameWithAvoidantConflict_selectsAvoidance": {"status": "PASSED", "timeSeconds": 48.7},
+        "attentionalDeployment_fearUncontrollable_redirectsFocus": {"status": "PASSED", "timeSeconds": 46.5},
+        "situationModification_controllableWithFallthrough_modifiesEnvironment": {"status": "PASSED", "timeSeconds": 52.2},
+        "cognitiveChange_controllableWithHighReappraisal_reappraises": {"status": "PASSED", "timeSeconds": 45.9},
+        "responseModulation_otherDirectedWithHighSuppression_suppresses": {"status": "PASSED", "timeSeconds": 85.0}
+      }
+    }
+  }
+}
