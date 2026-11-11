@@ -398,7 +398,7 @@ class AppraisalTickParticipantTest {
         var budget = new io.casehub.neocortex.cognition.search.SearchBudget(
                 0.5, 0.5, 0.5, 0.5,
                 io.casehub.neocortex.cognition.search.SearchMotivation.CURIOSITY,
-                false, true, 0.0, 0.0, 0.3, Instant.now());
+                false, true, 0.0, 0.0, 0.3, -1.0, -1.0, -1.0, Instant.now());
         participant.setSearchBudgetAccessor((a, t) -> Optional.of(budget));
 
         participant.tick(contextWithObservation("Something interesting"));
@@ -416,7 +416,7 @@ class AppraisalTickParticipantTest {
         var budget = new io.casehub.neocortex.cognition.search.SearchBudget(
                 0.5, 0.5, 0.5, 0.5,
                 io.casehub.neocortex.cognition.search.SearchMotivation.CURIOSITY,
-                false, false, 0.0, 0.0, 0.0, Instant.now());
+                false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         participant.setSearchBudgetAccessor((a, t) -> Optional.of(budget));
 
         participant.tick(contextWithObservation("Something boring"));
@@ -434,7 +434,7 @@ class AppraisalTickParticipantTest {
         var budget = new io.casehub.neocortex.cognition.search.SearchBudget(
                 0.5, 0.5, 0.5, 0.5,
                 io.casehub.neocortex.cognition.search.SearchMotivation.CURIOSITY,
-                false, true, 0.2, 0.0, 0.0, Instant.now());
+                false, true, 0.2, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         participant.setSearchBudgetAccessor((a, t) -> Optional.of(budget));
 
         participant.tick(contextWithObservation("Complex reasoning required"));
@@ -452,7 +452,7 @@ class AppraisalTickParticipantTest {
         var budget = new io.casehub.neocortex.cognition.search.SearchBudget(
                 0.5, 0.5, 0.5, 0.5,
                 io.casehub.neocortex.cognition.search.SearchMotivation.CURIOSITY,
-                false, true, 0.15, 0.1, 0.25, Instant.now());
+                false, true, 0.15, 0.1, 0.25, -1.0, -1.0, -1.0, Instant.now());
         participant.setSearchBudgetAccessor((a, t) -> Optional.of(budget));
 
         participant.tick(contextWithObservation("Ambitious exploration"));

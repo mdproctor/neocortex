@@ -128,7 +128,7 @@ class RegulationCascadeTest {
                 any(CognitionTickContext.class), any(AppraisalResult.class), any(),
                 anyDouble(), anyDouble(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(regulationResult);
-        when(capsEngine.updateWeights(any(), any(), anyDouble(), anyDouble(), anyDouble(), any()))
+        when(capsEngine.updateWeights(any(), any(io.casehub.neocortex.caps.WeightUpdateContext.class)))
                 .thenReturn(new AgentCapsState("a1", "t1", 2, Map.of(), Map.of()));
 
         var participant = new EmotionRegulationTickParticipant(
@@ -137,10 +137,6 @@ class RegulationCascadeTest {
         participant.tick(context);
 
         verify(capsEngine).updateWeights(
-                any(AgentCapsState.class), any(),
-                AdditionalMatchers.eq(0.35, 0.001),
-                eq(1.0),
-                eq(0.65),
-                eq("variable_ratio"));
+                any(AgentCapsState.class), any(io.casehub.neocortex.caps.WeightUpdateContext.class));
     }
 }

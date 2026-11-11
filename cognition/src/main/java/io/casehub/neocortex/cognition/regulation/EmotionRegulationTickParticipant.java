@@ -8,7 +8,7 @@ import io.casehub.neocortex.cognition.core.CognitionConfig;
 import io.casehub.neocortex.cognition.core.CognitionTickContext;
 import io.casehub.neocortex.cognition.core.CognitionTickParticipant;
 import io.casehub.neocortex.cognition.core.CognitiveResourcePool;
-import io.casehub.neocortex.cognition.prompt.observation.RegulationTracker; (fix(#880): fix remaining fatigue() → fatigueEffects() in SearchBudgetDescriptionGenerationPhase)
+import io.casehub.neocortex.cognition.prompt.observation.RegulationTracker;
 import io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry;
 import io.casehub.neocortex.cognitive.index.PersonalityFacet;
 import io.casehub.neocortex.cognitive.index.RegulationDefaults;
@@ -59,20 +59,20 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
     // Petter 2025 — cognitive resources for reappraisal exhausted above this intensity
     static final double SAFETY_INTENSITY_THRESHOLD = 0.75;
     static final double REGULATION_CONTRIBUTION_RATE = 0.15;
- (fix(#880): fix remaining fatigue() → fatigueEffects() in SearchBudgetDescriptionGenerationPhase)
+
     private static final int HISTORY_LIMIT = 5;
 
     private final ConcurrentHashMap<String, EmotionRegulationResult> results = new ConcurrentHashMap<>();
 
     public EmotionRegulationTickParticipant(AppraisalTickParticipant appraisalParticipant,
                                             CognitionConfig config) {
-        this(appraisalParticipant, config, null, null, null, null, null, null, null, null); (fix(#880): fix remaining fatigue() → fatigueEffects() in SearchBudgetDescriptionGenerationPhase)
+        this(appraisalParticipant, config, null, null, null, null, null, null, null, null);
     }
 
     public EmotionRegulationTickParticipant(AppraisalTickParticipant appraisalParticipant,
                                             CognitionConfig config,
                                             @Nullable EmotionRegulationGenerationPhase generationPhase) {
-        this(appraisalParticipant, config, generationPhase, null, null, null, null, null, null, null); (fix(#880): fix remaining fatigue() → fatigueEffects() in SearchBudgetDescriptionGenerationPhase)
+        this(appraisalParticipant, config, generationPhase, null, null, null, null, null, null, null);
     }
 
     public EmotionRegulationTickParticipant(AppraisalTickParticipant appraisalParticipant,
@@ -80,7 +80,7 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
                                             @Nullable EmotionRegulationGenerationPhase generationPhase,
                                             @Nullable MindMapStore mindMapStore,
                                             @Nullable String cognitiveSubgraphId) {
-        this(appraisalParticipant, config, generationPhase, mindMapStore, cognitiveSubgraphId, null, null, null, null, null); (fix(#880): fix remaining fatigue() → fatigueEffects() in SearchBudgetDescriptionGenerationPhase)
+        this(appraisalParticipant, config, generationPhase, mindMapStore, cognitiveSubgraphId, null, null, null, null, null);
     }
 
     public EmotionRegulationTickParticipant(AppraisalTickParticipant appraisalParticipant,
@@ -130,7 +130,7 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
         this.capsEngine            = capsEngine;
         this.cascadeConfig         = capsEngine != null && cascadeConfig == null
                                      ? RegulationCascadeConfig.defaults() : cascadeConfig;
-        this.regulationTracker     = regulationTracker; (fix(#880): fix remaining fatigue() → fatigueEffects() in SearchBudgetDescriptionGenerationPhase)
+        this.regulationTracker     = regulationTracker;
     }
 
 
@@ -292,8 +292,9 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
                 double outcomeIntensity   = Math.abs(result.peakOriginalIntensity() - result.regulatedIntensity());
                 double outcomeValence     = result.effectiveness() > 0.5 ? 1.0 : -1.0;
                 double salienceMultiplier = result.peakOriginalIntensity();
-                capsEngine.updateWeights(capsState, capsInputActivations,
-                                         outcomeIntensity, outcomeValence, salienceMultiplier, "variable_ratio");
+                capsEngine.updateWeights(capsState, new io.casehub.neocortex.caps.WeightUpdateContext(
+                                         capsInputActivations, outcomeIntensity, outcomeValence,
+                                         salienceMultiplier, "variable_ratio"));
             }
         } else {
             if (cognitiveResourcePool != null && defaultsRegistry != null) {

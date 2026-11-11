@@ -11,7 +11,7 @@ class SearchBudgetTest {
 
     @Test
     void valid_budget_accepted() {
-        var budget = new SearchBudget(0.5, 0.3, 0.7, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, Instant.now());
+        var budget = new SearchBudget(0.5, 0.3, 0.7, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         assertEquals(0.5, budget.breadth());
         assertEquals(0.3, budget.laterality());
         assertEquals(0.7, budget.depth());
@@ -22,25 +22,25 @@ class SearchBudgetTest {
     @Test
     void rejects_breadth_above_one() {
         assertThrows(IllegalArgumentException.class, () ->
-                new SearchBudget(1.1, 0.3, 0.7, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, Instant.now()));
+                new SearchBudget(1.1, 0.3, 0.7, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now()));
     }
 
     @Test
     void rejects_negative_convergence() {
         assertThrows(IllegalArgumentException.class, () ->
-                new SearchBudget(0.5, 0.3, 0.7, -0.1, SearchMotivation.COMPETENCE, false, false, 0.0, 0.0, 0.0, Instant.now()));
+                new SearchBudget(0.5, 0.3, 0.7, -0.1, SearchMotivation.COMPETENCE, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now()));
     }
 
     @Test
     void rejects_null_source() {
         assertThrows(NullPointerException.class, () ->
-                new SearchBudget(0.5, 0.3, 0.7, 0.4, null, false, false, 0.0, 0.0, 0.0, Instant.now()));
+                new SearchBudget(0.5, 0.3, 0.7, 0.4, null, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now()));
     }
 
     @Test
     void rejects_null_evaluated_at() {
         assertThrows(NullPointerException.class, () ->
-                new SearchBudget(0.5, 0.3, 0.7, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, null));
+                new SearchBudget(0.5, 0.3, 0.7, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, null));
     }
 
     @Test

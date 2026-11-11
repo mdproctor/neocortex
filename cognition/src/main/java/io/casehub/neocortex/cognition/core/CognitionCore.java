@@ -803,7 +803,7 @@ public @Nullable String lastTargetAgentId() {
 
         this.regulationParticipant = new io.casehub.neocortex.cognition.regulation.EmotionRegulationTickParticipant(
                 appraisalParticipant, config, generationPhase, mindMapStore, cogSgId,
-                defaultsRegistry, loadEstimator, null);
+                defaultsRegistry, loadEstimator);
         addParticipant(CognitionPhase.DERIVED, this.regulationParticipant);
     }
 

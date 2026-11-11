@@ -16,7 +16,7 @@ class SearchBudgetPromptSectionTest {
 
     @Test
     void renders_high_curiosity_budget() {
-        var budget = new SearchBudget(0.8, 0.6, 0.3, 0.2, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, Instant.now());
+        var budget = new SearchBudget(0.8, 0.6, 0.3, 0.2, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         var participant = mock(SearchBudgetTickParticipant.class);
         when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 
@@ -30,7 +30,7 @@ class SearchBudgetPromptSectionTest {
 
     @Test
     void renders_high_competence_budget() {
-        var budget = new SearchBudget(0.3, 0.2, 0.9, 0.7, SearchMotivation.COMPETENCE, false, false, 0.0, 0.0, 0.0, Instant.now());
+        var budget = new SearchBudget(0.3, 0.2, 0.9, 0.7, SearchMotivation.COMPETENCE, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         var participant = mock(SearchBudgetTickParticipant.class);
         when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 
@@ -44,7 +44,7 @@ class SearchBudgetPromptSectionTest {
 
     @Test
     void renders_small_budget() {
-        var budget = new SearchBudget(0.1, 0.05, 0.15, 0.8, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, Instant.now());
+        var budget = new SearchBudget(0.1, 0.05, 0.15, 0.8, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         var participant = mock(SearchBudgetTickParticipant.class);
         when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 
@@ -57,7 +57,7 @@ class SearchBudgetPromptSectionTest {
 
     @Test
     void renders_pathological_fixation() {
-        var budget = new SearchBudget(0.05, 0.0, 1.0, 0.0, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, Instant.now());
+        var budget = new SearchBudget(0.05, 0.0, 1.0, 0.0, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         var participant = mock(SearchBudgetTickParticipant.class);
         when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 
@@ -88,7 +88,7 @@ class SearchBudgetPromptSectionTest {
 
     @Test
     void threat_source_renders_narrowed_text() {
-        var budget = new SearchBudget(0.3, 0.0, 0.5, 0.8, SearchMotivation.THREAT, false, false, 0.0, 0.0, 0.0, Instant.now());
+        var budget = new SearchBudget(0.3, 0.0, 0.5, 0.8, SearchMotivation.THREAT, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
         var participant = mock(SearchBudgetTickParticipant.class);
         when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 

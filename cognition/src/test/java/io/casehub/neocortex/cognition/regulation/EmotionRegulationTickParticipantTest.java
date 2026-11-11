@@ -125,7 +125,7 @@ class EmotionRegulationTickParticipantTest {
         var config = CognitionConfig.none().with("regulation", true).with("appraisal", true);
         // registry present (predictor active) but no generation phase → no result
         var participant = new EmotionRegulationTickParticipant(
-                appraisalParticipant, config, null, null, null, registry, null, null);
+                appraisalParticipant, config, null, null, null, registry, null);
         participant.tick(context);
 
         assertThat(participant.currentResult("a1", "t1")).isEmpty();
@@ -148,7 +148,7 @@ class EmotionRegulationTickParticipantTest {
 
         var config = CognitionConfig.none().with("regulation", true).with("appraisal", true);
         var participant = new EmotionRegulationTickParticipant(
-                appraisalParticipant, config, null, null, null, registry, null, null);
+                appraisalParticipant, config, null, null, null, registry, null);
         participant.tick(context);
 
         assertThat(participant.currentResult("a1", "t1")).isEmpty();
@@ -187,7 +187,7 @@ class EmotionRegulationTickParticipantTest {
         var generationPhase = mock(EmotionRegulationGenerationPhase.class);
         var config          = CognitionConfig.none().with("regulation", true).with("appraisal", true);
         var participant = new EmotionRegulationTickParticipant(
-                appraisalParticipant, config, generationPhase, null, null, registry, null, null);
+                appraisalParticipant, config, generationPhase, null, null, registry, null);
         participant.tick(context);
 
         // Verify generate was called with axes and dominant emotion type
