@@ -439,13 +439,22 @@ public class EmotionRegulationGenerationPhase {
         sb.append("Regulation effort: ").append(String.format("%.2f", regulationEffort))
           .append(" (0=negligible, 1=maximum urgency)\n\n");
 
-        if (regulationFatigue > 0.01) {
+        if (regulationFatigue > 0.7) {
+            sb.append("Your reappraisal capacity is depleted. Trying to reframe the situation ")
+              .append("no longer works — the cognitive effort required for COGNITIVE_CHANGE has ")
+              .append("run dry. SITUATION_SELECTION requires environmental assessment you can't ")
+              .append("sustain. Only ATTENTIONAL_DEPLOYMENT remains as a regulation tool — ")
+              .append("shifting your focus is reflexive and doesn't require the cognitive ")
+              .append("resources you've exhausted. You MUST choose ATTENTIONAL_DEPLOYMENT.\n\n");
+        } else if (regulationFatigue > 0.5) {
+            sb.append("Your reappraisal capacity is running low. COGNITIVE_CHANGE requires ")
+              .append("deliberate effort to find alternative interpretations — each attempt is ")
+              .append("slower and less convincing than the last. You can still try, but the ")
+              .append("cognitive work feels heavy. ATTENTIONAL_DEPLOYMENT and ")
+              .append("RESPONSE_MODULATION require less effort.\n\n");
+        } else if (regulationFatigue > 0.01) {
             sb.append("Regulation fatigue: ").append(String.format("%.0f%%", regulationFatigue * 100))
-              .append(" — repeated regulation is depleting capacity");
-            if (regulationFatigue > 0.7) {
-                sb.append("; approaching breakdown, suppression may fail entirely");
-            }
-            sb.append("\n\n");
+              .append(" — repeated regulation is depleting capacity\n\n");
         }
 
         if (loadEstimate != null) {
