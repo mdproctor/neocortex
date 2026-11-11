@@ -199,6 +199,9 @@ public class CognitionObservationBuilder {
             if (generated == null) {
                 generated = generatedDescriptions.get(d.type());
             }
+            if (generated == null && d.description() != null && !d.description().isBlank()) {
+                generated = d.description();
+            }
             if (generated != null) {
                 sb.append("\n").append(generated);
             }
