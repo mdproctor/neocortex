@@ -510,6 +510,38 @@ public class EmotionRegulationGenerationPhase {
               .append(" (").append(String.format("%.2f", regulationDefaults.redirectTendency())).append(")\n\n");
         }
 
+        if (pinnedStrategy == null && regulationDefaults != null) {
+            double reap = regulationDefaults.reappraisalCapacity();
+            double supp = regulationDefaults.suppressionCapacity();
+            double redir = regulationDefaults.redirectTendency();
+            boolean isControllableNegLocal = dominantEmotionType != null
+                    && RegulationStrategyPredictor.emotionCategory(dominantEmotionType)
+                            == RegulationStrategyPredictor.EmotionCategory.CONTROLLABLE_NEGATIVE;
+            boolean temporalStagingApplies = isControllableNegLocal && reap >= 0.40;
+            if (!temporalStagingApplies) {
+                double max = Math.max(reap, Math.max(supp, redir));
+                boolean tied = (max == reap && max == supp)
+                            || (max == reap && max == redir)
+                            || (max == supp && max == redir);
+                if (!tied && max >= 0.6) {
+                    if (max == supp) {
+                        sb.append("Your instinct is to control the outward expression. You feel the ")
+                          .append("emotion fully inside but your face stays steady, your voice stays ")
+                          .append("level. You manage the display, not the feeling. Choose ")
+                          .append("RESPONSE_MODULATION.\n\n");
+                    } else if (max == reap) {
+                        sb.append("Your instinct is to step back and reframe. You search for an ")
+                          .append("alternative interpretation — why might this not mean what it first ")
+                          .append("seemed? The reappraisal comes naturally. Choose COGNITIVE_CHANGE.\n\n");
+                    } else {
+                        sb.append("Your instinct is to shift what you're focusing on. Not to leave, ")
+                          .append("not to suppress — but to redirect attention away from the triggering ")
+                          .append("stimulus. Choose ATTENTIONAL_DEPLOYMENT.\n\n");
+                    }
+                }
+            }
+        }
+
         if (pinnedStrategy == null && context.regulationContext() != null
                 && context.regulationContext().interactingAgents() != null
                 && !context.regulationContext().interactingAgents().isEmpty()) {
