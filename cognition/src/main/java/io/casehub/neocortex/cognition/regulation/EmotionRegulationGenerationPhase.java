@@ -454,6 +454,15 @@ public class EmotionRegulationGenerationPhase {
               .append(", goals=").append(loadEstimate.activeGoals())
               .append(", ToM targets=").append(loadEstimate.mentalModelTargets())
               .append(")\n\n");
+            if (loadEstimate.level() == CognitiveLoadLevel.HIGH) {
+                sb.append("Under HIGH cognitive load, you cannot hold the multi-step reasoning ")
+                  .append("chain needed for COGNITIVE_CHANGE or the environmental assessment ")
+                  .append("needed for SITUATION_SELECTION/MODIFICATION. These strategies require ")
+                  .append("deliberation you don't have capacity for right now. Only ")
+                  .append("ATTENTIONAL_DEPLOYMENT (automatic attention shift) and ")
+                  .append("RESPONSE_MODULATION (expression control) are executable — they're ")
+                  .append("reflexive, not deliberative. You MUST choose one of these two.\n\n");
+            }
         }
 
         if (failureSignal != null) {

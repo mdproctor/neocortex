@@ -46,9 +46,12 @@ class CognitiveLoadStrategyEvalTest {
             Strategy selection factors (Petter et al. 2025):
             - High intensity → ATTENTIONAL_DEPLOYMENT (cognitive resources overwhelmed)
             - Low-to-moderate → COGNITIVE_CHANGE (requires cognitive capacity)
-            - Cognitive load constrains strategy: HIGH load → prefer ATTENTIONAL_DEPLOYMENT \
-            or RESPONSE_MODULATION (low cognitive cost); LOW load → COGNITIVE_CHANGE \
-            or SITUATION_SELECTION are viable (require deliberation)
+            - Cognitive load constrains strategy: HIGH load → you cannot hold the \
+            multi-step reasoning chain needed for COGNITIVE_CHANGE or the environmental \
+            assessment needed for SITUATION_SELECTION/MODIFICATION. Only \
+            ATTENTIONAL_DEPLOYMENT and RESPONSE_MODULATION are executable — they're \
+            reflexive, not deliberative. You MUST choose one of these two. \
+            LOW load → COGNITIVE_CHANGE or SITUATION_SELECTION are viable (require deliberation)
 
             Respond with JSON only:
             {
