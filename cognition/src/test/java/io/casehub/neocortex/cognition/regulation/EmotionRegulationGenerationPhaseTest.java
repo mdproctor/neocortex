@@ -226,8 +226,8 @@ class EmotionRegulationGenerationPhaseTest {
         var message = EmotionRegulationGenerationPhase.buildUserMessage(
                 context, appraisal, List.of(), 0.6, null, 0.85, null);
 
-        assertThat(message).contains("Regulation fatigue: 85%");
-        assertThat(message).contains("breakdown");
+        assertThat(message).contains("reappraisal capacity is depleted");
+        assertThat(message).contains("MUST choose ATTENTIONAL_DEPLOYMENT");
     }
 
     @Test
