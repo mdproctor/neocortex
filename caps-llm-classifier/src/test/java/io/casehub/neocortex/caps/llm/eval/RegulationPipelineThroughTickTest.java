@@ -6,6 +6,7 @@ import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
 import io.casehub.neocortex.cognition.appraisal.AppraisalStrategy;
 import io.casehub.neocortex.cognition.appraisal.HabituationState;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionTickContext;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationGenerationPhase;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationResult;
@@ -104,7 +105,7 @@ class RegulationPipelineThroughTickTest {
 
         AppraisalStrategy stubbedAppraisal = ctx -> new AppraisalResult(emotions, List.of(), HabituationState.empty());
 
-        var core = CognitionCoreTestBuilder.buildCore(config, null);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).build().core();
         core.configureAppraisal(stubbedAppraisal, new ConcernBasedSalienceStrategy());
 
         // regulation with null generation phase — gate logic only
@@ -156,7 +157,7 @@ class RegulationPipelineThroughTickTest {
             }
         };
 
-        var core = CognitionCoreTestBuilder.buildCore(config, null);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).build().core();
         core.configureAppraisal(stubbedAppraisal, new ConcernBasedSalienceStrategy());
         core.configureRegulation(stubbedGeneration);
 

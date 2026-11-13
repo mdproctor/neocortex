@@ -3,6 +3,7 @@ package io.casehub.neocortex.caps.llm.eval;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.prompt.CognitionRenderContext;
 import org.junit.jupiter.api.Tag;
@@ -34,8 +35,8 @@ class EmergenceVerificationTest {
         Files.createDirectories(outputDir);
         var mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
-        var coreA = CognitionCoreTestBuilder.buildCore(CognitionConfig.none());
-        var coreB = CognitionCoreTestBuilder.buildCore(CognitionConfig.all());
+        var coreA = CognitionTestHarness.builder().withCognitionConfig(CognitionConfig.none()).build().core();
+        var coreB = CognitionTestHarness.builder().withCognitionConfig(CognitionConfig.all()).build().core();
 
         var runASections = new LinkedHashMap<String, Map<Integer, Map<String, String>>>();
         var runBSections = new LinkedHashMap<String, Map<Integer, Map<String, String>>>();

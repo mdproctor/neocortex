@@ -5,6 +5,7 @@ import io.casehub.eidos.api.AgentDisposition;
 import io.casehub.eidos.api.DispositionValue;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationResult;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationStrategy;
@@ -147,8 +148,7 @@ class PerModalityRegulationEvalTest {
                     .with("appraisal", true).with("salience", true)
                     .with("regulation", true);
             var mindMapNoPred = new InMemoryMindMapStore();
-            var coreNoPred = CognitionCoreTestBuilder.buildCore(
-                    configNoPred, sessionPipeline, mindMapNoPred);
+            var coreNoPred = CognitionTestHarness.builder().withCognitionConfig(configNoPred).withSessionPipeline(sessionPipeline).withMindMapStore(mindMapNoPred).build().core();
             coreNoPred.configureAppraisal(
                     new LlmAppraisalStrategy(sessionPipeline),
                     new ConcernBasedSalienceStrategy());
@@ -254,8 +254,8 @@ class PerModalityRegulationEvalTest {
                     new SubgraphInput("cognitive-eval", SubgraphTypes.COGNITIVE, null),
                     TENANT);
 
-            var core = CognitionCoreTestBuilder.buildCore(
-                    config, sessionPipeline, mindMap, registry);
+            var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
+            core.setDefaultsRegistry(registry);
             core.configureAppraisal(
                     new LlmAppraisalStrategy(sessionPipeline),
                     new ConcernBasedSalienceStrategy());
@@ -322,8 +322,8 @@ class PerModalityRegulationEvalTest {
                 .with("appraisal", true).with("salience", true)
                 .with("regulation", true);
         var mindMap = new InMemoryMindMapStore();
-        var core = CognitionCoreTestBuilder.buildCore(
-                config, sessionPipeline, mindMap, registry);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
+        core.setDefaultsRegistry(registry);
         core.configureAppraisal(
                 new LlmAppraisalStrategy(sessionPipeline),
                 new ConcernBasedSalienceStrategy());

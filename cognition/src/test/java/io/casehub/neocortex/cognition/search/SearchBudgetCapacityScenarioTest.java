@@ -1,9 +1,9 @@
 package io.casehub.neocortex.cognition.search;
 
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognitive.CognitiveCapacityConfig;
 import io.casehub.neocortex.cognitive.SearchBudgetConfig;
 import io.casehub.neocortex.cognitive.index.CognitiveDefaults;
-import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
@@ -25,7 +25,7 @@ class SearchBudgetCapacityScenarioTest {
                 6.0, 0.5, 6.0, 0.5, 0.7,
                 6.0, 0.05, 6.0, 0.5, 1.4,
                 null, 0.85, null, null);
-        var capacity = new CognitiveCapacityConfig(0.40, null, null);
+        var capacity = new CognitiveCapacityConfig(0.10, null, null);
 
         var harness = CognitionTestHarness.builder()
                 .agentFromDefaults("analytical",
@@ -41,7 +41,7 @@ class SearchBudgetCapacityScenarioTest {
         assertThat(budget).as("analytical agent should have a search budget").isPresent();
         assertThat(budget.get().depth())
                 .as("depth should be capped at relational complexity ceiling")
-                .isLessThanOrEqualTo(0.40);
+                .isLessThanOrEqualTo(0.10);
         assertThat(budget.get().capacityConstrained())
                 .as("should be capacity constrained when depth exceeds ceiling")
                 .isTrue();
@@ -115,7 +115,7 @@ class SearchBudgetCapacityScenarioTest {
                 6.0, 0.5, 6.0, 0.5, 0.7,
                 6.0, 0.05, 6.0, 0.5, 1.4,
                 null, 0.85, null, null);
-        var capacity = new CognitiveCapacityConfig(0.40, null, null);
+        var capacity = new CognitiveCapacityConfig(0.10, null, null);
 
         var harness = CognitionTestHarness.builder()
                 .withMindMapStore(store)

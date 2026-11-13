@@ -5,6 +5,7 @@ import io.casehub.eidos.api.AgentDisposition;
 import io.casehub.eidos.api.DispositionValue;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationResult;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationStrategy;
 import io.casehub.neocortex.cognition.salience.ConcernBasedSalienceStrategy;
@@ -218,7 +219,8 @@ class PerStrategyRegulationEvalTest {
                                     .with("regulation", true);
 
         var mindMap = new InMemoryMindMapStore();
-        var core    = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap, defaultsRegistry);
+        var core    = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
+        core.setDefaultsRegistry(defaultsRegistry);
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configureRegulation();
 

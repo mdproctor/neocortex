@@ -10,6 +10,7 @@ import io.casehub.neocortex.caps.llm.LlmSituationClassifier;
 import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.salience.ConcernBasedSalienceStrategy;
 import io.casehub.neocortex.cognition.trace.PipelineTrace;
@@ -87,7 +88,7 @@ class PipelineCoherenceEvalTest {
                 .with("regulation", true);
 
         var mindMap = new InMemoryMindMapStore();
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configureRegulation();
 
@@ -149,7 +150,7 @@ class PipelineCoherenceEvalTest {
         var topology = EvalTestSupport.loadTopology();
         var classifier = new LlmSituationClassifier(sessionPipeline, topology);
 
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
 
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
@@ -221,7 +222,7 @@ class PipelineCoherenceEvalTest {
         var topology = EvalTestSupport.loadTopology();
         var classifier = new LlmSituationClassifier(sessionPipeline, topology);
 
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
 
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
@@ -270,7 +271,7 @@ class PipelineCoherenceEvalTest {
         var mindMap = new InMemoryMindMapStore();
         var snapshotStore = new InMemoryPipelineSnapshotStore();
 
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configurePipelineSnapshotStore(snapshotStore);
 
@@ -378,7 +379,7 @@ class PipelineCoherenceEvalTest {
         var classifier = new LlmSituationClassifier(sessionPipeline, topology);
         var phase = new BehavioralSynthesisPhase(mindMap, capsEngine, classifier, 20);
 
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
         core.configureBehavioralSynthesis(phase);
 
