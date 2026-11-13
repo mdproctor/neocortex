@@ -668,8 +668,65 @@ This is the first multi-agent eval with confirmed session isolation. Prior 4.93 
 3. #845 — Upgrade CDE derivations to PID-5 facets
 4. #921 — Prediction calibration analysis
 5. #925 — CAPS consolidation-phase coherence scenario
-6. #938 — PipelineCoherenceEvalTest: cross-stage narrative continuity
-7. #941 — Drive profile differentiation
+6. #941 — Drive profile differentiation
+
+## Stream 11: Cross-Stage Narrative Coherence (#938)
+
+**Issues:** #938 (complete), follow-on: #957, #958, #959
+**Date:** 2026-11-13
+**Blog:** "The Stage That Couldn't Hear the Last One" (2026-11-13)
+
+### The problem
+
+PipelineCoherenceEvalTest (#894) measured per-transition coherence across four scenarios using a two-tier Haiku→Opus judge. All four scenarios failed (gate: ≥3/4 at mean ≥4.0). Process constraint improvements from #933/#937 had zero impact — the failures were structural, not prompt-quality-shaped.
+
+### Root cause analysis — five boundary failures
+
+Every failure occurred at a stage boundary, not within any stage:
+
+| # | Boundary | Failure | Fix |
+|---|----------|---------|-----|
+| 1 | Observation → Appraisal | Session contamination: LlmAppraisalStrategy reused session across ticks, LLM anchored on previous response | `ClearingPolicy.EVERY_CALL` — clears conversation history, keeps system prompt cached |
+| 2 | Appraisal → Prompt | MoodPromptSection coarse vocabulary: PAD-bin labels ("displeased") contradicted rich appraisal narrative | Suppress MoodPromptSection when appraisal active (follows CharacterDrivePromptSection precedent) |
+| 3 | Init → Trajectory | Serialization off-by-one: init tick consumed obsIndex, misaligning all observation-to-trace pairings | Skip snapshots with null appraisalResult in trajectory serialization |
+| 4 | Regulation → Prompt | Missing propagation: regulation narrative (intensity 0.87→0.54) invisible in prompt sections | `setRegulatedNarrative()` on AppraisalTickParticipant; AppraisalPromptSection prefers regulated narrative |
+| 5 | Drives → Prompt | Trigger text mismatch: DriveComposer kept source trigger ("no mental models") even when appraisal modulation dominated | Override trigger to "elevated/dampened by emotional response" when appraisal delta > 0.2 |
+
+### Additional fixes
+
+- **AppraisalTickParticipant**: Pass agentId via ClassificationContext to LlmSituationClassifier (prevents UUID session sprawl)
+- **EvalTestSupport**: Increase maxConcurrentSessions from 4 to 10 (classifier + appraisal + judge sessions)
+- **PipelineCoherenceEvalTest**: Wire LlmSituationClassifier via 4-arg configureAppraisal for channel weight production
+- **PipelineCoherenceEvalTest**: Remove invalid `.with("curiosity", true)` config key
+- **PipelineCoherenceEvalTest**: Update shame regulation expectation to account for safety gate (Petter 2025: intensity > 0.75 → ATTENTIONAL_DEPLOYMENT)
+
+### Results — 1/4 pass
+
+| Scenario | Before | After | Status |
+|----------|--------|-------|--------|
+| shameRegulationChain | 3.475 | **4.28** | **PASS** |
+| appraisalChannelWeightCoherence | 2.3 | 3.5 | FAIL — obs→appraisal LLM quality (wrong emotions for security breach) |
+| curiosityExplorationChain | ERROR | 2.5 | FAIL — drives don't activate from JOY(0.29) |
+| crossTickTrajectory | 2.2 | 2.3 | FAIL — negative attractor lock, drive monotonicity |
+
+### Key finding: wiring vs quality
+
+The five boundary fixes addressed all cross-stage coherence WIRING issues. The remaining failures are a different class — SEC→OCC emotion mapping quality:
+
+- **Arousal calibration:** SHAME's canonical PAD arousal is -0.04 (Mehrabian), producing near-zero arousal even in public confrontations. Theoretically correct but counter-intuitive.
+- **Missing INTEREST/SURPRISE:** The SEC→OCC mapper produces JOY for high-novelty discoveries. JOY generates CURIOSITY delta of only +0.07 via AppraisalDriveModulator. HOPE would produce +0.5×intensity — 7x larger.
+- **Missing FEAR:** Security breach maps to DISTRESS + SHAME, not FEAR. FEAR is the expected primary emotion for active threats.
+- **Negative attractor lock:** The appraisal LLM anchors on negative mood state across ticks and never recovers proportionally to positive observations.
+
+### Follow-on issues filed
+
+- **#957** — SEC→OCC emotion mapping: arousal calibration, FEAR/INTEREST taxonomy gaps (M/Med)
+- **#958** — Drive activation from single-tick appraisal: curiosity gap, blocked by #957 (S/Low)
+- **#959** — Cross-tick trajectory quality: negative attractor lock, drive monotonicity (M/High)
+
+### Key methodological finding
+
+Per-transition coherence scoring with an LLM judge is essential for multi-stage pipeline evaluation. Scoring only the final output masks boundary failures — you can't tell if the appraisal→regulation transition lost signal or if the regulation→prompt transition did. When you score each transition independently, the boundary failures become visible and addressable
 
 ### Deferred
 - **Era 6 Phase 4**: Condensation chains, persistent entity index, ACT-R decay (not blocked)
