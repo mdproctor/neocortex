@@ -5,6 +5,7 @@ import io.casehub.neocortex.caps.CapsAttractor;
 import io.casehub.neocortex.caps.CapsConnection;
 import io.casehub.neocortex.caps.CapsEngine;
 import io.casehub.neocortex.caps.CapsTopology;
+import io.casehub.neocortex.caps.ClassificationContext;
 import io.casehub.neocortex.caps.ConnectionWeight;
 import io.casehub.neocortex.caps.ConvergenceType;
 import io.casehub.neocortex.caps.SettlingResult;
@@ -13,6 +14,9 @@ import io.casehub.neocortex.caps.SituationActivation;
 import io.casehub.neocortex.caps.SituationClassifier;
 import io.casehub.neocortex.caps.WeightProvenance;
 import io.casehub.neocortex.caps.WeightUpdateContext;
+import io.casehub.neocortex.cognitive.index.CognitiveDefaults;
+import io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry;
+import io.casehub.neocortex.cognitive.index.DescriptorView;
 import io.casehub.neocortex.cognitive.index.DispositionAxes;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
@@ -618,6 +622,70 @@ class BehavioralSynthesisPhaseTest {
             lastInputActivations = new HashMap<>(inputActivations);
             return super.settle(state, inputActivations);
         }
+    }
+
+    @Test
+    void classify_passesDispositionMetadata() {
+        var capturedMetadata = new ArrayList<Map<String, String>>();
+        SituationClassifier capturingClassifier = (desc, meta, ctx) -> {
+            capturedMetadata.add(new HashMap<>(meta));
+            return new ClassificationResult(List.of(new SituationActivation("reward", 0.8)));
+        };
+
+        var axes = new DispositionAxes("competitive", "flexible", "bold", "high", "assertive");
+        var descriptor = new DescriptorView(AGENT, axes, List.of(), List.of(), null, List.of());
+        var defaults = new CognitiveDefaults(AGENT, null, null, null, null, null,
+            null, null, null, null, null, Map.of(), null, null, descriptor,
+            null, null, null, null, null, null, null);
+        var registry = new CognitiveDefaultsRegistry();
+        registry.register(defaults);
+
+        var dispPhase = new BehavioralSynthesisPhase(
+            store, capsEngine, capturingClassifier, 20, null, registry);
+
+        store.addNode(NodeInput.of("Won a competition", cognitiveSubgraphId)
+            .withProperties(Map.of(
+                "source-memory-id", "mem1",
+                "agent-id", AGENT,
+                "event-type", "observation",
+                "graduation-score", "0.7")),
+            TENANT);
+
+        dispPhase.run(TENANT, List.of());
+
+        assertThat(capturedMetadata).isNotEmpty();
+        var meta = capturedMetadata.getFirst();
+        assertThat(meta).containsEntry("disposition.socialOrient", "competitive");
+        assertThat(meta).containsEntry("disposition.ruleFollowing", "flexible");
+        assertThat(meta).containsEntry("disposition.riskAppetite", "bold");
+        assertThat(meta).containsEntry("disposition.autonomy", "high");
+        assertThat(meta).containsEntry("disposition.conflictMode", "assertive");
+    }
+
+    @Test
+    void classify_noRegistryOmitsDispositionMetadata() {
+        var capturedMetadata = new ArrayList<Map<String, String>>();
+        SituationClassifier capturingClassifier = (desc, meta, ctx) -> {
+            capturedMetadata.add(new HashMap<>(meta));
+            return new ClassificationResult(List.of(new SituationActivation("reward", 0.8)));
+        };
+
+        var noRegPhase = new BehavioralSynthesisPhase(
+            store, capsEngine, capturingClassifier, 20);
+
+        store.addNode(NodeInput.of("Got rewarded", cognitiveSubgraphId)
+            .withProperties(Map.of(
+                "source-memory-id", "mem2",
+                "agent-id", AGENT,
+                "event-type", "observation",
+                "graduation-score", "0.7")),
+            TENANT);
+
+        noRegPhase.run(TENANT, List.of());
+
+        assertThat(capturedMetadata).isNotEmpty();
+        var meta = capturedMetadata.getFirst();
+        assertThat(meta).doesNotContainKey("disposition.socialOrient");
     }
 
 }

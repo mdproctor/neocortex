@@ -88,10 +88,19 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
                              SituationClassifier classifier,
                              int maxPerPass,
                              CbrRecordStore cbrRecordStore) {
+        this(store, capsEngine, classifier, maxPerPass, cbrRecordStore, null);
+    }
+
+    public BehavioralSynthesisPhase(MindMapStore store,
+                             CapsEngine capsEngine,
+                             SituationClassifier classifier,
+                             int maxPerPass,
+                             CbrRecordStore cbrRecordStore,
+                             io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry defaultsRegistry) {
         this.store                 = store;
         this.capsEngine            = capsEngine;
         this.classifier            = classifier;
-        this.defaultsRegistry      = null;
+        this.defaultsRegistry      = defaultsRegistry;
         this.maxPerPass            = maxPerPass;
         this.emaRetention          = 0.5;
         this.reinforcementBoostCap = 0.5;
@@ -141,7 +150,7 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
                 for (MindMapNode node : agentNodes) {
                     classifyFutures.add(classifyExecutor.submit(() -> {
                         ClassificationResult classResult = classifier.classify(
-                            node.name(), nodeMetadata(node),
+                            node.name(), addDispositionMetadata(nodeMetadata(node), agentId),
                             ClassificationContext.of(tenantId));
                         for (SituationActivation sa : classResult.activations()) {
                             experienceActivations.merge(sa.nodeId(), sa.confidence(), Math::max);
@@ -371,6 +380,22 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
         return meta;
     }
 
+    private Map<String, String> addDispositionMetadata(Map<String, String> metadata, String agentId) {
+        if (defaultsRegistry == null) return metadata;
+        var defaults = defaultsRegistry.forAgent(agentId);
+        if (defaults.isEmpty() || defaults.get().descriptor() == null) return metadata;
+        var axes = defaults.get().descriptor().disposition();
+        if (axes == null) return metadata;
+
+        var enriched = new HashMap<>(metadata);
+        if (axes.socialOrient() != null) enriched.put("disposition.socialOrient", axes.socialOrient());
+        if (axes.ruleFollowing() != null) enriched.put("disposition.ruleFollowing", axes.ruleFollowing());
+        if (axes.riskAppetite() != null) enriched.put("disposition.riskAppetite", axes.riskAppetite());
+        if (axes.autonomy() != null) enriched.put("disposition.autonomy", axes.autonomy());
+        if (axes.conflictMode() != null) enriched.put("disposition.conflictMode", axes.conflictMode());
+        return enriched;
+    }
+
     private double averageIntensity(List<MindMapNode> nodes) {
         return nodes.stream()
             .mapToDouble(n -> n.property("graduation-score")
@@ -432,7 +457,8 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
             } else if (classifier != null) {
                 String description = node.properties().get("description");
                 if (description == null || description.isBlank()) {continue;}
-                var classResult = classifier.classify(description, Map.of(),
+                var classResult = classifier.classify(description,
+                    addDispositionMetadata(Map.of(), agentId),
                     ClassificationContext.of(tenantId));
                 for (var sa : classResult.activations()) {
                     double scaled = sa.confidence() * intensity;
