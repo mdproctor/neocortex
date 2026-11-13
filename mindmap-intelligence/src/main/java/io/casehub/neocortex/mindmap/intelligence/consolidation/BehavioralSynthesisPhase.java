@@ -76,14 +76,14 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
         this.cbrRecordStore        = cbrRecordStore.isResolvable() ? cbrRecordStore.get() : null;
     }
 
-    BehavioralSynthesisPhase(MindMapStore store,
+    public BehavioralSynthesisPhase(MindMapStore store,
                              CapsEngine capsEngine,
                              SituationClassifier classifier,
                              int maxPerPass) {
         this(store, capsEngine, classifier, maxPerPass, null);
     }
 
-    BehavioralSynthesisPhase(MindMapStore store,
+    public BehavioralSynthesisPhase(MindMapStore store,
                              CapsEngine capsEngine,
                              SituationClassifier classifier,
                              int maxPerPass,

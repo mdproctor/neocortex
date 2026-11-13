@@ -7,16 +7,20 @@ import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.CoherenceScore;
 import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.TwoTierCoherenceJudge;
 import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.StageTransition;
 import io.casehub.neocortex.caps.llm.LlmSituationClassifier;
+import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.salience.ConcernBasedSalienceStrategy;
 import io.casehub.neocortex.cognition.trace.PipelineTrace;
 import io.casehub.neocortex.mindmap.EdgeInput;
+import io.casehub.neocortex.mindmap.MindMapNode;
+import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
+import io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase;
 import io.casehub.neocortex.cognitive.observability.PipelineSnapshotStore;
 import io.casehub.neocortex.cognitive.observability.testing.InMemoryPipelineSnapshotStore;
 import io.casehub.platform.agent.AgentProvider;
@@ -36,6 +40,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static java.util.stream.Collectors.joining;
@@ -343,6 +348,154 @@ class PipelineCoherenceEvalTest {
         } catch (IOException e) {
             System.err.println("Failed to write results: " + e.getMessage());
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Scenario 5: CAPS consolidation coherence
+    // ---------------------------------------------------------------
+
+    @Test
+    void capsConsolidationChain() {
+        String agentId = "caps-consolidation-eval";
+
+        var descriptor = AgentDescriptor.builder()
+                .agentId(agentId).name("CAPS Consolidation Eval Agent").slot("eval").tenancyId(TENANT)
+                .disposition(disposition("neutral", "high", "low", "neutral", "cooperative"))
+                .build();
+
+        var config = CognitionConfig.none()
+                .with("mood", true)
+                .with("drives", true)
+                .with("appraisal", true)
+                .with("salience", true)
+                .with("behavioral", true);
+
+        var mindMap = new InMemoryMindMapStore();
+        seedGraduatedExperiences(mindMap, agentId);
+
+        var topology = EvalTestSupport.loadTopology();
+        var capsEngine = new InMemoryCapsEngine();
+        var classifier = new LlmSituationClassifier(sessionPipeline, topology);
+        var phase = new BehavioralSynthesisPhase(mindMap, capsEngine, classifier, 20);
+
+        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
+        core.configureBehavioralSynthesis(phase);
+
+        phase.run(TENANT, List.of());
+
+        core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
+
+        var trace = core.currentTrace(agentId, TENANT).orElseThrow(
+                () -> new AssertionError("No trace after tick"));
+
+        assertThat(trace.capsInputActivations())
+                .as("CAPS input activations should be populated after consolidation")
+                .isNotEmpty();
+
+        var graduatedDescription = serializeGraduatedNodes(mindMap);
+
+        var transitions = List.of(
+                buildTransition("graduated-nodes-to-caps-input",
+                        graduatedDescription,
+                        serializeCapsInputActivations(trace),
+                        "The graduated experience nodes describe social exclusion, public humiliation, and " +
+                        "abandonment by a collaborator. CAPS input activations should include nodes related to " +
+                        "rejection, exclusion, social threat, or similar interpersonal threat inputs. The " +
+                        "activated inputs should match the emotional content of the experiences."),
+                buildTransition("caps-input-to-settling",
+                        serializeCapsInputActivations(trace),
+                        serializeCapsSettling(trace),
+                        "Given rejection/exclusion/social-threat input activations, the CAPS network should " +
+                        "settle to behavioral attractors consistent with those inputs — withdrawal, avoidance, " +
+                        "social vigilance, or defensive patterns. The settling should converge (not oscillate). " +
+                        "Attractor categories should relate to the threat/rejection input profile."),
+                buildTransition("settling-to-behavioral-prompt",
+                        serializeCapsSettling(trace),
+                        serializePromptSections(trace),
+                        "The prompt sections should reflect the settled behavioral state. If a " +
+                        "BehavioralPromptSection or related section is present, it should describe behavioral " +
+                        "tendencies consistent with the attractors — e.g. withdrawal, caution, or vigilance " +
+                        "in social contexts. The overall prompt tone should not contradict the settled state."),
+                buildTransition("full-consolidation-coherence",
+                        graduatedDescription + "\n\n" + serializeCapsInputActivations(trace) +
+                        "\n\n" + serializeCapsSettling(trace),
+                        serializePromptSections(trace),
+                        "The complete consolidation pipeline — from graduated experience nodes through CAPS " +
+                        "input classification and network settling to prompt output — should form a coherent " +
+                        "narrative arc. Social rejection experiences should produce threat-related CAPS activations, " +
+                        "which should settle to defensive/withdrawal attractors, which should appear in prompt " +
+                        "sections as behavioral tendencies. No section should contradict the overall trajectory.")
+        );
+
+        assertCoherence("caps-consolidation", transitions);
+    }
+
+    private void seedGraduatedExperiences(InMemoryMindMapStore mindMap, String agentId) {
+        var sgId = mindMap.createSubgraph(
+                new SubgraphInput("cognitive-experiences", SubgraphTypes.COGNITIVE, null), TENANT);
+
+        var experiences = List.of(
+                Map.entry("Deliberately excluded from the team's strategic planning meeting — learned about " +
+                          "the decisions afterward from a colleague's offhand comment",
+                        Map.of("source-memory-id", "mem-001", "agent-id", agentId,
+                                "event-type", "observation", "cognitiveKind", "belief",
+                                "graduation-score", "0.8")),
+                Map.entry("My proposal was publicly criticized in front of the entire department — dismissed " +
+                          "as naive without any substantive engagement with the ideas",
+                        Map.of("source-memory-id", "mem-002", "agent-id", agentId,
+                                "event-type", "observation", "cognitiveKind", "belief",
+                                "graduation-score", "0.9")),
+                Map.entry("Close collaborator moved to another project without discussing it — found out " +
+                          "through the org chart update rather than a conversation",
+                        Map.of("source-memory-id", "mem-003", "agent-id", agentId,
+                                "event-type", "observation", "cognitiveKind", "belief",
+                                "graduation-score", "0.7"))
+        );
+
+        for (var entry : experiences) {
+            mindMap.addNode(
+                    NodeInput.of(entry.getKey(), sgId)
+                             .withProperties(entry.getValue()),
+                    TENANT);
+        }
+    }
+
+    private String serializeGraduatedNodes(InMemoryMindMapStore mindMap) {
+        var nodes = mindMap.search(MindMapQuery.of(TENANT, 100).withType(SubgraphTypes.COGNITIVE));
+        if (nodes.isEmpty()) return "[No graduated nodes]";
+        var sb = new StringBuilder("## Graduated Experience Nodes\n");
+        for (MindMapNode node : nodes) {
+            sb.append("- **%s**\n".formatted(node.name()));
+            node.property("event-type").ifPresent(v -> sb.append("  event-type: %s\n".formatted(v)));
+            node.property("cognitiveKind").ifPresent(v -> sb.append("  cognitiveKind: %s\n".formatted(v)));
+            node.property("graduation-score").ifPresent(v -> sb.append("  graduation-score: %s\n".formatted(v)));
+        }
+        return sb.toString();
+    }
+
+    private String serializeCapsInputActivations(PipelineTrace trace) {
+        if (trace.capsInputActivations().isEmpty()) return "[No CAPS input activations]";
+        var sb = new StringBuilder("## CAPS Input Activations\n");
+        trace.capsInputActivations().entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .forEach(e -> sb.append("- %s: %.3f\n".formatted(e.getKey(), e.getValue())));
+        return sb.toString();
+    }
+
+    private String serializeCapsSettling(PipelineTrace trace) {
+        var settling = trace.capsSettling();
+        if (settling == null) return "[No CAPS settling result]";
+        var sb = new StringBuilder("## CAPS Settling Result\n");
+        sb.append("Convergence: %s\n".formatted(settling.convergenceType()));
+        sb.append("Iterations: %d\n".formatted(settling.iterations()));
+        sb.append("Saturation ratio: %.3f\n".formatted(settling.saturationRatio()));
+        sb.append("### Node Activations\n");
+        settling.activations().entrySet().stream()
+                .sorted((a, b) -> Double.compare(Math.abs(b.getValue()), Math.abs(a.getValue())))
+                .limit(15)
+                .forEach(e -> sb.append("- %s: %.3f\n".formatted(e.getKey(), e.getValue())));
+        return sb.toString();
     }
 
     // ---------------------------------------------------------------
