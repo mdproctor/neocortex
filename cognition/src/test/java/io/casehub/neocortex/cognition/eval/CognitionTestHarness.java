@@ -9,13 +9,9 @@ import io.casehub.neocortex.cognition.core.ConsolidationMediator;
 import io.casehub.neocortex.cognition.core.SubjectResolver;
 import io.casehub.neocortex.cognition.drive.CuriosityChannel;
 import io.casehub.neocortex.cognition.drive.CuriosityDrive;
-import io.casehub.neocortex.cognition.drive.DriveAxis;
 import io.casehub.neocortex.cognition.drive.DriveComposer;
 import io.casehub.neocortex.cognition.drive.DriveConfig;
-import io.casehub.neocortex.cognition.drive.DriveIntensity;
 import io.casehub.neocortex.cognition.drive.DriveOrchestrator;
-import io.casehub.neocortex.cognition.drive.DriveSource;
-import io.casehub.neocortex.cognition.drive.MindMapDriveSource;
 import io.casehub.neocortex.cognition.mood.MoodConfig;
 import io.casehub.neocortex.cognition.mood.MoodOrchestrator;
 import io.casehub.neocortex.cognition.mood.MoodSignal;
@@ -229,6 +225,8 @@ public class CognitionTestHarness {
         private Supplier<Set<String>> goalNodeIds = Set::of;
         private CognitionConfig cognitionConfig;
         private boolean consolidationEnabled;
+        private io.casehub.platform.agent.session.SessionPipeline sessionPipeline;
+
         private final Map<String, io.casehub.neocortex.cognition.appraisal.HabituationState> habituationStates = new HashMap<>();
         private final Map<String, io.casehub.neocortex.cognition.appraisal.AppraisalResult>  appraisalResults  = new HashMap<>();
 
@@ -278,6 +276,12 @@ public class CognitionTestHarness {
             return this;
         }
 
+        public Builder withSessionPipeline(io.casehub.platform.agent.session.SessionPipeline pipeline) {
+            this.sessionPipeline = pipeline;
+            return this;
+        }
+
+
         public Builder withHabituationState(String agentId,
                 io.casehub.neocortex.cognition.appraisal.HabituationState state) {
             this.habituationStates.put(agentId, state);
@@ -298,28 +302,80 @@ public class CognitionTestHarness {
             var allDefaults = agentDefaults.values().toArray(new CognitiveDefaults[0]);
             var registry    = CognitiveDefaultsRegistry.forTesting(allDefaults);
 
+            var cbrStore = new io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrRecordStore();
+
+            var moodOrchestrator = new MoodOrchestrator(MoodConfig.defaults());
+
+            io.casehub.neocortex.memory.reflection.ReflectionOrchestrator reflectionOrch =
+                    (agentId, tenantId, since, maxEntries) -> List.of();
+
+            var narrativeOrch = new io.casehub.neocortex.cognition.narrative.NarrativeOrchestrator(
+                    new io.casehub.neocortex.cognition.narrative.NarrativeMemory(
+                            cbrStore, io.casehub.neocortex.cognition.narrative.NarrativeConfig.defaults()));
+
+            var userModel = new io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator(
+                    new io.casehub.neocortex.cognition.usermodel.UserProfileMemory(
+                            cbrStore, io.casehub.neocortex.cognition.usermodel.UserModelConfig.defaults()),
+                    io.casehub.neocortex.cognition.usermodel.UserModelConfig.defaults(), sessionPipeline);
+
+            var mentalModel = new io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator(
+                    new io.casehub.neocortex.cognition.mentalmodel.MentalModelMemory(
+                            cbrStore, io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig.defaults()),
+                    io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig.defaults(),
+                    java.time.Clock.systemUTC(), sessionPipeline);
+
+            var strategy = new io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator(
+                    new io.casehub.neocortex.cognition.strategy.StrategyMemory(
+                            cbrStore, io.casehub.neocortex.cognition.strategy.StrategyLearningConfig.defaults()),
+                    reflectionOrch,
+                    io.casehub.neocortex.cognition.strategy.StrategyLearningConfig.defaults(),
+                    java.time.Clock.systemUTC(), sessionPipeline);
+
+            io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator hygiene =
+                    new io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator() {
+                        @Override
+                        public void tick(String agentId, String tenantId) {}
+
+                        @Override
+                        public io.casehub.neocortex.memory.KnowledgeGapSummary knowledgeGaps(
+                                String agentId, String tenantId) {
+                            return io.casehub.neocortex.memory.KnowledgeGapSummary.empty();
+                        }
+                    };
+
             var gapDetector     = new InformationGapDetector(store);
             var channelComputer = new CuriosityChannelComputer();
             var curiosityDrive  = new CuriosityDrive(gapDetector, channelComputer, 0.5, goalNodeIds);
 
-            DriveSource competenceSource  = new MindMapDriveSource(DriveAxis.COMPETENCE, store, registry);
-            DriveSource affiliationSource = new MindMapDriveSource(DriveAxis.AFFILIATION, store, registry);
-            DriveSource autonomySource    = new MindMapDriveSource(DriveAxis.AUTONOMY, store, registry);
-
-            var moodOrchestrator = new MoodOrchestrator(MoodConfig.defaults());
             var driveOrchestrator = new DriveOrchestrator(
-                    curiosityDrive, competenceSource, affiliationSource, autonomySource,
+                    curiosityDrive,
+                    new io.casehub.neocortex.cognition.drive.CompetenceDrive(strategy),
+                    new io.casehub.neocortex.cognition.drive.AffiliationDrive(userModel, 0.3, java.time.Duration.ofHours(1)),
+                    new io.casehub.neocortex.cognition.drive.AutonomyDrive(mentalModel, 0.5),
                     moodOrchestrator, new DriveComposer(), DriveConfig.defaults());
+
+            var innerLife = new io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator(
+                    reflectionOrch, List.of(),
+                    io.casehub.neocortex.cognition.innerlife.InnerLifeConfig.defaults(),
+                    driveOrchestrator, sessionPipeline);
+
+            var goals = new io.casehub.neocortex.cognition.goal.GoalProposalOrchestrator(
+                    driveOrchestrator, List.of(), null, Optional.empty(),
+                    null, null, null,
+                    io.casehub.neocortex.cognition.goal.GoalProposalConfig.defaults(),
+                    io.casehub.neocortex.cognition.goal.GoalEscalationConfig.defaults(),
+                    java.time.Clock.systemUTC());
 
             var mediator = new ConsolidationMediator();
             var config   = cognitionConfig != null ? cognitionConfig : CognitionConfig.all();
 
             var core = new CognitionCore(
                     moodOrchestrator, driveOrchestrator,
-                    null, null, null, null, null, null,
-                    null, config,
+                    userModel, mentalModel, strategy,
+                    narrativeOrch, goals, hygiene,
+                    innerLife, config,
                     store, null, null, null, null, null,
-                    mediator, null);
+                    mediator, sessionPipeline);
 
             core.setDefaultsRegistry(registry);
 

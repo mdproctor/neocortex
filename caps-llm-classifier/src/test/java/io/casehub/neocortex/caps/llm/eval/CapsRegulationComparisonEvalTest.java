@@ -8,6 +8,7 @@ import io.casehub.neocortex.caps.CapsEngine;
 import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognitive.EmotionType;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationResult;
@@ -226,7 +227,8 @@ class CapsRegulationComparisonEvalTest {
                                     .with("appraisal", true).with("salience", true)
                                     .with("regulation", true);
         var mindMap = new InMemoryMindMapStore();
-        var core    = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap, defaultsRegistry);
+        var core    = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
+        core.setDefaultsRegistry(defaultsRegistry);
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configureRegulation(capsEngine, RegulationCascadeConfig.defaults());
 
@@ -244,7 +246,7 @@ class CapsRegulationComparisonEvalTest {
                 .with("appraisal", true).with("salience", true)
                 .with("regulation", true);
         var mindMap = new InMemoryMindMapStore();
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configureRegulation();
 

@@ -36,7 +36,7 @@ class SearchBudgetPathologicalThresholdTest {
 
         var harness = CognitionTestHarness.builder()
                                           .agentFromDefaults(AGENT, CognitiveDefaults.empty(AGENT)
-                                                                                     .withSearchBudgetConfig(SearchBudgetConfig.defaults())
+                                                                                     .withSearchBudgetConfig(new SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.3, 1.4, null, 0.85, null, null))
                                                                                      .withHabituationConfig(HabituationConfig.defaults()))
                                           .withHabituationState(AGENT, habituation)
                                           .withAppraisalResult(AGENT, appraisalResult)
@@ -63,7 +63,7 @@ class SearchBudgetPathologicalThresholdTest {
 
         var harness = CognitionTestHarness.builder()
                                           .agentFromDefaults(AGENT, CognitiveDefaults.empty(AGENT)
-                                                                                     .withSearchBudgetConfig(SearchBudgetConfig.defaults())
+                                                                                     .withSearchBudgetConfig(new SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.3, 1.4, null, 0.85, null, null))
                                                                                      .withHabituationConfig(HabituationConfig.defaults()))
                                           .withHabituationState(AGENT, habituation)
                                           .withAppraisalResult(AGENT, appraisalResult)
@@ -83,7 +83,7 @@ class SearchBudgetPathologicalThresholdTest {
         // No habituation state available → should not collapse even with high arousal
         var harness = CognitionTestHarness.builder()
                                           .agentFromDefaults(AGENT, CognitiveDefaults.empty(AGENT)
-                                                                                     .withSearchBudgetConfig(SearchBudgetConfig.defaults()))
+                                                                                     .withSearchBudgetConfig(new SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.3, 1.4, null, 0.85, null, null)))
                                           .build();
 
         harness.observe(AGENT, TENANT, "test observation");
@@ -108,7 +108,7 @@ class SearchBudgetPathologicalThresholdTest {
 
         var harness = CognitionTestHarness.builder()
                                           .agentFromDefaults(AGENT, CognitiveDefaults.empty(AGENT)
-                                                                                     .withSearchBudgetConfig(SearchBudgetConfig.defaults())
+                                                                                     .withSearchBudgetConfig(new SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.3, 1.4, null, 0.85, null, null))
                                                                                      .withHabituationConfig(HabituationConfig.defaults()))
                                           .withHabituationState(AGENT, habituation)
                                           .withAppraisalResult(AGENT, appraisalResult)

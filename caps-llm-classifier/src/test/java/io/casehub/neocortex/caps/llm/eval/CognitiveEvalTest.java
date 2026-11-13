@@ -3,6 +3,7 @@ package io.casehub.neocortex.caps.llm.eval;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.prompt.CognitionRenderContext;
 import org.junit.jupiter.api.Tag;
@@ -51,7 +52,7 @@ class CognitiveEvalTest {
         Map<String, List<CognitiveDeltaCapture.DeltaRecord>> allDeltas = new LinkedHashMap<>();
 
         for (var level : levels()) {
-            var core = CognitionCoreTestBuilder.buildCore(level.config());
+            var core = CognitionTestHarness.builder().withCognitionConfig(level.config()).build().core();
             var capture = new CognitiveDeltaCapture();
 
             for (int tick = 1; tick <= TICKS; tick++) {

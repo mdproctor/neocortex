@@ -3,6 +3,7 @@ package io.casehub.neocortex.caps.llm.eval;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationStrategy;
 import io.casehub.neocortex.cognition.salience.ConcernBasedSalienceStrategy;
@@ -121,7 +122,7 @@ class EmotionRegulationTickEvalTest {
                 .with("salience", true)
                 .with("regulation", true);
 
-        var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline);
+        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).build().core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configureRegulation();
 
