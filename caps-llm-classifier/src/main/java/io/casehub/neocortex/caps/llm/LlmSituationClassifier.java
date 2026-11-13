@@ -27,10 +27,13 @@ public class LlmSituationClassifier implements SituationClassifier {
     private static final double CONFIDENCE_THRESHOLD = 0.3;
     private static final Duration TIMEOUT = Duration.ofSeconds(120);
 
+    private static final double TENSION_THRESHOLD = 0.5;
+
     private final SessionPipeline pipeline;
     private final String model;
     private final ObjectMapper mapper = new ObjectMapper();
     private final String systemPrompt;
+    private final CapsTopology topology;
     private final Set<String> validNodeIds;
 
     public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology) {
@@ -40,6 +43,7 @@ public class LlmSituationClassifier implements SituationClassifier {
     public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology, String model) {
         this.pipeline = pipeline;
         this.model = model;
+        this.topology = topology;
         this.validNodeIds = topology.nodes().entrySet().stream()
             .filter(e -> e.getValue().type() == NodeType.INPUT)
             .map(Map.Entry::getKey)
@@ -55,13 +59,30 @@ public class LlmSituationClassifier implements SituationClassifier {
             return new ClassificationResult(List.of());
         }
 
+        boolean hasPersonality = PersonalityPromptBuilder.hasDisposition(metadata);
+        double tension = hasPersonality ? DispositionTension.maxTension(metadata) : 0.0;
+        boolean pathC = tension > TENSION_THRESHOLD;
+
         var sessionId = context.agentId() != null
                 ? "classifier-" + context.agentId()
                 : "classifier-" + java.util.UUID.randomUUID();
-        var init = AgentSessionInit.of(systemPrompt).withModel(model);
+
+        AgentSessionInit init;
+        if (pathC) {
+            var tensionEntry = DispositionTension.topTension(metadata).orElseThrow();
+            String personalitySystem = PersonalityPromptBuilder.personalitySystemPrompt(
+                metadata, tensionEntry, topology);
+            init = AgentSessionInit.of(personalitySystem).withModel(model);
+        } else {
+            init = AgentSessionInit.of(systemPrompt).withModel(model);
+        }
+
         var session = pipeline.openSession(sessionId, init);
         try {
             String userPrompt = buildUserPrompt(description, metadata);
+            if (hasPersonality) {
+                userPrompt += PersonalityPromptBuilder.userPromptSuffix(metadata);
+            }
             var events = session.query(userPrompt)
                 .collect().asList()
                 .await().atMost(TIMEOUT);

@@ -22,9 +22,13 @@ import io.smallrye.mutiny.Uni;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import io.casehub.neocortex.caps.ClassificationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -177,12 +181,119 @@ class LlmSituationClassifierTest {
             .isEqualTo("{\"a\": 1}");
     }
 
+    @Test
+    void classify_pathA_appendsDispositionToUserPrompt() {
+        var capturedPrompts = new ArrayList<String>();
+        var pipeline = capturingPipeline(capturedPrompts,
+            "{\"activations\": [{\"node\": \"reward\", \"confidence\": 0.8}]}");
+        var classifier = new LlmSituationClassifier(pipeline, TOPOLOGY);
+
+        var metadata = new HashMap<String, String>();
+        metadata.put("disposition.socialOrient", "competitive");
+        metadata.put("disposition.ruleFollowing", "flexible");
+        metadata.put("disposition.riskAppetite", "bold");
+        metadata.put("disposition.autonomy", "high");
+        metadata.put("disposition.conflictMode", "assertive");
+
+        classifier.classify("Got rewarded", metadata,
+            ClassificationContext.of("t1"));
+
+        assertThat(capturedPrompts).hasSize(1);
+        assertThat(capturedPrompts.getFirst()).contains("competitive");
+        assertThat(capturedPrompts.getFirst()).contains("Classify the situation as this character");
+    }
+
+    @Test
+    void classify_pathC_usesPersonalitySystemPrompt() {
+        var capturedInits = new ArrayList<AgentSessionInit>();
+        var pipeline = capturingInitPipeline(capturedInits,
+            "{\"activations\": [{\"node\": \"reward\", \"confidence\": 0.7}]}");
+        var classifier = new LlmSituationClassifier(pipeline, TOPOLOGY);
+
+        var metadata = new HashMap<String, String>();
+        metadata.put("disposition.riskAppetite", "bold");
+        metadata.put("disposition.ruleFollowing", "strict");
+
+        classifier.classify("Ambiguous situation", metadata,
+            ClassificationContext.of("t1"));
+
+        assertThat(capturedInits).hasSize(1);
+        assertThat(capturedInits.getFirst().systemPrompt())
+            .contains("through a specific character's lens");
+    }
+
+    @Test
+    void classify_pathC_alsoAppendsDispositionToUserPrompt() {
+        var capturedPrompts = new ArrayList<String>();
+        var pipeline = capturingPipeline(capturedPrompts,
+            "{\"activations\": [{\"node\": \"reward\", \"confidence\": 0.7}]}");
+        var classifier = new LlmSituationClassifier(pipeline, TOPOLOGY);
+
+        var metadata = new HashMap<String, String>();
+        metadata.put("disposition.riskAppetite", "bold");
+        metadata.put("disposition.ruleFollowing", "strict");
+
+        classifier.classify("Ambiguous situation", metadata,
+            ClassificationContext.of("t1"));
+
+        assertThat(capturedPrompts).hasSize(1);
+        assertThat(capturedPrompts.getFirst()).contains("bold");
+        assertThat(capturedPrompts.getFirst()).contains("Classify the situation as this character");
+    }
+
+    @Test
+    void classify_noDisposition_usesDefaultPrompt() {
+        var capturedPrompts = new ArrayList<String>();
+        var pipeline = capturingPipeline(capturedPrompts,
+            "{\"activations\": [{\"node\": \"reward\", \"confidence\": 0.8}]}");
+        var classifier = new LlmSituationClassifier(pipeline, TOPOLOGY);
+
+        classifier.classify("Got rewarded", Map.of(),
+            ClassificationContext.of("t1"));
+
+        assertThat(capturedPrompts).hasSize(1);
+        assertThat(capturedPrompts.getFirst()).doesNotContain("Character disposition");
+    }
+
+    @Test
+    void classify_noDisposition_usesDefaultSystemPrompt() {
+        var capturedInits = new ArrayList<AgentSessionInit>();
+        var pipeline = capturingInitPipeline(capturedInits,
+            "{\"activations\": [{\"node\": \"reward\", \"confidence\": 0.8}]}");
+        var classifier = new LlmSituationClassifier(pipeline, TOPOLOGY);
+
+        classifier.classify("Got rewarded", Map.of(),
+            ClassificationContext.of("t1"));
+
+        assertThat(capturedInits).hasSize(1);
+        assertThat(capturedInits.getFirst().systemPrompt())
+            .doesNotContain("through a specific character's lens");
+        assertThat(capturedInits.getFirst().systemPrompt())
+            .contains("psychological situation classifier");
+    }
+
+    private static SessionPipeline capturingPipeline(List<String> capturedPrompts, String response) {
+        return buildPipeline(response, null, capturedPrompts);
+    }
+
+    private static SessionPipeline capturingInitPipeline(List<AgentSessionInit> capturedInits, String response) {
+        return buildPipeline(response, capturedInits, null);
+    }
+
     private static SessionPipeline stubPipeline(String response) {
+        return buildPipeline(response, null, null);
+    }
+
+    private static SessionPipeline buildPipeline(String response,
+                                                  List<AgentSessionInit> capturedInits,
+                                                  List<String> capturedPrompts) {
         AgentBackend backend = new AgentBackend() {
             @Override public String key() { return "stub"; }
             @Override public AgentSession openSession(AgentSessionInit init) {
+                if (capturedInits != null) capturedInits.add(init);
                 return new AgentSession() {
                     @Override public Multi<AgentEvent> query(String prompt) {
+                        if (capturedPrompts != null) capturedPrompts.add(prompt);
                         return Multi.createFrom().items(
                             (AgentEvent) new AgentEvent.TextDelta(response),
                             new AgentEvent.InvocationComplete(0, 0, 0, 0, 0, null, 0, 0, null, 1, false, null, null));
