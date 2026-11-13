@@ -200,16 +200,11 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
     }
 
     public Optional<AppraisalResult> currentResult(String agentId, String tenantId) {
-        var key = agentId + ":" + tenantId;
-        var result = results.get(key);
-        if (result == null) return Optional.empty();
-        var regulated = regulatedNarratives.get(key);
-        if (regulated != null) {
-            return Optional.of(new AppraisalResult(
-                    result.emotions(), result.actionTendencies(),
-                    result.updatedHabituation(), regulated));
-        }
-        return Optional.of(result);
+        return Optional.ofNullable(results.get(agentId + ":" + tenantId));
+    }
+
+    public Optional<String> currentRegulatedNarrative(String agentId, String tenantId) {
+        return Optional.ofNullable(regulatedNarratives.get(agentId + ":" + tenantId));
     }
 
     public void setRegulatedNarrative(String agentId, String tenantId, String narrative) {

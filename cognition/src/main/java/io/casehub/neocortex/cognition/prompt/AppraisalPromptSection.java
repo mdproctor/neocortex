@@ -29,6 +29,10 @@ public class AppraisalPromptSection implements CognitionPromptRenderer {
 
     @Override
     public @Nullable String render(CognitionRenderContext context) {
+        var regulated = participant.currentRegulatedNarrative(context.agentId(), context.tenantId());
+        if (regulated.isPresent()) {
+            return regulated.get().strip();
+        }
         return participant.currentResult(context.agentId(), context.tenantId())
                           .map(this::renderEvocative)
                           .orElse(null);

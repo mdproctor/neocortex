@@ -100,7 +100,7 @@ class PipelineCoherenceEvalTest {
                 buildTransition("appraisal-to-regulation",
                         serializeAppraisal(trace),
                         serializeRegulation(trace),
-                        "A regulation strategy should be selected that addresses the shame. RESPONSE_MODULATION or COGNITIVE_CHANGE are expected for shame with high ruleFollowing. The strategy should target shame-related emotions."),
+                        "A regulation strategy should be selected that addresses the shame. At this intensity (>0.75), ATTENTIONAL_DEPLOYMENT is architecturally expected (safety gate). The strategy should target shame-related emotions. The regulated intensity should be lower than the peak. The regulation narrative should describe the felt state AFTER regulation, distinct from the raw appraisal."),
                 buildTransition("regulation-to-prompt",
                         serializeRegulation(trace),
                         serializePromptSections(trace),
