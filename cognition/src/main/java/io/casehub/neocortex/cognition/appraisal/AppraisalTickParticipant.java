@@ -181,7 +181,8 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
 
         if (situationClassifier != null && observation != null) {
             try {
-                var activations = situationClassifier.classify(observation, Map.of());
+                var classCtx = new io.casehub.neocortex.caps.ClassificationContext(context.tenantId(), context.agentId());
+                var activations = situationClassifier.classify(observation, Map.of(), classCtx).activations();
                 activations = RelationalBiasing.apply(targetSchema, activations);
                 channelWeights.put(agentKey, TopologyChannelWeighter.weight(activations));
             } catch (Exception e) {
