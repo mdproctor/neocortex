@@ -312,6 +312,7 @@ class PipelineCoherenceEvalTest {
         for (var snapshot : chronological) {
             var trace = snapshot.trace();
             if (trace == null) continue;
+            if (trace.appraisalResult() == null) continue;
 
             sb.append("## Tick %d\n".formatted(snapshot.tick()));
             if (obsIndex < observations.size()) {
