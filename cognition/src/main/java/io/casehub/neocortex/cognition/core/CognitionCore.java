@@ -660,7 +660,8 @@ private final              java.util.concurrent.atomic.AtomicInteger            
                 sections.add(new ConstraintPromptSection(softConstraints));
             }
         }
-        if (isEnabled(config.moodEnabled(), AttentionRelevance.MOOD)) {
+        var appraisalActive = config.appraisalEnabled() && appraisalParticipant != null;
+        if (isEnabled(config.moodEnabled(), AttentionRelevance.MOOD) && !appraisalActive) {
             sections.add(new MoodPromptSection(mood));
         }
         if (isEnabled(config.drivesEnabled(), AttentionRelevance.DRIVES)) {
@@ -684,7 +685,6 @@ private final              java.util.concurrent.atomic.AtomicInteger            
         if (isEnabled(config.goalsEnabled(), AttentionRelevance.GOALS) && goals != null) {
             sections.add(new EmergentGoalPromptSection(goals));
         }
-        var appraisalActive = config.appraisalEnabled() && appraisalParticipant != null;
         if (appraisalActive) {
             sections.add(new AppraisalPromptSection(appraisalParticipant));
             sections.add(new ChannelEmphasisPromptSection(appraisalParticipant));

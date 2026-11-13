@@ -271,6 +271,10 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
         if (result != null) {
             String key = context.agentId() + ":" + context.tenantId();
             results.put(key, result);
+            if (result.narrative() != null && !result.narrative().isBlank()) {
+                appraisalParticipant.setRegulatedNarrative(
+                        context.agentId(), context.tenantId(), result.narrative());
+            }
             if (cognitiveResourcePool != null) {
                 cognitiveResourcePool.recordEffort(context.agentId(), context.tenantId(),
                         regulationEffort * REGULATION_CONTRIBUTION_RATE);

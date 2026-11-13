@@ -40,7 +40,7 @@ final class EvalTestSupport {
                     ClaudeAgentProperties props = new ClaudeAgentProperties() {
                         @Override public java.util.Optional<String> binaryPath() { return java.util.Optional.empty(); }
                         @Override public java.time.Duration defaultTimeout() { return java.time.Duration.ofMinutes(5); }
-                        @Override public int maxConcurrentSessions() { return 4; }
+                        @Override public int maxConcurrentSessions() { return 10; }
                     };
                     sharedClient = new ClaudeAgentClient(props);
                     sharedBackend = new ClaudeAgentProvider(sharedClient);
@@ -65,11 +65,11 @@ final class EvalTestSupport {
             @Override public Optional<AgentBackend> resolve(String key, String instanceId) { return Optional.of(backend); }
             @Override public List<AgentBackend> resolveByKey(String key) { return List.of(backend); }
         };
-        var pool = new PoolDeclaration("eval", "eval", "claude", 0, 6, null, Map.of(), Map.of());
+        var pool = new PoolDeclaration("eval", "eval", "claude", 0, 10, null, Map.of(), Map.of());
         var poolRegistry = new SessionPoolRegistry(List.of(pool), registry);
         var lifecycleManager = new SessionLifecycleManager(poolRegistry);
         return new SessionPipeline(lifecycleManager, "claude",
-                new AimdAdmissionStrategy(6, 5, Duration.ofSeconds(120)), 50_000);
+                new AimdAdmissionStrategy(10, 8, Duration.ofSeconds(120)), 50_000);
     }
 
     private EvalTestSupport() {}

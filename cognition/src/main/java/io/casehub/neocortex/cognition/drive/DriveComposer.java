@@ -35,12 +35,19 @@ public class DriveComposer {
             if (disposition != null) {
                 intensity = applyPersonalityModulation(intensity, axis, disposition, config);
             }
+            double appraisalDelta = 0;
             for (var layer : modulations) {
-                intensity += layer.modulation().getOrDefault(axis, 0.0) * layer.strength();
+                double delta = layer.modulation().getOrDefault(axis, 0.0) * layer.strength();
+                intensity += delta;
+                if ("appraisal".equals(layer.source())) appraisalDelta += delta;
             }
 
             intensity = Math.clamp(intensity, config.minIntensity(), config.maxIntensity());
-            modulated.put(axis, new DriveIntensity(axis, intensity, raw.trigger()));
+            String trigger = raw.trigger();
+            if (Math.abs(appraisalDelta) > 0.2) {
+                trigger = appraisalDelta > 0 ? "elevated by emotional response" : "dampened by emotional response";
+            }
+            modulated.put(axis, new DriveIntensity(axis, intensity, trigger));
         }
 
         double composite = computeComposite(modulated, config);

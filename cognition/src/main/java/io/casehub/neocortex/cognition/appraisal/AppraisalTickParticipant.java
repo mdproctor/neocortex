@@ -45,6 +45,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
     private volatile java.util.function.@Nullable BiFunction<String, String, Optional<io.casehub.neocortex.cognition.search.SearchBudget>> searchBudgetAccessor;
 
     private final ConcurrentHashMap<String, ChannelWeightProfile> channelWeights  = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> regulatedNarratives = new ConcurrentHashMap<>();
 
 
     public Map<String, Double> currentConcernSalience(String agentId, String tenantId) {
@@ -119,6 +120,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
         if (!config.appraisalEnabled()) {return;}
 
         var agentKey    = context.agentId() + ":" + context.tenantId();
+        regulatedNarratives.remove(agentKey);
         var observation = context.observation();
 
         var profileOpt = driveOrchestrator.currentDrives(context.agentId(), context.tenantId());
@@ -181,7 +183,8 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
 
         if (situationClassifier != null && observation != null) {
             try {
-                var activations = situationClassifier.classify(observation, Map.of());
+                var classCtx = new io.casehub.neocortex.caps.ClassificationContext(context.tenantId(), context.agentId());
+                var activations = situationClassifier.classify(observation, Map.of(), classCtx).activations();
                 activations = RelationalBiasing.apply(targetSchema, activations);
                 channelWeights.put(agentKey, TopologyChannelWeighter.weight(activations));
             } catch (Exception e) {
@@ -199,6 +202,14 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
 
     public Optional<AppraisalResult> currentResult(String agentId, String tenantId) {
         return Optional.ofNullable(results.get(agentId + ":" + tenantId));
+    }
+
+    public Optional<String> currentRegulatedNarrative(String agentId, String tenantId) {
+        return Optional.ofNullable(regulatedNarratives.get(agentId + ":" + tenantId));
+    }
+
+    public void setRegulatedNarrative(String agentId, String tenantId, String narrative) {
+        regulatedNarratives.put(agentId + ":" + tenantId, narrative);
     }
 
     public @Nullable HabituationState currentHabituation(String agentId, String tenantId) {
