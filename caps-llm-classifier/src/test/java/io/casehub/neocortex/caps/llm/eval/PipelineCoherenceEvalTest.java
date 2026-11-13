@@ -6,6 +6,7 @@ import io.casehub.eidos.api.DispositionValue;
 import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.CoherenceScore;
 import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.TwoTierCoherenceJudge;
 import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.StageTransition;
+import io.casehub.neocortex.caps.llm.LlmSituationClassifier;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
 import io.casehub.neocortex.cognition.core.CognitionCore;
@@ -135,14 +136,16 @@ class PipelineCoherenceEvalTest {
                 .with("mood", true)
                 .with("drives", true)
                 .with("appraisal", true)
-                .with("salience", true)
-                .with("curiosity", true);
+                .with("salience", true);
 
         var mindMap = new InMemoryMindMapStore();
         seedCuriosityMindMap(mindMap);
 
+        var topology = EvalTestSupport.loadTopology();
+        var classifier = new LlmSituationClassifier(sessionPipeline, topology);
+
         var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
-        core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
+        core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
 
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of("research"), observation);
@@ -166,7 +169,7 @@ class PipelineCoherenceEvalTest {
                 buildTransition("trace-to-prompt",
                         serializeAppraisal(trace) + "\n\n" + serializeDrives(trace),
                         serializePromptSections(trace),
-                        "Prompt sections should reflect the curiosity state. CuriosityPromptSection should be rendered with exploration language. The overall prompt should encourage investigation, not avoidance.")
+                        "Prompt sections should reflect the curiosity state. AppraisalPromptSection should convey novelty and discovery. DrivePromptSection should show curiosity activation. The overall prompt tone should encourage investigation, not avoidance.")
         );
 
         assertCoherence("curiosity-exploration", transitions);
@@ -210,8 +213,11 @@ class PipelineCoherenceEvalTest {
                 .with("salience", true);
 
         var mindMap = new InMemoryMindMapStore();
+        var topology = EvalTestSupport.loadTopology();
+        var classifier = new LlmSituationClassifier(sessionPipeline, topology);
+
         var core = CognitionCoreTestBuilder.buildCore(config, sessionPipeline, mindMap);
-        core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
+        core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
 
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of("security"), observation);
@@ -227,11 +233,11 @@ class PipelineCoherenceEvalTest {
                 buildTransition("appraisal-to-channel-weights",
                         serializeAppraisal(trace) + "\n\n" + serializeHabituation(trace),
                         serializeChannelWeights(trace),
-                        "High arousal from appraisal should modulate channel weights. Search budget parameters should shift to reflect urgency — increased depth/convergence for focused problem-solving under threat."),
+                        "The appraisal detected a high-threat crisis. Channel weights should reflect this — elevated somatic and action tendency channels for threat response, or attentional focus for urgent problem-solving."),
                 buildTransition("channel-weights-to-prompt",
                         serializeChannelWeights(trace),
                         serializePromptSections(trace),
-                        "SearchBudgetPromptSection should reflect the arousal-driven parameter shift. The overall prompt tone should match the urgency of the situation without contradicting the channel weight profile.")
+                        "The prompt sections should reflect the crisis. AppraisalPromptSection should convey fear and urgency. Channel emphasis should be consistent with the threat profile. The overall tone should match the urgency of the situation.")
         );
 
         assertCoherence("appraisal-channel-weight", transitions);

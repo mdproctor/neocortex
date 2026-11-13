@@ -6,6 +6,7 @@ import io.casehub.neocortex.cognitive.index.PersonalityFacet;
 import io.casehub.neocortex.cognitive.index.RelationalSchema;
 import io.casehub.platform.agent.AgentEvent;
 import io.casehub.platform.agent.AgentSessionInit;
+import io.casehub.platform.agent.session.ClearingPolicy;
 import io.casehub.platform.agent.session.SessionPipeline;
 import org.jspecify.annotations.Nullable;
 
@@ -130,7 +131,7 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
         var pipeline = this.sessionPipeline;
         if (pipeline == null) return null;
         String userMessage = buildUserMessage(context);
-        var session = pipeline.openSession("llm-appraisal-" + context.agentId(), AgentSessionInit.of(SYSTEM_PROMPT));
+        var session = pipeline.openSession("llm-appraisal-" + context.agentId(), AgentSessionInit.of(SYSTEM_PROMPT), ClearingPolicy.EVERY_CALL);
         var responseText = new StringBuilder();
         session.query(userMessage).subscribe().asStream()
             .filter(e -> e instanceof AgentEvent.TextDelta)
