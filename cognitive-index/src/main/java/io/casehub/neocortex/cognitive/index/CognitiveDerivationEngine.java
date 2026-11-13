@@ -187,24 +187,25 @@ public final class CognitiveDerivationEngine {
     private CognitiveDerivationEngine() {}
 
     public static CognitiveDefaults derive(DescriptorView descriptor) {
-        PersonalityWeights      personality      = derivePersonality(descriptor.dispositionProfile());
-        MoodBaseline            mood             = deriveMoodBaseline(descriptor.disposition());
-        CuriosityConfig         curiosity        = deriveCuriosity(descriptor.disposition(), descriptor.goals());
-        TemporalFocusConfig     temporalFocus    = deriveTemporalFocus(descriptor.goals());
-        CbrStrategyDefaults     cbrStrategy      = deriveCbrStrategy(descriptor.disposition());
-        SocialCognitionDefaults socialCognition  = deriveSocialCognition(descriptor.disposition());
-        GraphStructureDefaults  graphStructure   = deriveGraphStructure(descriptor.dispositionProfile());
-        ExtractionBiasDefaults  extractionBias   = deriveExtractionBias(descriptor.dispositionProfile());
-        AppraisalWeights        appraisal        = deriveAppraisalWeights(descriptor.dispositionProfile(), descriptor.disposition());
-        HabituationConfig       habituation      = deriveHabituationConfig(descriptor.disposition(), descriptor.goals());
-        RegulationDefaults      regulation       = deriveRegulationDefaults(descriptor.disposition());
-        SearchBudgetConfig      searchBudget     = deriveSearchBudgetDefaults(descriptor.personalityFacets(), descriptor.disposition(), graphStructure != null ? graphStructure.connectiveBias() : 0.5);
-        CognitiveResourcePoolConfig poolConfig   = derivePoolConfig(descriptor.personalityFacets(), descriptor.disposition());
-        RecurringThoughtConfig  recurringThought = deriveRecurringThoughtConfig(descriptor.personalityFacets(), descriptor.disposition());
-        CognitiveCapacityConfig capacity         = deriveCapacity(descriptor.dispositionProfile());
-        double                  personalityDom   = derivePersonalityDominance(descriptor.formationPadSummary());
-        ExpressionStyleDefaults expressionStyles = deriveExpressionStyles(descriptor.personalityFacets());
-        PersonalityProfile      personalityProf  = new PersonalityProfile(personality, personalityDom, expressionStyles, null, descriptor.personalityFacets());
+        var                         facets           = descriptor.personalityFacets();
+        PersonalityWeights          personality      = derivePersonality(descriptor.dispositionProfile());
+        MoodBaseline                mood             = deriveMoodBaseline(descriptor.disposition(), facets);
+        CuriosityConfig             curiosity        = deriveCuriosity(descriptor.disposition(), descriptor.goals(), facets);
+        TemporalFocusConfig         temporalFocus    = deriveTemporalFocus(descriptor.goals());
+        CbrStrategyDefaults         cbrStrategy      = deriveCbrStrategy(descriptor.disposition(), facets);
+        SocialCognitionDefaults     socialCognition  = deriveSocialCognition(descriptor.disposition(), facets);
+        GraphStructureDefaults      graphStructure   = deriveGraphStructure(descriptor.dispositionProfile(), facets);
+        ExtractionBiasDefaults      extractionBias   = deriveExtractionBias(descriptor.dispositionProfile(), facets);
+        AppraisalWeights            appraisal        = deriveAppraisalWeights(descriptor.dispositionProfile(), descriptor.disposition(), facets);
+        HabituationConfig           habituation      = deriveHabituationConfig(descriptor.disposition(), descriptor.goals(), facets);
+        RegulationDefaults          regulation       = deriveRegulationDefaults(descriptor.disposition(), facets);
+        SearchBudgetConfig          searchBudget     = deriveSearchBudgetDefaults(facets, descriptor.disposition(), graphStructure != null ? graphStructure.connectiveBias() : 0.5);
+        CognitiveResourcePoolConfig poolConfig       = derivePoolConfig(facets, descriptor.disposition());
+        RecurringThoughtConfig      recurringThought = deriveRecurringThoughtConfig(facets, descriptor.disposition());
+        CognitiveCapacityConfig     capacity         = deriveCapacity(descriptor.dispositionProfile(), facets);
+        double                      personalityDom   = derivePersonalityDominance(descriptor.formationPadSummary());
+        ExpressionStyleDefaults     expressionStyles = deriveExpressionStyles(facets);
+        PersonalityProfile          personalityProf  = new PersonalityProfile(personality, personalityDom, expressionStyles, null, facets);
 
         return CognitiveDefaults.empty(descriptor.agentId())
                                 .withPersonalityProfile(personalityProf)
@@ -268,7 +269,14 @@ public final class CognitiveDerivationEngine {
         );
     }
 
+
     static CognitiveCapacityConfig deriveCapacity(List<WeightedTerm> profile) {
+        return deriveCapacity(profile, List.of());
+    }
+
+    // Tier 1: Impulsivity degrades WM — Heydarloo et al. (2024), Kofler et al. (2024)
+// Tier 2: Anxiousness narrows associative reach — attentional narrowing via Negative Affectivity (McCrae & Costa 1989, Gore & Widiger 2013)
+    static CognitiveCapacityConfig deriveCapacity(List<WeightedTerm> profile, List<PersonalityFacet> facets) {
         if (profile == null || profile.isEmpty()) {return null;}
 
         double tiWeight = 0.0, teWeight = 0.0, neWeight = 0.0, niWeight = 0.0, siWeight = 0.0;
@@ -286,6 +294,13 @@ public final class CognitiveDerivationEngine {
         double relational  = compressCapacity(0.5 * (tiWeight + teWeight));
         double associative = compressCapacity(0.5 * (neWeight + niWeight));
         double wmSpan      = compressCapacity(0.5 * (teWeight + siWeight));
+
+        if (facets != null && !facets.isEmpty()) {
+            double impulsivity = facetScore(facets, PersonalityFacet.IMPULSIVITY, 0.5);
+            double anxiousness = facetScore(facets, PersonalityFacet.ANXIOUSNESS, 0.5);
+            wmSpan -= (impulsivity - 0.5) * 0.2;
+            associative -= (anxiousness - 0.5) * 0.2;
+        }
 
         return new CognitiveCapacityConfig(relational, associative, wmSpan);
     }
@@ -337,20 +352,23 @@ public final class CognitiveDerivationEngine {
         return domainWeights.isEmpty() ? null : new PersonalityWeights(domainWeights);
     }
 
-    static MoodBaseline deriveMoodBaseline(DispositionAxes axes) {
-        if (axes == null) return null;
+    static MoodBaseline deriveMoodBaseline(DispositionAxes axes, List<PersonalityFacet> facets) {
+        if (axes == null) {return null;}
 
-        double pleasure = RISK_PLEASURE.getOrDefault(
-            lower(axes.riskAppetite()), 0.0);
-        double arousal = SOCIAL_AROUSAL.getOrDefault(
-            lower(axes.socialOrient()), 0.0);
-        double dominance = AUTONOMY_DOMINANCE.getOrDefault(
-            lower(axes.autonomy()), 0.0);
+        double pleasure  = RISK_PLEASURE.getOrDefault(lower(axes.riskAppetite()), 0.0);
+        double arousal   = SOCIAL_AROUSAL.getOrDefault(lower(axes.socialOrient()), 0.0);
+        double dominance = AUTONOMY_DOMINANCE.getOrDefault(lower(axes.autonomy()), 0.0);
+
+        if (facets != null && !facets.isEmpty()) {
+            pleasure += (facetScore(facets, PersonalityFacet.RISK_TAKING, 0.5) - 0.5) * 0.4;
+            arousal += (facetScore(facets, PersonalityFacet.EMOTIONAL_LABILITY, 0.5) - 0.5) * 0.4;
+            dominance -= (facetScore(facets, PersonalityFacet.WITHDRAWAL, 0.5) - 0.5) * 0.4;
+        }
 
         return new MoodBaseline(pleasure, arousal, dominance);
     }
 
-    static CuriosityConfig deriveCuriosity(DispositionAxes axes, List<String> goals) {
+    static CuriosityConfig deriveCuriosity(DispositionAxes axes, List<String> goals, List<PersonalityFacet> facets) {
         if (axes == null) {return null;}
 
         Map<String, Double> weights = new HashMap<>();
@@ -366,6 +384,15 @@ public final class CognitiveDerivationEngine {
                     break;
                 }
             }
+        }
+
+        if (facets != null && !facets.isEmpty()) {
+            double withdrawal  = facetScore(facets, PersonalityFacet.WITHDRAWAL, 0.5);
+            double impulsivity = facetScore(facets, PersonalityFacet.IMPULSIVITY, 0.5);
+            double riskTaking  = facetScore(facets, PersonalityFacet.RISK_TAKING, 0.5);
+            weights.merge("STRUCTURAL", -(withdrawal - 0.5) * 0.2, Double::sum);
+            weights.merge("QUALITY", -(impulsivity - 0.5) * 0.2, Double::sum);
+            weights.merge("CENTRALITY", (riskTaking - 0.5) * 0.2, Double::sum);
         }
 
         return CuriosityConfig.defaults().withCategoryWeights(weights);
@@ -391,41 +418,64 @@ public final class CognitiveDerivationEngine {
         return TemporalFocusConfig.defaults().withSubgraphProximityWeights(weights);
     }
 
-    static CbrStrategyDefaults deriveCbrStrategy(DispositionAxes axes) {
-        if (axes == null) return null;
+    static CbrStrategyDefaults deriveCbrStrategy(DispositionAxes axes, List<PersonalityFacet> facets) {
+        if (axes == null) {return null;}
 
-        double minSimilarity = RULE_MIN_SIMILARITY.getOrDefault(lower(axes.ruleFollowing()), 0.5);
-        int decayDays = RISK_DECAY_DAYS.getOrDefault(lower(axes.riskAppetite()), 90);
-        RetrievalMode mode = RULE_RETRIEVAL_MODE.getOrDefault(lower(axes.ruleFollowing()), RetrievalMode.HYBRID);
+        double        minSimilarity = RULE_MIN_SIMILARITY.getOrDefault(lower(axes.ruleFollowing()), 0.5);
+        int           decayDays     = RISK_DECAY_DAYS.getOrDefault(lower(axes.riskAppetite()), 90);
+        RetrievalMode mode          = RULE_RETRIEVAL_MODE.getOrDefault(lower(axes.ruleFollowing()), RetrievalMode.HYBRID);
+
+        if (facets != null && !facets.isEmpty()) {
+            double impulsivity = facetScore(facets, PersonalityFacet.IMPULSIVITY, 0.5);
+            double riskTaking  = facetScore(facets, PersonalityFacet.RISK_TAKING, 0.5);
+            minSimilarity -= (impulsivity - 0.5) * 0.2;
+            minSimilarity = Math.max(0.1, Math.min(0.9, minSimilarity));
+            decayDays += (int) ((riskTaking - 0.5) * 60);
+            decayDays     = Math.max(30, decayDays);
+        }
 
         return new CbrStrategyDefaults(minSimilarity, decayDays, mode);
     }
 
-    static SocialCognitionDefaults deriveSocialCognition(DispositionAxes axes) {
-        if (axes == null) return null;
+    static SocialCognitionDefaults deriveSocialCognition(DispositionAxes axes, List<PersonalityFacet> facets) {
+        if (axes == null) {return null;}
 
-        double trustRate = SOCIAL_TRUST_RATE.getOrDefault(lower(axes.socialOrient()), 0.5);
+        double                 trustRate    = SOCIAL_TRUST_RATE.getOrDefault(lower(axes.socialOrient()), 0.5);
         ConflictInterpretation conflictMode = CONFLICT_INTERPRETATION.getOrDefault(lower(axes.conflictMode()), ConflictInterpretation.NEUTRAL);
+
+        if (facets != null && !facets.isEmpty()) {
+            double suspiciousness = facetScore(facets, PersonalityFacet.SUSPICIOUSNESS, 0.5);
+            trustRate -= (suspiciousness - 0.5) * 0.4;
+            trustRate = Math.max(0.05, Math.min(0.95, trustRate));
+        }
 
         return new SocialCognitionDefaults(trustRate, conflictMode);
     }
 
     private static final Set<String> HOLISTIC_FUNCTIONS = Set.of("ni", "fe", "ne", "fi");
 
-    static GraphStructureDefaults deriveGraphStructure(List<WeightedTerm> profile) {
-        if (profile == null || profile.isEmpty()) return null;
+    // Tier 2: Withdrawal reduces connective bias — Detachment → reduced social node connectivity (McCrae & Costa 1989, Gore & Widiger 2013)
+    static GraphStructureDefaults deriveGraphStructure(List<WeightedTerm> profile, List<PersonalityFacet> facets) {
+        if (profile == null || profile.isEmpty()) {return null;}
 
         double holisticWeight = 0.0;
-        double totalWeight = 0.0;
+        double totalWeight    = 0.0;
         for (WeightedTerm term : profile) {
             totalWeight += term.weight();
             if (HOLISTIC_FUNCTIONS.contains(term.term().toLowerCase())) {
                 holisticWeight += term.weight();
             }
         }
-        if (totalWeight == 0.0) return null;
+        if (totalWeight == 0.0) {return null;}
 
         double connectiveBias = holisticWeight / totalWeight;
+
+        if (facets != null && !facets.isEmpty()) {
+            double withdrawal = facetScore(facets, PersonalityFacet.WITHDRAWAL, 0.5);
+            connectiveBias -= (withdrawal - 0.5) * 0.2;
+            connectiveBias = Math.max(0.0, Math.min(1.0, connectiveBias));
+        }
+
         GraphStructureDefaults.InferenceStyle style;
         if (connectiveBias > 0.6) {
             style = GraphStructureDefaults.InferenceStyle.CONNECTIVE;
@@ -441,22 +491,31 @@ public final class CognitiveDerivationEngine {
     private static final Set<String> ANALYTICAL_FUNCTIONS = Set.of("ni", "te", "ti", "si");
     private static final Set<String> EMPATHETIC_FUNCTIONS = Set.of("fe", "fi");
 
-    static ExtractionBiasDefaults deriveExtractionBias(List<WeightedTerm> profile) {
-        if (profile == null || profile.isEmpty()) return null;
+    // Tier 1: Callousness reduces relationship bias — Blair (2005, 2008, 2013) Nature Reviews Neuroscience
+// Tier 2: Emotional Lability amplifies affect sensitivity — McCrae & Costa 1989, Gore & Widiger 2013
+    static ExtractionBiasDefaults deriveExtractionBias(List<WeightedTerm> profile, List<PersonalityFacet> facets) {
+        if (profile == null || profile.isEmpty()) {return null;}
 
         double analyticalWeight = 0.0;
         double empatheticWeight = 0.0;
-        double totalWeight = 0.0;
+        double totalWeight      = 0.0;
         for (WeightedTerm term : profile) {
             String fn = term.term().toLowerCase();
             totalWeight += term.weight();
-            if (ANALYTICAL_FUNCTIONS.contains(fn)) analyticalWeight += term.weight();
-            if (EMPATHETIC_FUNCTIONS.contains(fn)) empatheticWeight += term.weight();
+            if (ANALYTICAL_FUNCTIONS.contains(fn)) {analyticalWeight += term.weight();}
+            if (EMPATHETIC_FUNCTIONS.contains(fn)) {empatheticWeight += term.weight();}
         }
-        if (totalWeight == 0.0) return null;
+        if (totalWeight == 0.0) {return null;}
 
-        double relationshipBias = 0.8 + 0.6 * (analyticalWeight / totalWeight);
+        double relationshipBias  = 0.8 + 0.6 * (analyticalWeight / totalWeight);
         double affectSensitivity = 0.8 + 0.6 * (empatheticWeight / totalWeight);
+
+        if (facets != null && !facets.isEmpty()) {
+            double callousness       = facetScore(facets, PersonalityFacet.CALLOUSNESS, 0.5);
+            double emotionalLability = facetScore(facets, PersonalityFacet.EMOTIONAL_LABILITY, 0.5);
+            relationshipBias -= (callousness - 0.5) * 0.2;
+            affectSensitivity += (emotionalLability - 0.5) * 0.2;
+        }
 
         return new ExtractionBiasDefaults(relationshipBias, affectSensitivity);
     }
@@ -478,7 +537,15 @@ public final class CognitiveDerivationEngine {
         "si", 0.747,  "se", 1.0
     );
 
+
     static AppraisalWeights deriveAppraisalWeights(List<WeightedTerm> profile, DispositionAxes axes) {
+        return deriveAppraisalWeights(profile, axes, List.of());
+    }
+
+    // Tier 1: Anxiousness amplifies fear — Bar-Haim et al. (2007) Psychological Bulletin, 172-study meta-analysis, d=0.45
+// Tier 2: Risk Taking reduces fear — Disinhibition → reduced threat sensitivity (McCrae & Costa 1989, Gore & Widiger 2013)
+// Tier 2: Impulsivity amplifies urgency — Disinhibition → immediate threat/opportunity weighting
+    static AppraisalWeights deriveAppraisalWeights(List<WeightedTerm> profile, DispositionAxes axes, List<PersonalityFacet> facets) {
         if (profile == null || profile.isEmpty()) {return null;}
 
         double urgencyRaw  = 0.0, relRaw = 0.0, fearRaw = 0.0;
@@ -506,11 +573,13 @@ public final class CognitiveDerivationEngine {
         if (axes != null) {
             if (axes.ruleFollowing() != null) {
                 switch (axes.ruleFollowing()) {
-                    case "strict" -> {selfStrictness  = 1.6;
-                                      otherStrictness = 1.4;
+                    case "strict" -> {
+                        selfStrictness  = 1.6;
+                        otherStrictness = 1.4;
                     }
-                    case "flexible" -> {selfStrictness  = 0.7;
-                                        otherStrictness = 0.6;
+                    case "flexible" -> {
+                        selfStrictness  = 0.7;
+                        otherStrictness = 0.6;
                     }
                     default -> {}
                 }
@@ -524,6 +593,15 @@ public final class CognitiveDerivationEngine {
             }
         }
 
+        if (facets != null && !facets.isEmpty()) {
+            double anxiousness = facetScore(facets, PersonalityFacet.ANXIOUSNESS, 0.5);
+            double riskTaking  = facetScore(facets, PersonalityFacet.RISK_TAKING, 0.5);
+            double impulsivity = facetScore(facets, PersonalityFacet.IMPULSIVITY, 0.5);
+            fearRaw += (anxiousness - 0.5) * 0.2;
+            fearRaw -= (riskTaking - 0.5) * 0.2;
+            urgencyRaw += (impulsivity - 0.5) * 0.2;
+        }
+
         return new AppraisalWeights(
                 Math.max(1.0 + urgencyRaw * SCALE_FACTOR, 0.1),
                 Math.max(1.0 + relRaw * SCALE_FACTOR, 0.1),
@@ -533,7 +611,7 @@ public final class CognitiveDerivationEngine {
         );
     }
 
-    static HabituationConfig deriveHabituationConfig(DispositionAxes axes, List<String> goals) {
+    static HabituationConfig deriveHabituationConfig(DispositionAxes axes, List<String> goals, List<PersonalityFacet> facets) {
         if (axes == null) {return null;}
 
         double habRate = RISK_HABITUATION_RATE.getOrDefault(lower(axes.riskAppetite()), 0.2);
@@ -542,6 +620,14 @@ public final class CognitiveDerivationEngine {
 
         if ("high".equalsIgnoreCase(axes.autonomy())) {
             repTol -= 1.0;
+        }
+
+        if (facets != null && !facets.isEmpty()) {
+            double impulsivity = facetScore(facets, PersonalityFacet.IMPULSIVITY, 0.5);
+            double riskTaking  = facetScore(facets, PersonalityFacet.RISK_TAKING, 0.5);
+            habRate += (impulsivity - 0.5) * 0.2;
+            novelty += (riskTaking - 0.5) * 0.2;
+            repTol -= (impulsivity - 0.5) * 2.0;
         }
 
         Map<String, Double> domainMod = new HashMap<>();
@@ -560,7 +646,12 @@ public final class CognitiveDerivationEngine {
         return new HabituationConfig(habRate, novelty, Math.max(2.0, repTol), domainMod);
     }
 
+
     public static RegulationDefaults deriveRegulationDefaults(DispositionAxes axes) {
+        return deriveRegulationDefaults(axes, List.of());
+    }
+
+    public static RegulationDefaults deriveRegulationDefaults(DispositionAxes axes, List<PersonalityFacet> facets) {
         if (axes == null) {return null;}
         double reappraisal = 0.5
                              + REAPPRAISAL_CONFLICT.getOrDefault(lower(axes.conflictMode()), 0.0)
@@ -584,6 +675,16 @@ public final class CognitiveDerivationEngine {
                         + SOCIAL_REG_SOCIAL.getOrDefault(lower(axes.socialOrient()), 0.0)
                         + SOCIAL_REG_CONFLICT.getOrDefault(lower(axes.conflictMode()), 0.0)
                         + SOCIAL_REG_AUTONOMY.getOrDefault(lower(axes.autonomy()), 0.0);
+
+        if (facets != null && !facets.isEmpty()) {
+            double emotionalLability = facetScore(facets, PersonalityFacet.EMOTIONAL_LABILITY, 0.5);
+            double callousness       = facetScore(facets, PersonalityFacet.CALLOUSNESS, 0.5);
+            double withdrawal        = facetScore(facets, PersonalityFacet.WITHDRAWAL, 0.5);
+            reappraisal -= (emotionalLability - 0.5) * 0.2;
+            social -= (callousness - 0.5) * 0.3;
+            social -= (withdrawal - 0.5) * 0.2;
+        }
+
         return new RegulationDefaults(
                 Math.max(0.0, Math.min(1.0, reappraisal)),
                 Math.max(0.0, Math.min(1.0, suppression)),
