@@ -49,11 +49,22 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
     static final String ENTITY_ID = "caps-classifier";
     static final MemoryDomain DOMAIN = new MemoryDomain("situation-classification");
 
+    private static final String[] DISPOSITION_KEYS = {
+        "disposition.autonomy", "disposition.conflictMode",
+        "disposition.riskAppetite", "disposition.ruleFollowing",
+        "disposition.socialOrient"
+    };
+
     private static final CbrRecordSchema SCHEMA = CbrRecordSchema.of(CASE_TYPE,
         FeatureField.semanticText("description"),
         FeatureField.categorical("event-type"),
         FeatureField.categorical("cognitiveKind"),
-        FeatureField.categorical("model-version"));
+        FeatureField.categorical("model-version"),
+        FeatureField.categorical("disposition-socialOrient"),
+        FeatureField.categorical("disposition-ruleFollowing"),
+        FeatureField.categorical("disposition-riskAppetite"),
+        FeatureField.categorical("disposition-autonomy"),
+        FeatureField.categorical("disposition-conflictMode"));
 
     private final SituationClassifier delegate;
     private final CbrRecordStore cbrStore;
@@ -105,7 +116,7 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
             if (!parsed.isEmpty()) {
                 String eventType = metadata != null ? metadata.getOrDefault("event-type", "") : "";
                 String cognitiveKind = metadata != null ? metadata.getOrDefault("cognitiveKind", "") : "";
-                String caseId = computeCaseId(description, eventType, cognitiveKind);
+                String caseId = computeCaseId(description, eventType, cognitiveKind, metadata);
                 LOG.fine(() -> "CBR hit for: " + excerpt(description));
                 return new ClassificationResult(parsed, caseId);
             }
@@ -145,16 +156,17 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
                                ? metadata.getOrDefault("event-type", "") : "";
             String cognitiveKind = metadata != null
                                    ? metadata.getOrDefault("cognitiveKind", "") : "";
-            Map<String, FeatureValue> features = Map.of(
+            var features = new java.util.HashMap<String, FeatureValue>(Map.of(
                 "description", FeatureValue.string(description),
                 "event-type", FeatureValue.string(eventType),
                 "cognitiveKind", FeatureValue.string(cognitiveKind),
-                "model-version", FeatureValue.string(modelVersion));
+                "model-version", FeatureValue.string(modelVersion)));
+            addDispositionFeatures(features, metadata);
 
             var record = new CbrFeatureRecord(description, solution,
                 null, null, features, null, null);
 
-            String caseId = computeCaseId(description, eventType, cognitiveKind);
+            String caseId = computeCaseId(description, eventType, cognitiveKind, metadata);
 
             cbrStore.store(record, CASE_TYPE, ENTITY_ID, DOMAIN, tenantId,
                 caseId, io.casehub.platform.api.path.Path.root());
@@ -162,6 +174,15 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
         } catch (Exception e) {
             LOG.log(Level.WARNING, "CBR store failed for: " + excerpt(description), e);
             return null;
+        }
+    }
+
+    private static void addDispositionFeatures(Map<String, FeatureValue> features,
+                                                Map<String, String> metadata) {
+        if (metadata == null) return;
+        for (String key : DISPOSITION_KEYS) {
+            String val = metadata.getOrDefault(key, "");
+            features.put(key.replace('.', '-'), FeatureValue.string(val));
         }
     }
 
@@ -202,6 +223,11 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
 
     static String computeCaseId(String description, String eventType,
                                  String cognitiveKind) {
+        return computeCaseId(description, eventType, cognitiveKind, Map.of());
+    }
+
+    static String computeCaseId(String description, String eventType,
+                                 String cognitiveKind, Map<String, String> metadata) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             digest.update(description.getBytes(StandardCharsets.UTF_8));
@@ -209,6 +235,11 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
             digest.update(eventType.getBytes(StandardCharsets.UTF_8));
             digest.update((byte) 0);
             digest.update(cognitiveKind.getBytes(StandardCharsets.UTF_8));
+            for (String key : DISPOSITION_KEYS) {
+                String val = metadata != null ? metadata.getOrDefault(key, "") : "";
+                digest.update((byte) 0);
+                digest.update(val.getBytes(StandardCharsets.UTF_8));
+            }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
