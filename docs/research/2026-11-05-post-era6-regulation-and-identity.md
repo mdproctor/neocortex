@@ -728,6 +728,41 @@ The five boundary fixes addressed all cross-stage coherence WIRING issues. The r
 
 Per-transition coherence scoring with an LLM judge is essential for multi-stage pipeline evaluation. Scoring only the final output masks boundary failures — you can't tell if the appraisal→regulation transition lost signal or if the regulation→prompt transition did. When you score each transition independently, the boundary failures become visible and addressable
 
+## Stream 12: CAPS Consolidation Coherence (#925)
+
+**Issues:** #925 (complete)
+**Date:** 2026-11-13
+**Blog:** "The Pipeline That Only Runs When You're Not Looking" (2026-11-13)
+
+### The problem
+
+Stream 10 and Stream 11 validated within-tick coherence — observation→appraisal→regulation→prompt. But the CAPS consolidation pipeline was never tested for coherence. This pipeline runs between ticks: `ExperienceConsolidationPhase` graduates memories into the cognitive subgraph, then `BehavioralSynthesisPhase` classifies those nodes into CAPS input activations, settles the network, and creates behavioral attractor nodes in the BEHAVIORAL subgraph. The `BehavioralPromptSection` then renders those attractors during the next tick.
+
+The design review for #894 (R1-01) identified this gap: CAPS data in PipelineTrace comes from consolidation, not from the current tick. The appraisal→CAPS causal chain doesn't exist within a single tick.
+
+### What was built
+
+Scenario 5 in `PipelineCoherenceEvalTest` — a consolidation-phase coherence eval that tests the full consolidation→trace→prompt pipeline:
+
+| Step | What it does |
+|------|-------------|
+| Seed graduated nodes | 3 experience nodes in COGNITIVE subgraph (social exclusion, public humiliation, collaborator abandonment) with `source-memory-id`, `agent-id`, `cognitiveKind` properties |
+| Run BehavioralSynthesisPhase | LlmSituationClassifier classifies experiences → CAPS input activations; InMemoryCapsEngine settles network → behavioral attractors |
+| Run tick | CognitionCore tick captures PipelineTrace with capsInputActivations + capsSettling from phase + prompt sections from BehavioralPromptSection |
+| Judge coherence | 4 transitions via TwoTierCoherenceJudge (Haiku→Opus): graduated-to-input, input-to-settling, settling-to-prompt, full-consolidation |
+
+### Infrastructure changes
+
+- `BehavioralSynthesisPhase` test constructors (4-arg and 5-arg) made public — previously package-private, blocking cross-module test access from `caps-llm-classifier`
+- 3 new serializers: `serializeGraduatedNodes`, `serializeCapsInputActivations`, `serializeCapsSettling`
+- No changes to `CognitionCoreTestBuilder` — direct wiring via `core.configureBehavioralSynthesis(phase)` follows existing pattern (same as `configureAppraisal`, `configurePipelineSnapshotStore`)
+
+### Key design decisions
+
+1. **Seeded graduated nodes directly** rather than running ExperienceConsolidationPhase — the eval tests the consolidation→tick boundary, not the experience→graduation boundary. ExperienceConsolidationPhase has its own tests.
+2. **Used LlmSituationClassifier** rather than RuleBasedSituationClassifier — matches Scenarios 2-4 and is the production classifier. RuleBasedSituationClassifier.classify() returns empty (keyword logic disabled, tracked by #587).
+3. **Social rejection scenario** chosen for clear CAPS mapping — exclusion, public criticism, and abandonment map to `rejection`, `social_threat`, `exclusion` input nodes with predictable defensive/withdrawal attractor outcomes.
+
 ### Deferred
 - **Era 6 Phase 4**: Condensation chains, persistent entity index, ACT-R decay (not blocked)
 - **Era 7 definition**: The post-era 6 work — regulation, identity, search budget, exploration pipeline — is era-scale in aggregate. Whether it constitutes era 7 or folds into era 6 Phase 4+ is a naming decision, not a technical one.
