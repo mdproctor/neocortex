@@ -20,7 +20,7 @@ import io.casehub.eidos.api.AgentGoal;
 import io.casehub.eidos.api.AgentQuery;
 import io.casehub.eidos.api.AgentRegistry;
 import io.casehub.eidos.api.DispositionAxis;
-import io.casehub.eidos.api.DispositionValue;
+import io.casehub.neocortex.cognitive.index.PersonalityFacet;
 import io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry;
 import io.casehub.neocortex.cognitive.index.CognitiveDerivationEngine;
 import io.casehub.neocortex.cognitive.index.DescriptorView;
@@ -30,7 +30,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.util.List;
 import java.util.logging.Logger;
 
 @ApplicationScoped
@@ -102,11 +101,34 @@ public class EidosCognitiveProfileBridge {
                 disposition.primaryTerm(DispositionAxis.CONFLICT_MODE)
         );
         var profile = disposition.dispositionProfile().stream()
-                .map(dv -> new WeightedTerm(dv.term(), dv.weight()))
-                .toList();
+                                 .map(dv -> new WeightedTerm(dv.term(), dv.weight()))
+                                 .toList();
         var goals = descriptor.goals().stream()
-                .map(AgentGoal::name)
-                .toList();
-        return DescriptorView.of(descriptor.agentId(), axes, profile, goals);
+                              .map(AgentGoal::name)
+                              .toList();
+        var facets = disposition.ampdFacets().stream()
+                                .map(af -> new PersonalityFacet(titleCase(af.facet()), af.score() / 100.0, "eidos"))
+                                .toList();
+        return new DescriptorView(descriptor.agentId(), axes, profile, goals, null, facets);
     }
+
+    private static String titleCase(String s) {
+        if (s == null || s.isEmpty()) {return s;}
+        var     sb        = new StringBuilder();
+        boolean nextUpper = true;
+        for (char c : s.toCharArray()) {
+            if (Character.isWhitespace(c)) {
+                nextUpper = true;
+                sb.append(c);
+            } else if (nextUpper) {
+                sb.append(Character.toUpperCase(c));
+                nextUpper = false;
+            } else {
+                sb.append(Character.toLowerCase(c));
+                nextUpper = false;
+            }
+        }
+        return sb.toString();
+    }
+
 }
