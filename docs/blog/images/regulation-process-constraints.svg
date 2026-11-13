@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520">
+  <style>
+    text { font-family: -apple-system, 'Segoe UI', sans-serif; }
+    .title { font-size: 14px; font-weight: 600; fill: #1a1a2e; }
+    .section { font-size: 12px; font-weight: 600; fill: #1a1a2e; }
+    .label { font-size: 11px; fill: #2d2d44; }
+    .sublabel { font-size: 10px; fill: #6b7280; }
+    .quote { font-size: 9.5px; fill: #4b5563; font-style: italic; }
+    .box-before { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; }
+    .box-after { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; }
+    .box-insight { fill: #f0fdf4; stroke: #16a34a; stroke-width: 1.5; }
+    .connector { stroke: #9ca3af; stroke-width: 1.2; fill: none; }
+    .arrow { stroke: #4b5563; stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+    .divider { stroke: #e5e7eb; stroke-width: 1; stroke-dasharray: 4 3; }
+  </style>
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4b5563"/>
+    </marker>
+  </defs>
+
+  <text x="380" y="24" text-anchor="middle" class="title">Process Constraints Applied to Emotion Regulation</text>
+
+  <!-- Row 1: Cognitive Load -->
+  <text x="30" y="56" class="section">Cognitive Load</text>
+  <rect x="30" y="64" width="330" height="56" rx="6" class="box-before"/>
+  <text x="195" y="82" text-anchor="middle" class="sublabel" font-weight="600">Descriptive (before)</text>
+  <text x="195" y="100" text-anchor="middle" class="quote">"HIGH load → prefer ATTENTIONAL_DEPLOYMENT"</text>
+  <text x="195" y="112" text-anchor="middle" class="sublabel" fill="#dc2626">LLM ignores — picks COGNITIVE_CHANGE anyway</text>
+
+  <path d="M 370 92 L 395 92" class="arrow"/>
+
+  <rect x="400" y="64" width="330" height="56" rx="6" class="box-after"/>
+  <text x="565" y="82" text-anchor="middle" class="sublabel" font-weight="600">Process Constraint (after)</text>
+  <text x="565" y="100" text-anchor="middle" class="quote">"You cannot hold the multi-step reasoning chain.</text>
+  <text x="565" y="112" text-anchor="middle" class="quote">Only ATTENTIONAL_DEPLOYMENT and RESPONSE_MODULATION exist."</text>
+
+  <!-- Divider -->
+  <line x1="30" y1="134" x2="730" y2="134" class="divider"/>
+
+  <!-- Row 2: Fatigue -->
+  <text x="30" y="156" class="section">Regulation Fatigue</text>
+  <rect x="30" y="164" width="330" height="56" rx="6" class="box-before"/>
+  <text x="195" y="182" text-anchor="middle" class="sublabel" font-weight="600">Descriptive (before)</text>
+  <text x="195" y="200" text-anchor="middle" class="quote">"Regulation fatigue: 70%"</text>
+  <text x="195" y="212" text-anchor="middle" class="sublabel" fill="#dc2626">A number — LLM has no mechanism to comply</text>
+
+  <path d="M 370 192 L 395 192" class="arrow"/>
+
+  <rect x="400" y="164" width="330" height="56" rx="6" class="box-after"/>
+  <text x="565" y="182" text-anchor="middle" class="sublabel" font-weight="600">Graded Process Constraint (after)</text>
+  <text x="565" y="196" text-anchor="middle" class="quote">50%: "Reappraisal capacity running low — each attempt slower"</text>
+  <text x="565" y="208" text-anchor="middle" class="quote">70%: "Reappraisal depleted. MUST choose ATTENTIONAL_DEPLOYMENT"</text>
+  <text x="565" y="218" text-anchor="middle" class="sublabel" fill="#2563eb">Strategies degrade, then vanish from the menu</text>
+
+  <!-- Divider -->
+  <line x1="30" y1="236" x2="730" y2="236" class="divider"/>
+
+  <!-- Row 3: Personality -->
+  <text x="30" y="258" class="section">Personality Differentiation</text>
+  <rect x="30" y="266" width="330" height="56" rx="6" class="box-before"/>
+  <text x="195" y="284" text-anchor="middle" class="sublabel" font-weight="600">Descriptive (before)</text>
+  <text x="195" y="300" text-anchor="middle" class="quote">"Suppression capacity: 0.80, Reappraisal capacity: 0.35"</text>
+  <text x="195" y="312" text-anchor="middle" class="sublabel" fill="#dc2626">Numbers — all characters choose reappraisal regardless</text>
+
+  <path d="M 370 294 L 395 294" class="arrow"/>
+
+  <rect x="400" y="266" width="330" height="56" rx="6" class="box-after"/>
+  <text x="565" y="284" text-anchor="middle" class="sublabel" font-weight="600">Inner Monologue Constraint (after)</text>
+  <text x="565" y="300" text-anchor="middle" class="quote">"You feel the emotion but your face stays steady.</text>
+  <text x="565" y="312" text-anchor="middle" class="quote">You are containing, not processing. Choose RESPONSE_MODULATION."</text>
+
+  <!-- Divider -->
+  <line x1="30" y1="338" x2="730" y2="338" class="divider"/>
+
+  <!-- Row 4: Drive Profiles -->
+  <text x="30" y="360" class="section">Drive Profiles</text>
+  <rect x="30" y="368" width="330" height="56" rx="6" class="box-before"/>
+  <text x="195" y="386" text-anchor="middle" class="sublabel" font-weight="600">Missing Rendering (before)</text>
+  <text x="195" y="402" text-anchor="middle" class="quote">"GALLANTRY (0.9)"</text>
+  <text x="195" y="414" text-anchor="middle" class="sublabel" fill="#dc2626">Bare label — no personality-specific description</text>
+
+  <path d="M 370 396 L 395 396" class="arrow"/>
+
+  <rect x="400" y="368" width="330" height="56" rx="6" class="box-after"/>
+  <text x="565" y="386" text-anchor="middle" class="sublabel" font-weight="600">Description Fallback (after)</text>
+  <text x="565" y="402" text-anchor="middle" class="quote">"GALLANTRY (0.9): When she is present, your attention</text>
+  <text x="565" y="414" text-anchor="middle" class="quote">organises around her wellbeing before you consciously choose it."</text>
+
+  <!-- Bottom insight -->
+  <rect x="100" y="448" width="560" height="56" rx="8" class="box-insight"/>
+  <text x="380" y="470" text-anchor="middle" class="label" font-weight="600">The Pattern</text>
+  <text x="380" y="486" text-anchor="middle" class="label">Don't describe traits. Describe what the mind does when the trait activates.</text>
+  <text x="380" y="500" text-anchor="middle" class="label">The LLM follows the procedure; the procedure IS the personality.</text>
+
+  <path d="M 380 424 L 380 448" class="arrow"/>
+</svg>
