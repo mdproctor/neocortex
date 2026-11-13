@@ -45,6 +45,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
     private volatile java.util.function.@Nullable BiFunction<String, String, Optional<io.casehub.neocortex.cognition.search.SearchBudget>> searchBudgetAccessor;
 
     private final ConcurrentHashMap<String, ChannelWeightProfile> channelWeights  = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> regulatedNarratives = new ConcurrentHashMap<>();
 
 
     public Map<String, Double> currentConcernSalience(String agentId, String tenantId) {
@@ -199,7 +200,20 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
     }
 
     public Optional<AppraisalResult> currentResult(String agentId, String tenantId) {
-        return Optional.ofNullable(results.get(agentId + ":" + tenantId));
+        var key = agentId + ":" + tenantId;
+        var result = results.get(key);
+        if (result == null) return Optional.empty();
+        var regulated = regulatedNarratives.get(key);
+        if (regulated != null) {
+            return Optional.of(new AppraisalResult(
+                    result.emotions(), result.actionTendencies(),
+                    result.updatedHabituation(), regulated));
+        }
+        return Optional.of(result);
+    }
+
+    public void setRegulatedNarrative(String agentId, String tenantId, String narrative) {
+        regulatedNarratives.put(agentId + ":" + tenantId, narrative);
     }
 
     public @Nullable HabituationState currentHabituation(String agentId, String tenantId) {
