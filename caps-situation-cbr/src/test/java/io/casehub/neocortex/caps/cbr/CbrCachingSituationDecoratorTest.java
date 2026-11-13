@@ -145,6 +145,51 @@ class CbrCachingSituationDecoratorTest {
     }
 
     @Test
+    void computeCaseId_includesDisposition() {
+        String idNoDisp = CbrCachingSituationDecorator.computeCaseId(
+            "desc", "obs", "concern", Map.of());
+        String idWithDisp = CbrCachingSituationDecorator.computeCaseId(
+            "desc", "obs", "concern",
+            Map.of("disposition.socialOrient", "competitive"));
+
+        assertThat(idNoDisp).isNotEqualTo(idWithDisp);
+    }
+
+    @Test
+    void computeCaseId_differentDispositions_differentIds() {
+        String id1 = CbrCachingSituationDecorator.computeCaseId(
+            "desc", "obs", "concern",
+            Map.of("disposition.socialOrient", "competitive"));
+        String id2 = CbrCachingSituationDecorator.computeCaseId(
+            "desc", "obs", "concern",
+            Map.of("disposition.socialOrient", "cooperative"));
+
+        assertThat(id1).isNotEqualTo(id2);
+    }
+
+    @Test
+    void computeCaseId_sameDisposition_sameId() {
+        String id1 = CbrCachingSituationDecorator.computeCaseId(
+            "desc", "obs", "concern",
+            Map.of("disposition.socialOrient", "competitive",
+                   "disposition.riskAppetite", "bold"));
+        String id2 = CbrCachingSituationDecorator.computeCaseId(
+            "desc", "obs", "concern",
+            Map.of("disposition.socialOrient", "competitive",
+                   "disposition.riskAppetite", "bold"));
+
+        assertThat(id1).isEqualTo(id2);
+    }
+
+    @Test
+    void computeCaseId_backwardCompatible_noDisposition() {
+        String oldStyle = CbrCachingSituationDecorator.computeCaseId("desc", "obs", "concern");
+        String newStyleEmpty = CbrCachingSituationDecorator.computeCaseId("desc", "obs", "concern", Map.of());
+
+        assertThat(oldStyle).isEqualTo(newStyleEmpty);
+    }
+
+    @Test
     void emptyActivations_notStored() {
         var ctx = ClassificationContext.of("tenant-1");
         when(cbrStore.retrieveSimilar(any(CbrQuery.class), eq(CbrFeatureRecord.class)))
