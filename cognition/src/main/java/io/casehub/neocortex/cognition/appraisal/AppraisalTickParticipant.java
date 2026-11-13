@@ -120,6 +120,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
         if (!config.appraisalEnabled()) {return;}
 
         var agentKey    = context.agentId() + ":" + context.tenantId();
+        regulatedNarratives.remove(agentKey);
         var observation = context.observation();
 
         var profileOpt = driveOrchestrator.currentDrives(context.agentId(), context.tenantId());
