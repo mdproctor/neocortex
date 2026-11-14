@@ -245,6 +245,8 @@ Each drive's profile clusters in 1-2 of the 7 CAPS input categories. This concen
 - Absolute exclusion beats soft exclusion. V2's regression (7/8→5/8) showed that allowing nodes "unless equally or more for another drive" lets the LLM redistribute nodes between drives. Tight constraint → tight profiles → correct filtering.
 - Developmental substrate vs operational mechanism (HC-Clara failure). Scheming's profile correctly captures its developmental substrate (control, competition) but misses its operational mechanism (exploiting trust). Minimum-intensity rendering (≥0.7) is the architectural fallback for dominant drives that operate through channels their substrate didn't form.
 
+**Update (2026-11-14, #941):** Journal 5 established that discrimination in the profile derivation prompt determines classification quality. #941 extends this by making the *classifier itself* personality-aware — disposition axes flow as metadata into the classification prompt, shaping which CAPS nodes activate. This adds primary appraisal differentiation: two agents with different dispositions now receive different activations for the same observation, complementing the secondary appraisal differentiation from CAPS connection weight modulation. See Stream 14 in the post-era 6 research doc.
+
 ### Journal 6: The Encoding Gap — Concept vs Surface Form (2026-10-18)
 
 "The trap worked. The cellar door is sealed. Nobody heard a thing." The CAPS classifier returned `agency_granted:0.85, choice_available:0.75` — autonomy and control. Zero reward. Gloating's profile has `reward:0.850` as its top node. Zero overlap. Drive filtered. The Hooded Claw's defining gloating moment produced no gloating expression.

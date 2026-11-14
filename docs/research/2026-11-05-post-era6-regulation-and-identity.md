@@ -1,6 +1,6 @@
 # Post-Era 6: Regulation, Identity, Search Budget, and Pipeline Completion
 
-**Period:** 2026-11-01 → 2026-11-13
+**Period:** 2026-11-01 → 2026-11-14
 **Status:** Standalone gap document — to be incorporated into era 7 when that era is defined
 **Predecessor:** Era 6 — Cognitive Memory Architecture (Phase 3 completed 2026-11-01)
 
@@ -804,3 +804,46 @@ Both fixes made the tests more robust: they now verify the mechanism works regar
 ### Key finding
 
 Test harnesses that pass null for production dependencies create a false confidence problem. The tests pass, but they're testing a system that doesn't exist. When the real dependencies are wired in, tests break — not because the code is wrong, but because the tests were calibrated for a phantom configuration. The fix isn't to adjust drive baselines to match the old stubs; it's to design tests that work with any reasonable configuration by testing mechanisms, not specific numeric values tied to a particular drive state.
+
+## Stream 14: Personality-Aware Situation Classification (#941)
+
+**Issues:** #941
+**Commits:** 9 across neocortex
+**Literature:** Lazarus 1991 (primary appraisal theory), Mischel & Shoda 1995 (CAPS personality-sensitivity)
+
+### The problem
+
+The CAPS situation classifier (`LlmSituationClassifier`) produced identical activations regardless of which agent encountered a situation. A competitive agent and a cooperative agent received the same CAPS input node activations for the same observation. Personality differentiation happened only through overlap filtering — which drive profiles matched the activations — not through interpretive differences in how the situation was perceived.
+
+This contradicts appraisal theory (Lazarus 1991): personality shapes primary appraisal (what we perceive), not just secondary appraisal (how we respond). The CAPS topology already models secondary appraisal via `disposition_modifiers` on network connections. Stream 14 adds primary appraisal — personality-shaped classification.
+
+### What was built
+
+**Dual-level personality influence:**
+
+| Level | Where | What it shapes | Mechanism |
+|-------|-------|---------------|-----------|
+| Classification (new) | `LlmSituationClassifier` prompt | Which CAPS input nodes activate | DispositionAxes → interpretive framing |
+| Propagation (existing) | CAPS topology connections | How activations flow through network | disposition_modifiers → connection weight modulation |
+
+**Hybrid A/C routing** — two prompt injection paths selected by a tension heuristic:
+
+- **Path A (default):** Personality description appended to the user prompt after the observation. The LLM applies personality as a filter.
+- **Path C (high tension, >0.5):** Personality frame + tension narrative embedded in the system prompt. The LLM inhabits the interpretive frame rather than applying it externally.
+
+**Tension scoring** — static lookup table of conflicting disposition axis value pairs. Six entries scoring psychological conflicts (e.g. bold+strict = 1.0 "approach vs inhibition", high autonomy+avoidant = 0.9 "independent but won't confront"). Each entry includes an evocative narrative that frames the character's interpretive lens.
+
+**New code:**
+- `DispositionTension` — static utility: tension table + scoring from disposition metadata keys
+- `PersonalityPromptBuilder` — builds user-prompt suffix (path A) or system-prompt personality frame (path C)
+- `BehavioralSynthesisPhase` — injects `disposition.*` metadata from `CognitiveDefaultsRegistry` at both classify() call sites (experience classification and drive intensity fallback)
+- `CbrCachingSituationDecorator` — disposition values included in SHA-256 cache key and as categorical features in CBR query filtering, preventing cross-personality cache collisions
+
+**Eval:** `PersonalityClassificationEvalTest` — 4 profiles × 4 observations measuring inter-profile activation variance (cosine distance), tension dual-activation (bold-strict should activate both approach and inhibition nodes), and bias detection (no profile should map >80% of observations to a single CAPS category).
+
+### Key design decisions
+
+1. **Metadata-only SPI contract** — disposition flows through the existing `Map<String, String> metadata` parameter on `SituationClassifier.classify()`. No SPI signature changes required. The caller (BehavioralSynthesisPhase) serialises disposition axes as `disposition.*` entries; the classifier reads them back.
+2. **Static tension table over learned thresholds** — the 6 tension entries are psychologically grounded (approach-avoidance conflict, autonomy-conformity tension). A learned threshold would need training data that doesn't exist yet. The table is extensible by adding entries.
+3. **Path C rebuilds the system prompt** rather than appending to it — when tension is high, the personality frame must precede the task instructions so the LLM perceives the character lens before encountering the classification rules.
+4. **DriveProfileDerivationPhase deferred** — the second classify() call site (line 196/214) needs separate evaluation. The drive derivation pipeline has different sensitivity to personality injection than the experience classification pipeline.
