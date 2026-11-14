@@ -121,11 +121,11 @@ class SchererAppraisalStrategyTest {
         var withResult = withCoping.appraise(ctx);
         var noResult = noCoping.appraise(ctx);
 
-        var withTypes = withResult.emotions().stream().map(e -> e.type()).toList();
-        var noTypes = noResult.emotions().stream().map(e -> e.type()).toList();
+        var withTendencies = withResult.actionTendencies().stream().map(ActionTendency::readiness).toList();
+        var noTendencies = noResult.actionTendencies().stream().map(ActionTendency::readiness).toList();
 
-        assertThat(withTypes).as("Coping check should influence which emotion types appear")
-                .isNotEqualTo(noTypes);
+        assertThat(withTendencies).as("Coping check should influence action tendencies")
+                .isNotEqualTo(noTendencies);
     }
 
     private static AppraisalContext context(String observation, List<Drive> drives) {

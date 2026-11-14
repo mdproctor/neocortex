@@ -58,6 +58,7 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
                 "conduciveness": <-1.0 to 1.0, does it advance or block goals>,
                 "controllability": <0.0-1.0, can the character influence the outcome>,
                 "novelty": <0.0-1.0, how new/surprising is this>,
+                "urgency": <0.0-1.0, how time-pressured is the response>,
                 "internal-standards": <0.0-1.0, does this align with self-standards (1.0=fine)>,
                 "external-standards": <0.0-1.0, does this align with social norms (1.0=fine)>
               }

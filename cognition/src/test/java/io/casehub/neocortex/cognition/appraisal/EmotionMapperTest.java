@@ -183,4 +183,69 @@ class EmotionMapperTest {
         assertThat(fear.pad().pleasure()).isLessThan(0.0);
         assertThat(fear.pad().arousal()).isGreaterThan(0.0);
     }
+
+    @Test
+    void hopeFromNoveltyWithPositiveConduciveness() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.7, SecDimensions.NOVELTY, 0.7),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, 0.5));
+
+        var emotions = EmotionMapper.mapEmotions(results, "discovery");
+
+        assertThat(emotions).extracting("type").contains(EmotionType.HOPE, EmotionType.JOY);
+    }
+
+    @Test
+    void noHopeWhenNegativeConduciveness() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.7, SecDimensions.NOVELTY, 0.7),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.3));
+
+        var emotions = EmotionMapper.mapEmotions(results, "bad-surprise");
+
+        assertThat(emotions).extracting("type").doesNotContain(EmotionType.HOPE);
+    }
+
+    @Test
+    void fearWithUrgencyElevatedThreshold() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.URGENCY, 0.8),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.6),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.5));
+
+        var emotions = EmotionMapper.mapEmotions(results, "security-breach");
+
+        assertThat(emotions).extracting("type").contains(EmotionType.FEAR);
+    }
+
+    @Test
+    void fearAndAngerCoOccurrence() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.URGENCY, 0.8),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.6),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.55));
+
+        var emotions = EmotionMapper.mapEmotions(results, "crisis");
+
+        assertThat(emotions).extracting("type").contains(EmotionType.FEAR, EmotionType.ANGER);
+        assertThat(emotions).extracting("type").doesNotContain(EmotionType.DISTRESS);
+    }
+
+    @Test
+    void arousalBoostedByUrgency() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.URGENCY, 0.8),
+                SecResult.of("normative",
+                        SecDimensions.INTERNAL_STANDARDS, 0.2,
+                        SecDimensions.EXTERNAL_STANDARDS, 0.8));
+
+        var emotions = EmotionMapper.mapEmotions(results, "public-confrontation");
+        var shame = emotions.stream()
+                .filter(e -> e.type() == EmotionType.SHAME).findFirst().orElseThrow();
+
+        double baselineArousal = 0.1 * shame.intensity();
+        assertThat(shame.pad().arousal())
+                .as("Urgency should boost arousal above canonical SHAME baseline")
+                .isGreaterThan(baselineArousal + 0.1);
+    }
 }

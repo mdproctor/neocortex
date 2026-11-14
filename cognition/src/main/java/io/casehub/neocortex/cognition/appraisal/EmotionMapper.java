@@ -4,6 +4,7 @@ import io.casehub.neocortex.cognitive.AlmaPadTable;
 import io.casehub.neocortex.cognitive.CognitiveEmotion;
 import io.casehub.neocortex.cognitive.EmotionSource;
 import io.casehub.neocortex.cognitive.EmotionType;
+import io.casehub.neocortex.cognitive.PadProjection;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,6 +22,8 @@ public final class EmotionMapper {
         var now = Instant.now();
 
         double relevance = dims.getOrDefault(SecDimensions.RELEVANCE, 0.0);
+        double novelty = dims.getOrDefault(SecDimensions.NOVELTY, 0.0);
+        double urgency = dims.getOrDefault(SecDimensions.URGENCY, 0.0);
         double conduciveness = dims.getOrDefault(SecDimensions.CONDUCIVENESS, 0.0);
         double controllability = dims.getOrDefault(SecDimensions.CONTROLLABILITY, 0.5);
         double internalStd = dims.getOrDefault(SecDimensions.INTERNAL_STANDARDS, 1.0);
@@ -28,30 +31,41 @@ public final class EmotionMapper {
 
         if (relevance < 0.2) return emotions;
 
-        if (conduciveness < -0.2 && controllability < 0.4) {
+        double arousalBoost = urgency * 0.5;
+
+        double fearThreshold = urgency > 0.5 ? 0.6 : 0.4;
+        if (conduciveness < -0.2 && controllability < fearThreshold) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
-            emotions.add(emotion(EmotionType.FEAR, intensity, subjectId, now));
-        } else if (conduciveness < -0.2 && controllability > 0.5) {
+            emotions.add(emotion(EmotionType.FEAR, intensity, subjectId, now, arousalBoost));
+        }
+        if (conduciveness < -0.2 && controllability > 0.5) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
-            emotions.add(emotion(EmotionType.ANGER, intensity, subjectId, now));
-        } else if (conduciveness < -0.2) {
+            emotions.add(emotion(EmotionType.ANGER, intensity, subjectId, now, arousalBoost));
+        }
+        if (conduciveness < -0.2 && !containsType(emotions, EmotionType.FEAR)
+                && !containsType(emotions, EmotionType.ANGER)) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
-            emotions.add(emotion(EmotionType.DISTRESS, intensity, subjectId, now));
+            emotions.add(emotion(EmotionType.DISTRESS, intensity, subjectId, now, arousalBoost));
         }
 
         if (conduciveness > 0.3) {
             double intensity = clampIntensity(relevance * conduciveness);
-            emotions.add(emotion(EmotionType.JOY, intensity, subjectId, now));
+            emotions.add(emotion(EmotionType.JOY, intensity, subjectId, now, arousalBoost));
+        }
+
+        if (novelty > 0.4 && conduciveness >= 0) {
+            double intensity = clampIntensity(relevance * novelty);
+            emotions.add(emotion(EmotionType.HOPE, intensity, subjectId, now, arousalBoost));
         }
 
         if (internalStd < 0.5) {
             double intensity = clampIntensity(relevance * (1.0 - internalStd));
-            emotions.add(emotion(EmotionType.SHAME, intensity, subjectId, now));
+            emotions.add(emotion(EmotionType.SHAME, intensity, subjectId, now, arousalBoost));
         }
 
         if (externalStd < 0.5) {
             double intensity = clampIntensity(relevance * (1.0 - externalStd));
-            emotions.add(emotion(EmotionType.REPROACH, intensity, subjectId, now));
+            emotions.add(emotion(EmotionType.REPROACH, intensity, subjectId, now, arousalBoost));
         }
 
         return emotions;
@@ -90,10 +104,21 @@ public final class EmotionMapper {
         return merged;
     }
 
+    private static boolean containsType(List<CognitiveEmotion> emotions, EmotionType type) {
+        return emotions.stream().anyMatch(e -> e.type() == type);
+    }
+
     private static CognitiveEmotion emotion(EmotionType type, double intensity,
-                                            String subjectId, Instant onset) {
+                                            String subjectId, Instant onset,
+                                            double arousalBoost) {
+        var basePad = AlmaPadTable.project(type, intensity);
+        var pad = arousalBoost > 0
+                ? new PadProjection(basePad.pleasure(),
+                        Math.min(1.0, basePad.arousal() + arousalBoost * intensity),
+                        basePad.dominance())
+                : basePad;
         return new CognitiveEmotion(type, intensity, subjectId, onset,
-                EmotionSource.INTRINSIC, AlmaPadTable.project(type, intensity));
+                EmotionSource.INTRINSIC, pad);
     }
 
     private static double clampIntensity(double value) {
