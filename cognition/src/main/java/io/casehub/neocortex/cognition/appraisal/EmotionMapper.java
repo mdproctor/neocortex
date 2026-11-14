@@ -33,7 +33,7 @@ public final class EmotionMapper {
 
         double arousalBoost = urgency * 0.5;
 
-        double fearThreshold = urgency > 0.5 ? 0.6 : 0.4;
+        double fearThreshold = urgency > 0.7 ? 0.6 : 0.4;
         if (conduciveness < -0.2 && controllability < fearThreshold) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
             emotions.add(emotion(EmotionType.FEAR, intensity, subjectId, now, arousalBoost));
