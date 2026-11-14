@@ -139,6 +139,15 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
                 .withMinSimilarity(minSimilarity)
                 .withFilter("model-version",
                     CbrFilter.contains(modelVersion));
+            if (metadata != null) {
+                for (String key : DISPOSITION_KEYS) {
+                    String val = metadata.get(key);
+                    if (val != null) {
+                        query = query.withFilter(key.replace('.', '-'),
+                            CbrFilter.contains(val));
+                    }
+                }
+            }
             return cbrStore.retrieveSimilar(query, CbrFeatureRecord.class);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "CBR lookup failed, falling back to LLM", e);

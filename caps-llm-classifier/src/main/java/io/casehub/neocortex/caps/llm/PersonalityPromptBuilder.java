@@ -74,23 +74,26 @@ public final class PersonalityPromptBuilder {
                   Available input nodes:
                   """);
 
-        if (topology != null) {
-            topology.nodes().forEach((id, node) -> {
-                if (node.type() == NodeType.INPUT) {
-                    sb.append("- ").append(id);
-                    if (!node.description().isEmpty()) {
-                        sb.append(" (").append(node.category())
-                          .append(": ").append(node.description()).append(")");
-                    } else {
-                        sb.append(" (").append(node.category()).append(")");
-                    }
-                    sb.append(node.vocabulary().isEmpty() ? "" :
-                              " — vocabulary: " + String.join(", ", node.vocabulary().keySet()));
-                    sb.append("\n");
-                }
-            });
-        }
+        appendTopologyNodes(sb, topology);
 
         return sb.toString();
+    }
+
+    static void appendTopologyNodes(StringBuilder sb, CapsTopology topology) {
+        if (topology == null) return;
+        topology.nodes().forEach((id, node) -> {
+            if (node.type() == NodeType.INPUT) {
+                sb.append("- ").append(id);
+                if (!node.description().isEmpty()) {
+                    sb.append(" (").append(node.category())
+                      .append(": ").append(node.description()).append(")");
+                } else {
+                    sb.append(" (").append(node.category()).append(")");
+                }
+                sb.append(node.vocabulary().isEmpty() ? "" :
+                          " — vocabulary: " + String.join(", ", node.vocabulary().keySet()));
+                sb.append("\n");
+            }
+        });
     }
 }

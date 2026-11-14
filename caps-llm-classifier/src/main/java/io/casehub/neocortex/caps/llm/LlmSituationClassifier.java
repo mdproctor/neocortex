@@ -130,8 +130,13 @@ public class LlmSituationClassifier implements SituationClassifier {
     private String buildUserPrompt(String description, Map<String, String> metadata) {
         var sb = new StringBuilder("Description: ").append(description);
         if (metadata != null && !metadata.isEmpty()) {
-            sb.append("\n\nMetadata:");
-            metadata.forEach((k, v) -> sb.append("\n  ").append(k).append(": ").append(v));
+            var filtered = metadata.entrySet().stream()
+                .filter(e -> !e.getKey().startsWith("disposition."))
+                .toList();
+            if (!filtered.isEmpty()) {
+                sb.append("\n\nMetadata:");
+                filtered.forEach(e -> sb.append("\n  ").append(e.getKey()).append(": ").append(e.getValue()));
+            }
         }
         return sb.toString();
     }
@@ -154,22 +159,7 @@ public class LlmSituationClassifier implements SituationClassifier {
                                    Available input nodes:
                                    """);
 
-        if (topology != null) {
-            topology.nodes().forEach((id, node) -> {
-                if (node.type() == NodeType.INPUT) {
-                    sb.append("- ").append(id);
-                    if (!node.description().isEmpty()) {
-                        sb.append(" (").append(node.category())
-                          .append(": ").append(node.description()).append(")");
-                    } else {
-                        sb.append(" (").append(node.category()).append(")");
-                    }
-                    sb.append(node.vocabulary().isEmpty() ? "" :
-                              " — vocabulary: " + String.join(", ", node.vocabulary().keySet()));
-                    sb.append("\n");
-                }
-            });
-        }
+        PersonalityPromptBuilder.appendTopologyNodes(sb, topology);
 
         return sb.toString();
     }
