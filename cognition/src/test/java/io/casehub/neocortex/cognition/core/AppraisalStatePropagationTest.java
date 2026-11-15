@@ -1,31 +1,30 @@
 package io.casehub.neocortex.cognition.core;
 
 import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
+import io.casehub.neocortex.cognition.appraisal.HabituationState;
 import io.casehub.neocortex.cognition.drive.DriveAxis;
 import io.casehub.neocortex.cognition.drive.DriveComposer;
 import io.casehub.neocortex.cognition.drive.DriveConfig;
 import io.casehub.neocortex.cognition.drive.DriveIntensity;
 import io.casehub.neocortex.cognition.drive.DriveOrchestrator;
 import io.casehub.neocortex.cognition.drive.DriveSource;
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognition.mood.MoodConfig;
 import io.casehub.neocortex.cognition.mood.MoodOrchestrator;
 import io.casehub.neocortex.cognition.mood.MoodSignal;
 import io.casehub.neocortex.cognition.prompt.CognitionRenderContext;
 import io.casehub.neocortex.cognition.prompt.MoodPromptSection;
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
-import io.casehub.neocortex.cognition.appraisal.HabituationState;
-import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
 import io.casehub.neocortex.cognitive.CognitiveEmotion;
 import io.casehub.neocortex.cognitive.EmotionSource;
 import io.casehub.neocortex.cognitive.EmotionType;
 import io.casehub.neocortex.cognitive.PadProjection;
+import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
 import static org.mockito.Mockito.mock;
 
@@ -153,4 +152,69 @@ class AppraisalStatePropagationTest {
         assertThat(driveSection).as("ANGER should boost competence above stub baseline")
                 .doesNotContain("Competence: 0.1");
     }
+
+    @Test
+    void highNoveltyAppraisalDrivesCuriosityViaHope() {
+        var secResults = List.of(
+                io.casehub.neocortex.cognition.appraisal.SecResult.of("relevance",
+                                                                      io.casehub.neocortex.cognition.appraisal.SecDimensions.RELEVANCE, 0.7,
+                                                                      io.casehub.neocortex.cognition.appraisal.SecDimensions.NOVELTY, 0.9),
+                io.casehub.neocortex.cognition.appraisal.SecResult.of("implication",
+                                                                      io.casehub.neocortex.cognition.appraisal.SecDimensions.CONDUCIVENESS, 0.1));
+
+        var emotions = io.casehub.neocortex.cognition.appraisal.EmotionMapper.mapEmotions(secResults, "novel-discovery");
+        assertThat(emotions).extracting("type").contains(EmotionType.HOPE);
+
+        var hopeEmotion = emotions.stream()
+                                  .filter(e -> e.type() == EmotionType.HOPE).findFirst().orElseThrow();
+        assertThat(hopeEmotion.intensity()).as("HOPE intensity from relevance*novelty").isGreaterThan(0.5);
+
+        var appraisal = new AppraisalResult(emotions, List.of(), HabituationState.empty(), "high novelty curiosity");
+
+        var config = CognitionConfig.all().with("regulation", true).with("appraisal", true);
+        var harness = CognitionTestHarness.builder()
+                                          .withCognitionConfig(config)
+                                          .agentFromAxes("a1", "cooperative", "flexible", "moderate", "collaborative", "analytical")
+                                          .withAppraisalResult("a1", appraisal)
+                                          .build();
+
+        harness.observe("a1", "test-tenant", "A completely novel phenomenon appears");
+        harness.tick("a1", "test-tenant");
+
+        var trace = harness.currentTrace("a1", "test-tenant");
+        assertThat(trace).isPresent();
+        var driveSection = trace.get().promptSections().get("DrivePromptSection");
+        assertThat(driveSection).as("DrivePromptSection should be present").isNotNull();
+        assertThat(driveSection)
+                .as("High-novelty HOPE should override curiosity trigger text")
+                .contains("elevated by emotional response");
+        assertThat(driveSection)
+                .as("Original 'no knowledge gaps' trigger should be replaced")
+                .doesNotContain("no knowledge gaps");
+    }
+
+    @Test
+    void appraisalMoodBridgeProducesProportionalShift() {
+        var emotion = new CognitiveEmotion(EmotionType.FEAR, 0.6, "threat",
+                Instant.now(), EmotionSource.INTRINSIC, new PadProjection(-0.5, 0.5, -0.3));
+        var appraisal = new AppraisalResult(
+                List.of(emotion), List.of(), HabituationState.empty(), "danger detected");
+
+        var config = CognitionConfig.all().with("regulation", true).with("appraisal", true);
+        var harness = CognitionTestHarness.builder()
+                .withCognitionConfig(config)
+                .agentFromAxes("a1", "cooperative", "flexible", "moderate", "collaborative", "analytical")
+                .withAppraisalResult("a1", appraisal)
+                .build();
+
+        harness.observe("a1", "test-tenant", "A threatening situation");
+        harness.tick("a1", "test-tenant");
+
+        var mood = harness.currentMood("a1", "test-tenant").orElseThrow();
+        assertThat(mood.pleasure())
+                .as("Single bridge: mood pleasure should reflect PAD projection, not 2x")
+                .isBetween(-0.8, -0.1);
+    }
+
+
 }

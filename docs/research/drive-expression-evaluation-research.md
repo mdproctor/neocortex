@@ -247,6 +247,8 @@ Each drive's profile clusters in 1-2 of the 7 CAPS input categories. This concen
 
 **Update (2026-11-14, #941):** Journal 5 established that discrimination in the profile derivation prompt determines classification quality. #941 extends this by making the *classifier itself* personality-aware — disposition axes flow as metadata into the classification prompt, shaping which CAPS nodes activate. This adds primary appraisal differentiation: two agents with different dispositions now receive different activations for the same observation, complementing the secondary appraisal differentiation from CAPS connection weight modulation. See Stream 14 in the post-era 6 research doc.
 
+**Update (2026-11-15, #972):** The A/C routing tension threshold (originally hardcoded at 0.5) is now configurable via `casehub.caps.classification.tension-threshold`. Sensitivity analysis at 0.3/0.5/0.7 confirms 0.5 is optimal — all 6 curated tensions score ≥ 0.6, so any threshold in (0.0, 0.6) produces identical routing. Threshold 0.7 drops meaningful tensions. See `docs/specs/issue-972-tension-threshold-sensitivity.md`.
+
 ### Journal 6: The Encoding Gap — Concept vs Surface Form (2026-10-18)
 
 "The trap worked. The cellar door is sealed. Nobody heard a thing." The CAPS classifier returned `agency_granted:0.85, choice_available:0.75` — autonomy and control. Zero reward. Gloating's profile has `reward:0.850` as its top node. Zero overlap. Drive filtered. The Hooded Claw's defining gloating moment produced no gloating expression.

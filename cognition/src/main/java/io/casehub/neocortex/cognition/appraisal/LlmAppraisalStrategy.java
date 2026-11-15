@@ -153,7 +153,8 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
 
         if (context.currentMood() != null) {
             var m = context.currentMood();
-            sb.append("\n\nCurrent mood: pleasure=").append(String.format("%.2f", m.pleasure()))
+            sb.append("\n\nCurrent mood (background — appraise the situation itself, not this mood):")
+              .append("\npleasure=").append(String.format("%.2f", m.pleasure()))
               .append(", arousal=").append(String.format("%.2f", m.arousal()))
               .append(", dominance=").append(String.format("%.2f", m.dominance()));
         }

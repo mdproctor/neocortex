@@ -194,7 +194,6 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
             }
         }
 
-        bridgeToMood(result, context);
         generateCapacityFrustration(context);
     }
 

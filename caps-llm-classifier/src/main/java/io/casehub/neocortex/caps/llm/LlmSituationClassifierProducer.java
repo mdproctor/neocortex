@@ -18,12 +18,17 @@ public class LlmSituationClassifierProducer {
     @ConfigProperty(name = "casehub.caps.classification.model-version",
                     defaultValue = "haiku")
     String model;
+    @Inject
+    @ConfigProperty(name = "casehub.caps.classification.tension-threshold",
+                    defaultValue = "0.5")
+    double tensionThreshold;
+
 
     @Produces
     @ApplicationScoped
     public SituationClassifier produce() {
         return new LlmSituationClassifier(sessionPipeline,
-                                           capsEngine.topology(),
-                                           model);
+                                          capsEngine.topology(),
+                                          model, tensionThreshold);
     }
 }

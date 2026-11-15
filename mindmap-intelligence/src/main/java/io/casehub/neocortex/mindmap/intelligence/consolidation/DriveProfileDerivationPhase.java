@@ -2,9 +2,9 @@ package io.casehub.neocortex.mindmap.intelligence.consolidation;
 
 import io.casehub.neocortex.caps.CapsConnection;
 import io.casehub.neocortex.caps.CapsTopology;
+import io.casehub.neocortex.caps.ClassificationContext;
 import io.casehub.neocortex.caps.NodeType;
 import io.casehub.neocortex.caps.SituationActivation;
-import io.casehub.neocortex.caps.ClassificationContext;
 import io.casehub.neocortex.caps.SituationClassifier;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
@@ -49,14 +49,17 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
     private final MindMapStore store;
     private final SituationClassifier classifier;
     private final CapsTopology topology;
+    private final io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry defaultsRegistry;
 
     @Inject
     public DriveProfileDerivationPhase(MindMapStore store,
                                        Instance<SituationClassifier> classifier,
-                                       Instance<CapsTopology> topology) {
+                                       Instance<CapsTopology> topology,
+                                       Instance<io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry> defaultsRegistry) {
         this.store = store;
         this.classifier = classifier.isResolvable() ? classifier.get() : null;
         this.topology = topology.isResolvable() ? topology.get() : null;
+        this.defaultsRegistry = defaultsRegistry.isResolvable() ? defaultsRegistry.get() : null;
     }
 
     public DriveProfileDerivationPhase(MindMapStore store,
@@ -65,7 +68,19 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
         this.store = store;
         this.classifier = classifier;
         this.topology = topology;
+        this.defaultsRegistry = null;
     }
+
+    public DriveProfileDerivationPhase(MindMapStore store,
+                                       SituationClassifier classifier,
+                                       CapsTopology topology,
+                                       io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry defaultsRegistry) {
+        this.store            = store;
+        this.classifier       = classifier;
+        this.topology         = topology;
+        this.defaultsRegistry = defaultsRegistry;
+    }
+
 
     @Override
     public String name() {
@@ -136,7 +151,7 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
 
             if (agentMemories.isEmpty()) {continue;}
 
-            Map<String, DriveProfile> profiles   = deriveProfiles(drivesToDerive, driveNodes, agentMemories, tenantId);
+            Map<String, DriveProfile> profiles   = deriveProfiles(drivesToDerive, driveNodes, agentMemories, tenantId, agentId);
             String                    subgraphId = findCognitiveSubgraph(tenantId, agentId);
             if (subgraphId == null) {continue;}
 
@@ -157,7 +172,7 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
     private Map<String, DriveProfile> deriveProfiles(List<MindMapNode> drivesToDerive,
                                                      List<MindMapNode> allDriveNodes,
                                                      List<MindMapNode> formativeNodes,
-                                                     String tenantId) {
+                                                     String tenantId, String agentId) {
         Map<String, DriveProfile> profiles = new HashMap<>();
 
         Map<String, String> driveDescriptions = new HashMap<>();
@@ -177,8 +192,8 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
 
             if (servingMemories.isEmpty()) {continue;}
 
-            Map<String, String> discriminationMeta = buildDiscriminationMetadata(
-                    driveType, driveDescriptions);
+            Map<String, String> discriminationMeta = addDispositionMetadata(
+                    buildDiscriminationMetadata(driveType, driveDescriptions), agentId);
 
             var inputActivations = new java.util.concurrent.ConcurrentHashMap<String, Double>();
             var memoryExcerpts = java.util.Collections.synchronizedList(new ArrayList<String>());
@@ -269,6 +284,22 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
                       + "'mastery' distinguishes skill but not helping. "
                       + "Pick the 2-3 nodes from different categories that best separate "
                       + "this drive from the others. Fewer is better than more.");
+    }
+
+    private Map<String, String> addDispositionMetadata(Map<String, String> metadata, String agentId) {
+        if (defaultsRegistry == null) {return metadata;}
+        var defaults = defaultsRegistry.forAgent(agentId);
+        if (defaults.isEmpty() || defaults.get().descriptor() == null) {return metadata;}
+        var axes = defaults.get().descriptor().disposition();
+        if (axes == null) {return metadata;}
+
+        var enriched = new HashMap<>(metadata);
+        if (axes.socialOrient() != null) {enriched.put("disposition.socialOrient", axes.socialOrient());}
+        if (axes.ruleFollowing() != null) {enriched.put("disposition.ruleFollowing", axes.ruleFollowing());}
+        if (axes.riskAppetite() != null) {enriched.put("disposition.riskAppetite", axes.riskAppetite());}
+        if (axes.autonomy() != null) {enriched.put("disposition.autonomy", axes.autonomy());}
+        if (axes.conflictMode() != null) {enriched.put("disposition.conflictMode", axes.conflictMode());}
+        return enriched;
     }
 
 
