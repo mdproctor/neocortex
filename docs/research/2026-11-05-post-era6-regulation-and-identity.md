@@ -847,3 +847,13 @@ This contradicts appraisal theory (Lazarus 1991): personality shapes primary app
 2. **Static tension table over learned thresholds** — the 6 tension entries are psychologically grounded (approach-avoidance conflict, autonomy-conformity tension). A learned threshold would need training data that doesn't exist yet. The table is extensible by adding entries.
 3. **Path C rebuilds the system prompt** rather than appending to it — when tension is high, the personality frame must precede the task instructions so the LLM perceives the character lens before encountering the classification rules.
 4. **DriveProfileDerivationPhase deferred** — the second classify() call site (line 196/214) needs separate evaluation. The drive derivation pipeline has different sensitivity to personality injection than the experience classification pipeline.
+
+### Threshold sensitivity analysis (#972)
+
+The 0.5 tension threshold was originally hardcoded. #972 made it configurable (`casehub.caps.classification.tension-threshold`, default 0.5) and ran a sensitivity analysis at 0.3, 0.5, and 0.7.
+
+**Analytical finding:** threshold 0.5 is optimal. The tension table's 6 entries all score ≥ 0.6 (range 0.6–1.0). No scores exist in (0.0, 0.6) — the table is binary (genuine tension vs. none). Any threshold in (0.0, 0.6) produces identical routing. Threshold 0.7 drops 3/6 entries including "competitive+strict" (0.6) and "bold+avoidant" (0.7), whose tension narratives describe genuine interpretive conflicts that warrant path C framing.
+
+**Eval test:** `TensionThresholdSensitivityEvalTest` exercises all 6 tension table entries via 7 profiles (6 tension-triggering + 1 baseline) across thresholds 0.3/0.5/0.7. Measures inter-profile variance, boundary profile dual-activation, and stability for always-same-path profiles. LLM eval data collection pending Vertex model availability (fable-5-2 blocked at time of implementation).
+
+**Code changes:** `LlmSituationClassifier` now accepts `tensionThreshold` as a 4th constructor parameter with [0,1] validation. `LlmSituationClassifierProducer` injects it via `@ConfigProperty`. Full analysis: `docs/specs/issue-972-tension-threshold-sensitivity.md`.
