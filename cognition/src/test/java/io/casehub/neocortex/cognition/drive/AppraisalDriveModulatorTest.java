@@ -73,6 +73,28 @@ class AppraisalDriveModulatorTest {
         assertThat(dual.get(DriveAxis.COMPETENCE)).isGreaterThan(single.get(DriveAxis.COMPETENCE));
     }
 
+
+    @Test
+    void hopeBoostsCuriosityAboveTriggerThreshold() {
+        var mods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.HOPE, 0.63)));
+        assertThat(mods.get(DriveAxis.CURIOSITY))
+                .as("HOPE at 0.63 should produce CURIOSITY delta > 0.2 trigger threshold")
+                .isGreaterThan(0.2);
+        assertThat(mods.get(DriveAxis.COMPETENCE))
+                .as("HOPE should also give secondary COMPETENCE boost")
+                .isGreaterThan(0.05);
+    }
+
+    @Test
+    void hopeStrongerCuriosityDriverThanJoy() {
+        var hopeMods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.HOPE, 0.6)));
+        var joyMods  = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.JOY, 0.6)));
+        assertThat(hopeMods.get(DriveAxis.CURIOSITY))
+                .as("HOPE (BOOST=0.5) should produce larger CURIOSITY delta than JOY (SECONDARY_BOOST=0.25)")
+                .isGreaterThan(joyMods.get(DriveAxis.CURIOSITY));
+    }
+
+
     @Test
     void emptyEmotionsReturnsZeros() {
         var mods = AppraisalDriveModulator.modulate(List.of());
