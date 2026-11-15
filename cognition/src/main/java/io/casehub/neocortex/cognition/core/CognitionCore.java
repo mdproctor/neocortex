@@ -1215,18 +1215,19 @@ public @Nullable String lastTargetAgentId() {
         }
     }
 
+
     private void bridgeAppraisalToMood(io.casehub.neocortex.cognition.appraisal.AppraisalResult result,
                                        String agentId, String tenantId) {
-        if (result.emotions().isEmpty()) return;
+        if (result.emotions().isEmpty()) {return;}
         double totalIntensity = result.emotions().stream()
-                .mapToDouble(io.casehub.neocortex.cognitive.CognitiveEmotion::intensity).sum();
-        if (totalIntensity <= 0) return;
+                                      .mapToDouble(io.casehub.neocortex.cognitive.CognitiveEmotion::intensity).sum();
+        if (totalIntensity <= 0) {return;}
         double p = result.emotions().stream()
-                .mapToDouble(e -> e.intensity() * e.pad().pleasure()).sum() / totalIntensity;
+                         .mapToDouble(e -> e.intensity() * e.pad().pleasure()).sum() / totalIntensity;
         double a = result.emotions().stream()
-                .mapToDouble(e -> e.intensity() * e.pad().arousal()).sum() / totalIntensity;
+                         .mapToDouble(e -> e.intensity() * e.pad().arousal()).sum() / totalIntensity;
         double d = result.emotions().stream()
-                .mapToDouble(e -> e.intensity() * e.pad().dominance()).sum() / totalIntensity;
+                         .mapToDouble(e -> e.intensity() * e.pad().dominance()).sum() / totalIntensity;
         mood.record(new MoodSignal.DirectShift(
                 Math.max(-2.0, Math.min(2.0, p)),
                 Math.max(-2.0, Math.min(2.0, a)),

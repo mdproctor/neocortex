@@ -193,4 +193,28 @@ class AppraisalStatePropagationTest {
                 .doesNotContain("no knowledge gaps");
     }
 
+    @Test
+    void appraisalMoodBridgeProducesProportionalShift() {
+        var emotion = new CognitiveEmotion(EmotionType.FEAR, 0.6, "threat",
+                Instant.now(), EmotionSource.INTRINSIC, new PadProjection(-0.5, 0.5, -0.3));
+        var appraisal = new AppraisalResult(
+                List.of(emotion), List.of(), HabituationState.empty(), "danger detected");
+
+        var config = CognitionConfig.all().with("regulation", true).with("appraisal", true);
+        var harness = CognitionTestHarness.builder()
+                .withCognitionConfig(config)
+                .agentFromAxes("a1", "cooperative", "flexible", "moderate", "collaborative", "analytical")
+                .withAppraisalResult("a1", appraisal)
+                .build();
+
+        harness.observe("a1", "test-tenant", "A threatening situation");
+        harness.tick("a1", "test-tenant");
+
+        var mood = harness.currentMood("a1", "test-tenant").orElseThrow();
+        assertThat(mood.pleasure())
+                .as("Single bridge: mood pleasure should reflect PAD projection, not 2x")
+                .isBetween(-0.8, -0.1);
+    }
+
+
 }
