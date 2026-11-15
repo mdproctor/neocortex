@@ -27,7 +27,7 @@ public class LlmSituationClassifier implements SituationClassifier {
     private static final double CONFIDENCE_THRESHOLD = 0.3;
     private static final Duration TIMEOUT = Duration.ofSeconds(120);
 
-    private static final double TENSION_THRESHOLD = 0.5;
+    static final double DEFAULT_TENSION_THRESHOLD = 0.5;
 
     private final SessionPipeline pipeline;
     private final String model;
@@ -35,19 +35,29 @@ public class LlmSituationClassifier implements SituationClassifier {
     private final String systemPrompt;
     private final CapsTopology topology;
     private final Set<String> validNodeIds;
+    private final double tensionThreshold;
 
     public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology) {
-        this(pipeline, topology, "haiku");
+        this(pipeline, topology, "haiku", DEFAULT_TENSION_THRESHOLD);
     }
 
     public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology, String model) {
-        this.pipeline = pipeline;
-        this.model = model;
-        this.topology = topology;
-        this.validNodeIds = topology.nodes().entrySet().stream()
-            .filter(e -> e.getValue().type() == NodeType.INPUT)
-            .map(Map.Entry::getKey)
-            .collect(Collectors.toSet());
+        this(pipeline, topology, model, DEFAULT_TENSION_THRESHOLD);
+    }
+
+    public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology,
+                                  String model, double tensionThreshold) {
+        if (tensionThreshold < 0 || tensionThreshold > 1) {
+            throw new IllegalArgumentException("tensionThreshold must be in [0, 1]: " + tensionThreshold);
+        }
+        this.pipeline         = pipeline;
+        this.model            = model;
+        this.topology         = topology;
+        this.tensionThreshold = tensionThreshold;
+        this.validNodeIds     = topology.nodes().entrySet().stream()
+                                        .filter(e -> e.getValue().type() == NodeType.INPUT)
+                                        .map(Map.Entry::getKey)
+                                        .collect(Collectors.toSet());
         this.systemPrompt = buildSystemPrompt(topology);
     }
 
@@ -61,7 +71,7 @@ public class LlmSituationClassifier implements SituationClassifier {
 
         boolean hasPersonality = PersonalityPromptBuilder.hasDisposition(metadata);
         double tension = hasPersonality ? DispositionTension.maxTension(metadata) : 0.0;
-        boolean pathC = tension > TENSION_THRESHOLD;
+        boolean pathC = tension > tensionThreshold;
 
         var sessionId = context.agentId() != null
                 ? "classifier-" + context.agentId()
