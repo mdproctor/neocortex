@@ -71,6 +71,17 @@ public class DriveProfileDerivationPhase implements ConsolidationPhase {
         this.defaultsRegistry = null;
     }
 
+    public DriveProfileDerivationPhase(MindMapStore store,
+                                       SituationClassifier classifier,
+                                       CapsTopology topology,
+                                       io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry defaultsRegistry) {
+        this.store            = store;
+        this.classifier       = classifier;
+        this.topology         = topology;
+        this.defaultsRegistry = defaultsRegistry;
+    }
+
+
     @Override
     public String name() {
         return "drive-profile-derivation";
