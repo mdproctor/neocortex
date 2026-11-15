@@ -11,11 +11,18 @@ import java.util.Optional;
  * Personality × emotion-type regulation strategy prediction (Petter et al. 2025).
  * Emotion type encodes situation controllability (ANGER = controllable, FEAR = not),
  * so the predictor is situation-aware without reading the scenario text.
+ *
+ * @deprecated Strategy selection intelligence migrated to
+ * {@link io.casehub.neocortex.cognition.coping.CopingStrategyPredictor} (#992).
+ * When {@link io.casehub.neocortex.cognition.core.CognitionConfig#copingEnabled()} is true,
+ * this predictor is bypassed. Retained for non-coping paths and static utilities
+ * ({@link #emotionCategory(io.casehub.neocortex.cognitive.EmotionType)}).
  */
+@Deprecated(since = "issue-995")
 public class RegulationStrategyPredictor {
 
     static final double HIGH_INTENSITY_THRESHOLD = 0.75;
-    static final double ALIGNED_EFFECTIVENESS = 0.55;
+    static final double ALIGNED_EFFECTIVENESS    = 0.55;
     static final double MISALIGNED_EFFECTIVENESS = 0.35;
     static final double REAPPRAISAL_THRESHOLD    = 0.65;
     static final double SUPPRESSION_THRESHOLD    = 0.65;
@@ -50,7 +57,7 @@ public class RegulationStrategyPredictor {
             return Optional.empty();
         }
         if (emotionCategory(dominantEmotion) == EmotionCategory.UNCONTROLLABLE_NEGATIVE
-                && peakIntensity < MILD_DISTRESS_THRESHOLD) {
+            && peakIntensity < MILD_DISTRESS_THRESHOLD) {
             return predictControllableFromCapacities(rd, axes);
         }
         return predictFromCapacities(rd, axes, dominantEmotion);
@@ -76,13 +83,13 @@ public class RegulationStrategyPredictor {
                 REAPPRAISAL_THRESHOLD, SUPPRESSION_THRESHOLD, DOMINANCE_MARGIN);
         if (dominant == null) {return Optional.empty();}
         if (dominant == EmotionRegulationStrategy.RESPONSE_MODULATION) {
-            if (hasCompetitiveAvoidantConflict(axes)) return Optional.empty();
-            if (rd.reappraisalCapacity() >= VIABLE_REAPPRAISAL) return Optional.empty();
+            if (hasCompetitiveAvoidantConflict(axes)) {return Optional.empty();}
+            if (rd.reappraisalCapacity() >= VIABLE_REAPPRAISAL) {return Optional.empty();}
         }
         if (dominant == EmotionRegulationStrategy.COGNITIVE_CHANGE) {
             double maxAlt = Math.max(rd.suppressionCapacity(), rd.redirectTendency());
             if (maxAlt >= VIABLE_ALTERNATIVE
-                    && rd.reappraisalCapacity() - maxAlt < OVERWHELMING_DOMINANCE) {
+                && rd.reappraisalCapacity() - maxAlt < OVERWHELMING_DOMINANCE) {
                 return Optional.empty();
             }
         }
@@ -97,7 +104,7 @@ public class RegulationStrategyPredictor {
         // Nathanson 1992 compass of shame: avoidant personalities withdraw from shame
         // Bonanno & Burton 2013: fall through if redirect capacity degraded by prior failures
         if (axes != null && "avoidant".equals(axes.conflictMode())
-                && rd.redirectTendency() >= VIABLE_ALTERNATIVE) {
+            && rd.redirectTendency() >= VIABLE_ALTERNATIVE) {
             return Optional.of(new RegulationPrediction(
                     EmotionRegulationStrategy.SITUATION_SELECTION, 0.75, ALIGNED_EFFECTIVENESS));
         }
@@ -133,7 +140,7 @@ public class RegulationStrategyPredictor {
 
     private boolean hasCompetitiveAvoidantConflict(DispositionAxes axes) {
         boolean competitive = "competitive".equals(axes.conflictMode())
-                || "competitive".equals(axes.socialOrient());
+                              || "competitive".equals(axes.socialOrient());
         boolean avoidant = "avoidant".equals(axes.conflictMode());
         return competitive && avoidant;
     }

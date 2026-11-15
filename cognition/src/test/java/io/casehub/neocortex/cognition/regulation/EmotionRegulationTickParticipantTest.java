@@ -196,4 +196,103 @@ class EmotionRegulationTickParticipantTest {
                 eq(axes), eq(EmotionType.ANGER), isNull(), isNull(), isNull(), isNull());
     }
 
+
+    @Test
+    void copingEnabled_safetyGateTriggered_pinsAttentionalDeployment() {
+        var emotion = new CognitiveEmotion(EmotionType.FEAR, 0.90, "subject1",
+                                           java.time.Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
+                                           io.casehub.neocortex.cognitive.PadProjection.NEUTRAL);
+        var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
+        when(appraisalParticipant.currentResult("a1", "t1")).thenReturn(Optional.of(appraisal));
+
+        var generationPhase = mock(EmotionRegulationGenerationPhase.class);
+        var copingMicroLoop = mock(io.casehub.neocortex.cognition.coping.CopingMicroLoop.class);
+
+        var config = CognitionConfig.none().with("regulation", true)
+                                    .with("appraisal", true).with("coping", true);
+        var participant = new EmotionRegulationTickParticipant(
+                appraisalParticipant, config, generationPhase, null, null,
+                null, null, null, null, null, copingMicroLoop);
+        participant.tick(context);
+
+        // Safety gate fires (intensity 0.90 > 0.75) → AD pinned, regulation called
+        verify(generationPhase).generate(eq(context), eq(appraisal), any(), anyDouble(), anyDouble(),
+                                         isNull(), eq(EmotionRegulationStrategy.ATTENTIONAL_DEPLOYMENT));
+        // Coping micro-loop NOT called
+        org.mockito.Mockito.verifyNoInteractions(copingMicroLoop);
+    }
+
+    @Test
+    void copingEnabled_regulationRoutedStrategy_callsGenerateForCoping() {
+        var emotion = new CognitiveEmotion(EmotionType.ANGER, 0.65, "subject1",
+                                           java.time.Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
+                                           io.casehub.neocortex.cognitive.PadProjection.NEUTRAL);
+        var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
+        when(appraisalParticipant.currentResult("a1", "t1")).thenReturn(Optional.of(appraisal));
+
+        var appraisalContext = mock(io.casehub.neocortex.cognition.appraisal.AppraisalContext.class);
+        when(appraisalParticipant.currentContext("a1", "t1")).thenReturn(Optional.of(appraisalContext));
+
+        // CopingState with POSITIVE_REINTERPRETATION → regulation-routed to COGNITIVE_CHANGE
+        var copingState = io.casehub.neocortex.cognition.coping.CopingState.initial(
+                                    "original", java.util.Map.of(), List.of(emotion))
+                                                                           .withInterpretation("reinterpreted narrative")
+                                                                           .withStrategy(new io.casehub.neocortex.cognition.coping.CopingStrategyAttempt(
+                                                                                   io.casehub.neocortex.cognition.coping.CopingStrategy.POSITIVE_REINTERPRETATION,
+                                                                                   0, "reinterpreted narrative"));
+
+        var copingMicroLoop = mock(io.casehub.neocortex.cognition.coping.CopingMicroLoop.class);
+        when(copingMicroLoop.execute(any(), any(), any(), any(), any(), any(), any())).thenReturn(copingState);
+
+        var generationPhase = mock(EmotionRegulationGenerationPhase.class);
+
+        var config = CognitionConfig.none().with("regulation", true)
+                                    .with("appraisal", true).with("coping", true);
+        var participant = new EmotionRegulationTickParticipant(
+                appraisalParticipant, config, generationPhase, null, null,
+                null, null, null, null, null, copingMicroLoop);
+        participant.tick(context);
+
+        // Verify generateForCoping called with correct coping context
+        verify(generationPhase).generateForCoping(
+                eq(context), eq(appraisal), any(), anyDouble(), anyDouble(),
+                eq(io.casehub.neocortex.cognition.coping.CopingStrategy.POSITIVE_REINTERPRETATION),
+                eq(EmotionRegulationStrategy.COGNITIVE_CHANGE),
+                eq("reinterpreted narrative"));
+    }
+
+    @Test
+    void copingEnabled_directEffectStrategy_noRegulationCall() {
+        var emotion = new CognitiveEmotion(EmotionType.ANGER, 0.65, "subject1",
+                                           java.time.Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
+                                           io.casehub.neocortex.cognitive.PadProjection.NEUTRAL);
+        var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
+        when(appraisalParticipant.currentResult("a1", "t1")).thenReturn(Optional.of(appraisal));
+
+        var appraisalContext = mock(io.casehub.neocortex.cognition.appraisal.AppraisalContext.class);
+        when(appraisalParticipant.currentContext("a1", "t1")).thenReturn(Optional.of(appraisalContext));
+
+        // CopingState with PLANNING — direct-effect (not regulation-routed)
+        var copingState = io.casehub.neocortex.cognition.coping.CopingState.initial(
+                                    "original", java.util.Map.of(), List.of(emotion))
+                                                                           .withStrategy(new io.casehub.neocortex.cognition.coping.CopingStrategyAttempt(
+                                                                                   io.casehub.neocortex.cognition.coping.CopingStrategy.PLANNING,
+                                                                                   0, "I'll make a plan"));
+
+        var copingMicroLoop = mock(io.casehub.neocortex.cognition.coping.CopingMicroLoop.class);
+        when(copingMicroLoop.execute(any(), any(), any(), any(), any(), any(), any())).thenReturn(copingState);
+
+        var generationPhase = mock(EmotionRegulationGenerationPhase.class);
+
+        var config = CognitionConfig.none().with("regulation", true)
+                                    .with("appraisal", true).with("coping", true);
+        var participant = new EmotionRegulationTickParticipant(
+                appraisalParticipant, config, generationPhase, null, null,
+                null, null, null, null, null, copingMicroLoop);
+        participant.tick(context);
+
+        // No regulation call for direct-effect strategies
+        org.mockito.Mockito.verifyNoInteractions(generationPhase);
+        assertThat(participant.currentResult("a1", "t1")).isEmpty();
+    }
 }

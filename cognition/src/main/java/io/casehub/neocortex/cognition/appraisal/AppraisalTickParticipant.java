@@ -46,6 +46,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
 
     private final ConcurrentHashMap<String, ChannelWeightProfile> channelWeights  = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> regulatedNarratives = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AppraisalContext> contexts  = new ConcurrentHashMap<>();
 
 
     public Map<String, Double> currentConcernSalience(String agentId, String tenantId) {
@@ -170,11 +171,12 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
             personalityFacets = defaults.personalityProfile().facets();
         }
 
-        var result = appraisalStrategy.appraise(
-                new AppraisalContext(context.agentId(), situation, drives, weights, habConfig, habituation, mood,
-                        disposition, targetSchema, personalityFacets));
+        var appraisalContext = new AppraisalContext(context.agentId(), situation, drives, weights, habConfig, habituation, mood,
+                        disposition, targetSchema, personalityFacets);
+        var result = appraisalStrategy.appraise(appraisalContext);
 
         results.put(agentKey, result);
+        contexts.put(agentKey, appraisalContext);
         habituationStates.put(agentKey, result.updatedHabituation());
 
         if (!situation.salience().isEmpty()) {
@@ -203,6 +205,11 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
     public Optional<AppraisalResult> currentResult(String agentId, String tenantId) {
         return Optional.ofNullable(results.get(agentId + ":" + tenantId));
     }
+
+    public Optional<AppraisalContext> currentContext(String agentId, String tenantId) {
+        return Optional.ofNullable(contexts.get(agentId + ":" + tenantId));
+    }
+
 
     public Optional<String> currentRegulatedNarrative(String agentId, String tenantId) {
         return Optional.ofNullable(regulatedNarratives.get(agentId + ":" + tenantId));

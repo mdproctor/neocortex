@@ -269,6 +269,7 @@ public final class CognitiveDerivationEngine {
         AppraisalWeights        appraisal       = deriveAppraisalWeights(descriptor.dispositionProfile(), descriptor.disposition(), facets, ctx);
         HabituationConfig       habituation     = deriveHabituationConfig(descriptor.disposition(), descriptor.goals(), facets, ctx);
         RegulationDefaults      regulation      = deriveRegulationDefaults(descriptor.disposition(), facets, ctx);
+        CopingDefaults          coping          = deriveCopingDefaults(descriptor.disposition(), facets, ctx);
 
         if (graphStructure != null) {
             ctx.flow("deriveGraphStructure", "connectiveBias", "deriveSearchBudgetDefaults", "connectiveBias", graphStructure.connectiveBias());
@@ -295,6 +296,7 @@ public final class CognitiveDerivationEngine {
                                 .withAppraisalWeights(appraisal)
                                 .withHabituationConfig(habituation)
                                 .withRegulationDefaults(regulation)
+                                .withCopingDefaults(coping)
                                 .withSearchBudgetConfig(searchBudget)
                                 .withRecurringThoughtConfig(recurringThought)
                                 .withCapacityConfig(capacity)
@@ -322,6 +324,7 @@ public final class CognitiveDerivationEngine {
                                 .withAppraisalWeights(explicit.appraisalWeights() != null ? explicit.appraisalWeights() : derived.appraisalWeights())
                                 .withHabituationConfig(explicit.habituationConfig() != null ? explicit.habituationConfig() : derived.habituationConfig())
                                 .withRegulationDefaults(explicit.regulationDefaults() != null ? explicit.regulationDefaults() : derived.regulationDefaults())
+                                .withCopingDefaults(explicit.copingDefaults() != null ? explicit.copingDefaults() : derived.copingDefaults())
                                 .withSearchBudgetConfig(explicit.searchBudgetConfig() != null ? explicit.searchBudgetConfig() : derived.searchBudgetConfig())
                                 .withRecurringThoughtConfig(explicit.recurringThoughtConfig() != null ? explicit.recurringThoughtConfig() : derived.recurringThoughtConfig())
                                 .withCapacityConfig(mergeCapacity(explicit.capacityConfig(), derived.capacityConfig()))
@@ -835,6 +838,64 @@ public final class CognitiveDerivationEngine {
         ctx.output("socialRegulationTendency", Math.max(0.0, Math.min(1.0, social)));
         ctx.stageEnd();
         return new RegulationDefaults(Math.max(0.0, Math.min(1.0, reappraisal)), Math.max(0.0, Math.min(1.0, suppression)), Math.max(0.0, Math.min(1.0, redirect)), Math.max(0.0, Math.min(1.0, social)));
+    }
+
+    // Connor-Smith & Flachsbart (2007) meta-analysis: Big Five → coping strategy correlations
+// Big Five composites derived from PID-5 facets following existing CDE patterns
+    public static CopingDefaults deriveCopingDefaults(DispositionAxes axes, List<PersonalityFacet> facets) {
+        return deriveCopingDefaults(axes, facets, Ctx.NOOP);
+    }
+
+    public static CopingDefaults deriveCopingDefaults(DispositionAxes axes, List<PersonalityFacet> facets, Ctx ctx) {
+        if (facets == null || facets.isEmpty()) {return null;}
+        ctx.stageStart("deriveCopingDefaults");
+
+        double impulsivity       = facetScore(facets, PersonalityFacet.IMPULSIVITY, 0.5);
+        double anxiousness       = facetScore(facets, PersonalityFacet.ANXIOUSNESS, 0.5);
+        double emotionalLability = facetScore(facets, PersonalityFacet.EMOTIONAL_LABILITY, 0.5);
+        double withdrawal        = facetScore(facets, PersonalityFacet.WITHDRAWAL, 0.5);
+        double riskTaking        = facetScore(facets, PersonalityFacet.RISK_TAKING, 0.5);
+        double suspiciousness    = facetScore(facets, PersonalityFacet.SUSPICIOUSNESS, 0.5);
+        double callousness       = facetScore(facets, PersonalityFacet.CALLOUSNESS, 0.5);
+        double hostility         = facetScore(facets, PersonalityFacet.HOSTILITY, 0.5);
+        double intimacyAvoidance = facetScore(facets, PersonalityFacet.INTIMACY_AVOIDANCE, 0.5);
+        double manipulativeness  = facetScore(facets, PersonalityFacet.MANIPULATIVENESS, 0.5);
+
+        double ruleFollowingNumeric = axes != null
+                                      ? RULE_FOLLOWING_NUMERIC.getOrDefault(lower(axes.ruleFollowing()), 0.5) : 0.5;
+
+        double conscientiousness = (ruleFollowingNumeric + 1.0 - impulsivity) / 2.0;
+        double neuroticism       = (anxiousness + emotionalLability) / 2.0;
+        double openness          = (1.0 - withdrawal + 1.0 - suspiciousness + riskTaking) / 3.0;
+        double agreeableness     = (1.0 - callousness + 1.0 - hostility + 1.0 - manipulativeness) / 3.0;
+        double extraversion      = (1.0 - withdrawal + 1.0 - intimacyAvoidance) / 2.0;
+
+        ctx.base("conscientiousness", conscientiousness);
+        ctx.base("neuroticism", neuroticism);
+        ctx.base("openness", openness);
+        ctx.base("agreeableness", agreeableness);
+        ctx.base("extraversion", extraversion);
+
+        double planful          = conscientiousness;
+        double reinterpretation = openness;
+        double avoidance        = neuroticism;
+        double supportSeeking   = (agreeableness + extraversion) / 2.0;
+        double acceptance       = 1.0 - neuroticism;
+
+        planful          = clamp01(planful);
+        reinterpretation = clamp01(reinterpretation);
+        avoidance        = clamp01(avoidance);
+        supportSeeking   = clamp01(supportSeeking);
+        acceptance       = clamp01(acceptance);
+
+        ctx.output("planfulTendency", planful);
+        ctx.output("reinterpretationTendency", reinterpretation);
+        ctx.output("avoidanceTendency", avoidance);
+        ctx.output("supportSeekingTendency", supportSeeking);
+        ctx.output("acceptanceTendency", acceptance);
+        ctx.stageEnd();
+
+        return new CopingDefaults(planful, reinterpretation, avoidance, supportSeeking, acceptance);
     }
 
 

@@ -551,4 +551,26 @@ class EmotionRegulationGenerationPhaseTest {
     }
 
 
+    @Test
+    void buildCopingAwareMessage_includesCopingContext() {
+        var emotion = new CognitiveEmotion(EmotionType.ANGER, 0.75, "subject1",
+                                           Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
+                                           io.casehub.neocortex.cognitive.PadProjection.NEUTRAL);
+        var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
+
+        var msg = EmotionRegulationGenerationPhase.buildCopingAwareMessage(
+                context, appraisal, List.of(), 0.8, null, 0.1,
+                io.casehub.neocortex.cognition.coping.CopingStrategy.POSITIVE_REINTERPRETATION,
+                EmotionRegulationStrategy.COGNITIVE_CHANGE,
+                "I see this as a growth opportunity");
+
+        assertThat(msg).contains("COPING-ROUTED REGULATION");
+        assertThat(msg).contains("POSITIVE_REINTERPRETATION");
+        assertThat(msg).contains("COGNITIVE_CHANGE");
+        assertThat(msg).contains("I see this as a growth opportunity");
+        assertThat(msg).contains("pre-selected");
+        assertThat(msg).contains("Regulation effort: 0.80");
+        assertThat(msg).contains("Regulation fatigue: 10%");
+        assertThat(msg).contains("ANGER");
+    }
 }

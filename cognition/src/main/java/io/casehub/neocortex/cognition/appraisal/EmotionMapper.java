@@ -96,7 +96,7 @@ public final class EmotionMapper {
         return tendencies;
     }
 
-    static Map<String, Double> mergeDimensions(List<SecResult> results) {
+    public static Map<String, Double> mergeDimensions(List<SecResult> results) {
         var merged = new HashMap<String, Double>();
         for (var result : results) {
             merged.putAll(result.dimensions());

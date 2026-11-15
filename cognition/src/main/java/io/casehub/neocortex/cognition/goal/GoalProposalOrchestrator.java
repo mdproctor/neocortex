@@ -129,6 +129,20 @@ public class GoalProposalOrchestrator {
         state.registeredGoals = List.copyOf(merged);
     }
 
+    public void requestAbandonment(String agentId, String tenantId, String goalName, String reason) {
+        String            key   = agentId + "|" + tenantId;
+        GoalProposalState state = states.computeIfAbsent(key, k -> new GoalProposalState());
+        state.requestedAbandonments.add(new RequestedAbandonment(goalName, reason));
+    }
+
+    public void requestDemotion(String agentId, String tenantId, String goalName,
+                                GoalPriority priority, String reason) {
+        String            key   = agentId + "|" + tenantId;
+        GoalProposalState state = states.computeIfAbsent(key, k -> new GoalProposalState());
+        state.requestedDemotions.add(new PriorityAdjustment(goalName, priority, reason));
+    }
+
+
     public void registerParticipantGoals(String participantId, String agentId,
                                          String tenantId, List<DriveGoalProposal> goals) {
         String            key   = agentId + "|" + tenantId;
@@ -171,6 +185,16 @@ public class GoalProposalOrchestrator {
         DriveProfile profile = profileOpt.get();
 
         List<String> abandonments = evaluateRelevance(descriptor, profile, state, agentId, tenantId);
+        if (!state.requestedAbandonments.isEmpty()) {
+            var merged = new ArrayList<>(abandonments);
+            for (var req : state.requestedAbandonments) {
+                if (!merged.contains(req.goalName())) {
+                    merged.add(req.goalName());
+                }
+            }
+            abandonments = merged;
+            state.requestedAbandonments.clear();
+        }
 
         int existingDriveGoals = countDriveGoals(descriptor);
         int remainingCapacity = config.maxDriveGoals() - existingDriveGoals + abandonments.size();
@@ -217,6 +241,13 @@ public class GoalProposalOrchestrator {
                     state, newSynthesis);
             adjustments = demotionSignals.adjustments();
             govUpdates = demotionSignals.updates();
+        }
+
+        if (!state.requestedDemotions.isEmpty()) {
+            var mergedAdj = new ArrayList<>(adjustments);
+            mergedAdj.addAll(state.requestedDemotions);
+            adjustments = mergedAdj;
+            state.requestedDemotions.clear();
         }
 
         if (proposals.isEmpty() && abandonments.isEmpty()
@@ -556,18 +587,23 @@ public class GoalProposalOrchestrator {
         return compounds;
     }
 
+
+    record RequestedAbandonment(String goalName, String reason) {}
+
     static final class GoalProposalState {
-        Instant lastProposalTimestamp;
-        List<DriveGoalProposal> cachedProposals = List.of();
-        List<DriveGoalProposal> registeredGoals = List.of();
+        Instant                              lastProposalTimestamp;
+        List<DriveGoalProposal>              cachedProposals = List.of();
+        List<DriveGoalProposal>              registeredGoals = List.of();
         Map<String, List<DriveGoalProposal>> namespacedGoals = new HashMap<>();
 
-        List<String> cachedAbandonments = List.of();
-        Map<String, Instant> driveGoalBelowThresholdSince = new HashMap<>();
-        Set<String> failureSuppressedGoalNames = new HashSet<>();
-        Instant lastSeenSynthesisAt;
-        Map<String, EscalationTracker> escalationTrackers = new HashMap<>();
-        Map<String, Integer> demotionMisalignedCycles = new HashMap<>();
+        List<String>                   cachedAbandonments           = List.of();
+        Map<String, Instant>           driveGoalBelowThresholdSince = new HashMap<>();
+        Set<String>                    failureSuppressedGoalNames   = new HashSet<>();
+        Instant                        lastSeenSynthesisAt;
+        Map<String, EscalationTracker> escalationTrackers           = new HashMap<>();
+        Map<String, Integer>           demotionMisalignedCycles     = new HashMap<>();
+        List<RequestedAbandonment>     requestedAbandonments        = new java.util.concurrent.CopyOnWriteArrayList<>();
+        List<PriorityAdjustment>       requestedDemotions           = new java.util.concurrent.CopyOnWriteArrayList<>();
     }
 
     static final class EscalationTracker {

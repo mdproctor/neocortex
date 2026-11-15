@@ -3,18 +3,18 @@ package io.casehub.neocortex.cognition.regulation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
+import io.casehub.neocortex.cognition.coping.CopingStrategy;
 import io.casehub.neocortex.cognition.core.CognitionTickContext;
 import io.casehub.neocortex.cognition.drive.DriveAxis;
+import io.casehub.neocortex.cognition.prompt.observation.RegulationTracker;
 import io.casehub.neocortex.cognitive.EmotionType;
 import io.casehub.neocortex.cognitive.index.DispositionAxes;
 import io.casehub.neocortex.cognitive.index.RegulationDefaults;
 import io.casehub.platform.agent.AgentEvent;
 import io.casehub.platform.agent.AgentSessionInit;
 import io.casehub.platform.agent.session.SessionPipeline;
-import org.jspecify.annotations.Nullable;
 import org.eclipse.microprofile.config.ConfigProvider;
-
-import io.casehub.neocortex.cognition.prompt.observation.RegulationTracker;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -262,6 +262,26 @@ public class EmotionRegulationGenerationPhase {
         }
     }
 
+    public @Nullable EmotionRegulationResult generateForCoping(CognitionTickContext context,
+                                                               AppraisalResult appraisal,
+                                                               List<EmotionRegulationResult> history,
+                                                               double regulationEffort,
+                                                               double regulationFatigue,
+                                                               CopingStrategy copingStrategy,
+                                                               EmotionRegulationStrategy regulationTarget,
+                                                               String reinterpretedNarrative) {
+        if (sessionPipeline == null) {return null;}
+        try {
+            String response = invokeLlmForCoping(context, appraisal, history, regulationEffort,
+                                                 regulationFatigue, copingStrategy, regulationTarget, reinterpretedNarrative);
+            if (response == null) {return null;}
+            return parseResponse(response);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Coping-routed regulation generation failed", e);
+            return null;
+        }
+    }
+
 
     private String systemPrompt() {
         if (socialRegulationEnabled) return SYSTEM_PROMPT;
@@ -379,6 +399,26 @@ public class EmotionRegulationGenerationPhase {
                                            regulationFatigue, failureSignal, pinnedStrategy, axes,
                                            dominantEmotionType, regulationDefaults, shameContext,
                                            situationContext, distressTrajectories);
+        var responseText = new StringBuilder();
+        session.query(userMessage).subscribe().asStream()
+               .filter(e -> e instanceof AgentEvent.TextDelta)
+               .map(e -> ((AgentEvent.TextDelta) e).text())
+               .forEach(responseText::append);
+        return responseText.isEmpty() ? null : responseText.toString();
+    }
+
+    private String invokeLlmForCoping(CognitionTickContext context, AppraisalResult appraisal,
+                                      List<EmotionRegulationResult> history, double regulationEffort,
+                                      double regulationFatigue,
+                                      CopingStrategy copingStrategy,
+                                      EmotionRegulationStrategy regulationTarget,
+                                      String reinterpretedNarrative) {
+        var session = sessionPipeline.openSession("emotion-regulation-" + context.agentId(), AgentSessionInit.of(systemPrompt()));
+        var loadEstimate = (loadEstimator != null)
+                           ? loadEstimator.estimate(context.agentId(), context.tenantId())
+                           : null;
+        var userMessage = buildCopingAwareMessage(context, appraisal, history, regulationEffort, loadEstimate,
+                                                  regulationFatigue, copingStrategy, regulationTarget, reinterpretedNarrative);
         var responseText = new StringBuilder();
         session.query(userMessage).subscribe().asStream()
                .filter(e -> e instanceof AgentEvent.TextDelta)
@@ -700,6 +740,60 @@ public class EmotionRegulationGenerationPhase {
         if (capacity >= 0.3) return "low";
         return "minimal";
     }
+
+    static String buildCopingAwareMessage(CognitionTickContext context, AppraisalResult appraisal,
+                                          List<EmotionRegulationResult> history, double regulationEffort,
+                                          @Nullable CognitiveLoadEstimate loadEstimate,
+                                          double regulationFatigue,
+                                          CopingStrategy copingStrategy,
+                                          EmotionRegulationStrategy regulationTarget,
+                                          String reinterpretedNarrative) {
+        var sb = new StringBuilder();
+
+        sb.append("COPING-ROUTED REGULATION — strategy is pre-selected. Do NOT choose a different strategy.\n\n");
+        sb.append("Coping strategy: ").append(copingStrategy.name()).append("\n");
+        sb.append("Regulation target: ").append(regulationTarget.name())
+          .append(" (execute this strategy — assess effectiveness, regulated intensity, and produce experiential narrative)\n\n");
+
+        sb.append("Coping-produced reinterpretation:\n").append(reinterpretedNarrative).append("\n\n");
+
+        sb.append("Regulation effort: ").append(String.format("%.2f", regulationEffort))
+          .append(" (0=negligible, 1=maximum urgency)\n\n");
+
+        if (regulationFatigue > 0.01) {
+            sb.append("Regulation fatigue: ").append(String.format("%.0f%%", regulationFatigue * 100))
+              .append(" — factor this into effectiveness assessment\n\n");
+        }
+
+        if (loadEstimate != null) {
+            sb.append("Cognitive load: ").append(loadEstimate.level().name())
+              .append(" (drives=").append(loadEstimate.activeDrives())
+              .append(", goals=").append(loadEstimate.activeGoals())
+              .append(", ToM targets=").append(loadEstimate.mentalModelTargets())
+              .append(")\n\n");
+        }
+
+        sb.append("Current emotions (post-appraisal):\n");
+        for (var emotion : appraisal.emotions()) {
+            sb.append("- ").append(emotion.type().name())
+              .append(": intensity=").append(String.format("%.2f", emotion.intensity()))
+              .append(", subject=").append(emotion.subjectId())
+              .append("\n");
+        }
+
+        if (!history.isEmpty()) {
+            sb.append("\nRecent regulation history:\n");
+            for (var prev : history) {
+                sb.append("- ").append(prev.strategy().name())
+                  .append(" on ").append(String.join(", ", prev.targetEmotions()))
+                  .append(": effectiveness=").append(String.format("%.2f", prev.effectiveness()))
+                  .append("\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
 
     private @Nullable EmotionRegulationResult parseResponse(String response) throws Exception {
         var jsonStart = response.indexOf('{');

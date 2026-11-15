@@ -565,4 +565,39 @@ class GoalProposalOrchestratorTest {
     }
 
 
+    @Test
+    void requestAbandonment_includesGoalInNextTick() {
+        setupDrives("a1", "t1", DriveAxis.CURIOSITY, 0.7);
+
+        var goal       = driveGoal("doomed-goal");
+        var descriptor = descriptorWithGoals(goal);
+
+        orchestrator.requestAbandonment("a1", "t1", "doomed-goal", "resignation: perceived as uncontrollable");
+
+        var tick = orchestrator.tick("a1", "t1", descriptor);
+        assertThat(tick).isInstanceOf(GoalProposalTick.Changes.class);
+        var changes = (GoalProposalTick.Changes) tick;
+        assertThat(changes.abandonedGoalNames()).contains("doomed-goal");
+    }
+
+    @Test
+    void requestDemotion_includesAdjustmentInNextTick() {
+        setupDrives("a1", "t1", DriveAxis.CURIOSITY, 0.7);
+
+        var goal = new AgentGoal("deferred-goal", "Test goal", GoalPriority.PRIMARY,
+                                 Visibility.PUBLIC, List.of(),
+                                 Map.of("source", "drive", "driveAxis", "CURIOSITY"));
+        var descriptor = descriptorWithGoals(goal);
+
+        orchestrator.requestDemotion("a1", "t1", "deferred-goal",
+                                     GoalPriority.SECONDARY, "procrastination: deferring to reduce cognitive load");
+
+        var tick = orchestrator.tick("a1", "t1", descriptor);
+        assertThat(tick).isInstanceOf(GoalProposalTick.Changes.class);
+        var changes = (GoalProposalTick.Changes) tick;
+        assertThat(changes.priorityAdjustments()).hasSize(1);
+        assertThat(changes.priorityAdjustments().get(0).goalName()).isEqualTo("deferred-goal");
+        assertThat(changes.priorityAdjustments().get(0).newPriority()).isEqualTo(GoalPriority.SECONDARY);
+        assertThat(changes.priorityAdjustments().get(0).reason()).contains("procrastination");
+    }
 }

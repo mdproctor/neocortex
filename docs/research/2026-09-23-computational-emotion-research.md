@@ -305,6 +305,15 @@ theory. More focused on coping strategies than OCC.
 how agents cope with and manage their emotional states. This is relevant for our
 system's decay and adjustment mechanisms.
 
+**Implementation status (Nov 2026):** EMA coping is now designed and partially
+implemented (#595). The design adopts the full 16-strategy taxonomy (not a simplified
+3-mode version), organized by the mental representation each strategy targets
+(attention, belief, desire, intention). An intra-tick micro-loop provides the
+appraisal-coping-reappraisal cycle: the LLM reinterprets the situation narrative,
+keyword SEC checks re-evaluate, and the loop converges or iterates. Coping sits
+between Scherer appraisal and Gross regulation — coping selects the strategy,
+regulation executes it. See `specs/issue-595-coping-strategies/2026-11-15-coping-strategies-design.md`.
+
 **Key reference:**
 - Marsella, S. & Gratch, J. (2009). "EMA: A process model of appraisal dynamics."
 *Cognitive Systems Research*, 10(1), 70–90.

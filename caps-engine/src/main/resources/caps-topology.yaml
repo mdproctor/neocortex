@@ -588,6 +588,23 @@ nodes:
       - social_withdrawal
       - co_regulation
       - deliberate_provocation
+    coping:
+      - seek_information
+      - suppress_information
+      - shift_responsibility
+      - wishful_thinking
+      - denial
+      - mental_disengagement
+      - positive_reinterpretation
+      - acceptance
+      - planning
+      - seek_instrumental_support
+      - seek_emotional_support
+      - active_confrontation
+      - suppression
+      - procrastination
+      - resignation
+      - avoidance
 
 # Key connections with initial weights and provenance.
 # Format: source -> target, weight, provenance (empirical/consensus/estimated)

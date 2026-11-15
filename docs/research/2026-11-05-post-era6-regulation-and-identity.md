@@ -31,7 +31,7 @@ The regulation system adds a decision layer between appraisal (feeling an emotio
 | `CognitiveLoadEstimator` | #815 | Per-tick cognitive load proxy (drives + goals + ToM targets) |
 | `RegulationFatigueTracker` | #817 | Bosse Eq. 8-9 — fatigue accumulation and recovery |
 | `RegulationMonitor` | #820 | Gross 2015 control loop — effectiveness decline detection, strategy failure signals |
-| `RegulationStrategyPredictor` | #818 | Emotion-type × personality strategy prediction — constrains (not replaces) LLM generation |
+| `RegulationStrategyPredictor` | #818 | Emotion-type × personality strategy prediction — constrains (not replaces) LLM generation. **Being retired as selector (#595):** intelligence migrated to CopingStrategyPredictor; RegulationDefaults retained for execution capacity. |
 | EmotionMapper intensity fix | #816 | Removed redundant controllability multiplier from ANGER/FEAR intensity |
 
 ### Architecture
@@ -514,6 +514,8 @@ Root cause: `cognitive-index` depends on `cognitive-observability-api`, blocking
 **Dates:** 2026-11-10
 **Literature:** Frijda 1986 (action tendencies), Lazarus 1991 (appraisal→coping), Deci & Ryan 2000 (SDT drives)
 **Eval improvement:** Pipeline coherence eval (#894) from 2/5 → 4+/5 (all 4 scenarios)
+
+**Coping layer update (Nov 2026, #595):** The Lazarus appraisal→coping pathway referenced here is now implemented as a distinct pipeline layer using the full EMA model (Marsella & Gratch 2009). Coping sits between appraisal and regulation — not alongside regulation. CopingStrategyPredictor absorbs RegulationStrategyPredictor's intelligence (cognitive load gate, mild distress override, self-conscious emotion refinement) while adding EMA's controllability-first filtering and 16-strategy taxonomy. CopingDefaults (personality *preferences* — what you tend to do) complements RegulationDefaults (personality *capacities* — how well you do it). Design spec: `specs/issue-595-coping-strategies/2026-11-15-coping-strategies-design.md`.
 
 ### The problem
 

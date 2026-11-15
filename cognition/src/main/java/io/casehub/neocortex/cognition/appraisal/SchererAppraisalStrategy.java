@@ -53,6 +53,6 @@ public class SchererAppraisalStrategy implements AppraisalStrategy {
                 ? context.habituation().withObservation(hash, novelty)
                 : HabituationState.empty().withObservation(hash, novelty);
 
-        return new AppraisalResult(emotions, tendencies, habituation);
+        return new AppraisalResult(emotions, tendencies, habituation, null, dims);
     }
 }
