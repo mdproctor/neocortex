@@ -34,6 +34,9 @@ public final class TopologyChannelWeighter {
     );
 
     private static final Map<String, String> NODE_TO_CATEGORY = buildNodeCategoryMap();
+
+    private static final double               ATTENDING_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               ATTENDING_BLEND_FACTOR         = 0.4;
     private static final ChannelWeightProfile ATTENDING_PROFILE =
             new ChannelWeightProfile(0.15, 0.45, 0.15, 0.25);
 
@@ -129,10 +132,10 @@ public final class TopologyChannelWeighter {
                 attendingIntensity = at.intensity();
             }
         }
-        if (attendingIntensity <= 0.3) {
+        if (attendingIntensity <= ATTENDING_ACTIVATION_THRESHOLD) {
             return base;
         }
-        return base.blend(ATTENDING_PROFILE, attendingIntensity * 0.4);
+        return base.blend(ATTENDING_PROFILE, attendingIntensity * ATTENDING_BLEND_FACTOR);
     }
 
 
