@@ -110,6 +110,47 @@ class TopologyChannelWeighterTest {
     }
 
     @Test
+    void attendingTendencyBoostsAttentionalChannel() {
+        var activations = List.of(
+                new SituationActivation("agency_granted", 0.7),
+                new SituationActivation("mastery", 0.6));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.ATTENDING, 0.85, ""));
+        var boosted = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(boosted.attentional())
+                .as("ATTENDING tendency should boost attentional channel")
+                .isGreaterThan(baseLine.attentional());
+    }
+
+    @Test
+    void lowAttendingTendencyNoEffect() {
+        var activations = List.of(
+                new SituationActivation("physical_threat", 0.8));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.ATTENDING, 0.2, ""));
+        var result = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(result.attentional())
+                .isCloseTo(baseLine.attentional(), offset(0.001));
+    }
+
+    @Test
+    void nullActionTendenciesFallsBackToBase() {
+        var activations = List.of(
+                new SituationActivation("acceptance", 0.9));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+        var result   = TopologyChannelWeighter.weight(activations, null);
+
+        assertThat(result.attentional()).isCloseTo(baseLine.attentional(), offset(0.001));
+    }
+
+
+    @Test
     void profileWeightsSumToOne() {
         for (var category : TopologyChannelWeighter.knownCategories()) {
             var profile = TopologyChannelWeighter.profileForCategory(category);
