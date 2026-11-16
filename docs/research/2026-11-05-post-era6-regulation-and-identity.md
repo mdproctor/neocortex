@@ -854,13 +854,13 @@ The 0.5 tension threshold was originally hardcoded. #972 made it configurable (`
 
 **Analytical finding:** threshold 0.5 is optimal. The tension table's 6 entries all score ≥ 0.6 (range 0.6–1.0). No scores exist in (0.0, 0.6) — the table is binary (genuine tension vs. none). Any threshold in (0.0, 0.6) produces identical routing. Threshold 0.7 drops 3/6 entries including "competitive+strict" (0.6) and "bold+avoidant" (0.7), whose tension narratives describe genuine interpretive conflicts that warrant path C framing.
 
-**Eval test:** `TensionThresholdSensitivityEvalTest` exercises all 6 tension table entries via 7 profiles (6 tension-triggering + 1 baseline) across thresholds 0.3/0.5/0.7. Measures inter-profile variance, boundary profile dual-activation, and stability for always-same-path profiles. LLM eval data collection pending Vertex model availability (fable-5-2 blocked at time of implementation).
+**Eval test:** `TensionThresholdSensitivityEvalTest` exercises all 6 tension table entries via 7 profiles (6 tension-triggering + 1 baseline) across thresholds 0.3/0.5/0.7. Measures inter-profile variance, boundary profile dual-activation, and stability for always-same-path profiles. LLM eval data collection was initially blocked by a hardcoded model name (`"haiku"`) in the classifier — resolved in #989 by making the model parameter nullable (backend uses its configured default when null).
 
 **Code changes:** `LlmSituationClassifier` now accepts `tensionThreshold` as a 4th constructor parameter with [0,1] validation. `LlmSituationClassifierProducer` injects it via `@ConfigProperty`. Full analysis: `docs/specs/issue-972-tension-threshold-sensitivity.md`.
 
 ## Stream 15: Drive Modulation and Channel Weight Refinement (#983, #984, #985, #990)
 
-**Issues:** #973, #983, #984, #985, #986, #989 (blocked), #990
+**Issues:** #973, #983, #984, #985, #986, #989, #990
 **Date:** 2026-11-15
 **Literature:** Frijda 1986 (action tendencies), Tangney & Dearing 2002 (relational shame), Easterbrook 1959 (attentional narrowing)
 
@@ -882,6 +882,7 @@ Stream 11 eval findings identified three downstream coherence gaps that survived
 | #984 | Applied `Math.tanh()` to accumulated drive deltas | Natural diminishing returns — asymptotes at 1.0, symmetric for negative values. FEAR(0.9)+SHAME(0.9) → AUTONOMY ≈ 0.72 instead of 1.0 |
 | #985 | Added action tendency modulation to channel weighting | Overloaded `weight(activations, actionTendencies)` blends toward attention-heavy profile (0.15/0.45/0.15/0.25) when ATTENDING intensity > 0.3. Blend factor = `intensity × 0.4`. Wired into AppraisalTickParticipant |
 | #986 | Closed — already covered by #985 | |
+| #989 | Made LlmSituationClassifier model nullable | When null, skips `.withModel()` — backend uses its configured default. Eval tests no longer coupled to specific model deployment |
 | #990 | Warning log for non-JSON LLM responses | `parseResponse()` logs WARNING with truncated text when `extractJson()` returns null. Makes model unavailability diagnosable from logs |
 | #973 | Integration test for CBR disposition filter isolation | Real `InMemoryCbrRecordStore` verifying cross-personality cache isolation end-to-end |
 
@@ -897,6 +898,5 @@ Stream 11 eval findings identified three downstream coherence gaps that survived
 
 ### Deferred
 
-- **#989** — Re-run tension threshold LLM eval. Blocked on Vertex deployment update (fable-5-2 model unavailable)
 - **AVOIDANCE/ANTAGONISM channel modulation** — #985 only handles ATTENDING → attentional. Other action tendencies could similarly modulate channels (AVOIDANCE → somatic/action-tendency, ANTAGONISM → somatic). Deferred pending eval data showing the gap matters
 - **Context-dependent SHAME** — If eval shows SHAME still needs AFFILIATION engagement (not just non-suppression), a more nuanced mapping could use subject metadata or co-occurring emotion patterns to distinguish relational from self-directed shame
