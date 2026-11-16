@@ -248,4 +248,80 @@ class EmotionMapperTest {
                 .as("Urgency should boost arousal above canonical SHAME baseline")
                 .isGreaterThan(baselineArousal + 0.1);
     }
+
+    @Test
+    void interestFromHighNoveltyPositiveConduciveness() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.7, SecDimensions.NOVELTY, 0.7),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, 0.3));
+
+        var emotions = EmotionMapper.mapEmotions(results, "discovery");
+
+        assertThat(emotions).extracting("type").contains(EmotionType.INTEREST);
+    }
+
+    @Test
+    void noInterestWhenNegativeConduciveness() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.7, SecDimensions.NOVELTY, 0.8),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.4));
+
+        var emotions = EmotionMapper.mapEmotions(results, "bad-surprise");
+
+        assertThat(emotions).extracting("type").doesNotContain(EmotionType.INTEREST);
+    }
+
+    @Test
+    void remorseFromInternalStandardsViolationWithHighControllability() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.NOVELTY, 0.5),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.7),
+                SecResult.of("normative", SecDimensions.INTERNAL_STANDARDS, 0.2, SecDimensions.EXTERNAL_STANDARDS, 0.8));
+
+        var emotions = EmotionMapper.mapEmotions(results, "my-lie");
+
+        assertThat(emotions).extracting("type").contains(EmotionType.REMORSE);
+        assertThat(emotions).extracting("type").doesNotContain(EmotionType.SHAME);
+    }
+
+    @Test
+    void shameWhenLowControllabilityDespiteInternalStandardsViolation() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.NOVELTY, 0.5),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.3),
+                SecResult.of("normative", SecDimensions.INTERNAL_STANDARDS, 0.2, SecDimensions.EXTERNAL_STANDARDS, 0.8));
+
+        var emotions = EmotionMapper.mapEmotions(results, "my-weakness");
+
+        assertThat(emotions).extracting("type").contains(EmotionType.SHAME);
+        assertThat(emotions).extracting("type").doesNotContain(EmotionType.REMORSE);
+    }
+
+    @Test
+    void dominanceTendencyFromUrgentCrisis() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.9, SecDimensions.URGENCY, 0.8),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.6),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.3));
+
+        var tendencies = EmotionMapper.mapTendencies(results);
+
+        assertThat(tendencies).extracting("readiness").contains(ActionReadiness.DOMINANCE);
+    }
+
+    @Test
+    void arousalBoostedByNoveltyEvenWithoutUrgency() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.NOVELTY, 0.9),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, 0.5));
+
+        var emotions = EmotionMapper.mapEmotions(results, "exciting-discovery");
+        var joy = emotions.stream()
+                          .filter(e -> e.type() == EmotionType.JOY).findFirst().orElseThrow();
+
+        assertThat(joy.pad().arousal())
+                .as("High novelty should boost arousal even without urgency")
+                .isGreaterThan(0.15);
+    }
+
 }

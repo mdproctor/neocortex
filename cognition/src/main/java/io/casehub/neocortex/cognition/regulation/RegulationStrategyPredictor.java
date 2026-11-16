@@ -171,7 +171,7 @@ public class RegulationStrategyPredictor {
             case FEAR, DISTRESS, FEARS_CONFIRMED -> EmotionCategory.UNCONTROLLABLE_NEGATIVE;
             case SHAME, REMORSE -> EmotionCategory.SELF_CONSCIOUS;
             case REPROACH, DISAPPOINTMENT, PITY -> EmotionCategory.OTHER_DIRECTED;
-            case JOY, HOPE, SATISFACTION, RELIEF, PRIDE, ADMIRATION,
+            case JOY, HOPE, INTEREST, SATISFACTION, RELIEF, PRIDE, ADMIRATION,
                  GRATITUDE, GRATIFICATION, HAPPY_FOR, LOVE -> EmotionCategory.POSITIVE;
         };
     }

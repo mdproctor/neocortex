@@ -49,6 +49,13 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
             For each drive, consider: does this situation touch it? How? What does it \
             make the character want to do? Consider ALL drives, not just the strongest one.
 
+            Calibration anchors for dimension values:
+            - An exciting discovery or genuine surprise: novelty ≥ 0.7, urgency depends on time pressure
+            - An active crisis with ongoing harm: urgency ≥ 0.8, conduciveness ≤ -0.5
+            - A personal moral failure the character caused: internal-standards ≤ 0.3, \
+            controllability reflects whether they had a choice (high = guilt, low = helpless shame)
+            - A social norm violation by someone else: external-standards ≤ 0.3, controllability high
+
             Respond with JSON only:
             {
               "narrative": "2-3 sentences in first person. Gut reaction, internal sensation, \
