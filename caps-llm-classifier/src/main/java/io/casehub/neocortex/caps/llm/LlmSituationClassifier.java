@@ -113,7 +113,13 @@ public class LlmSituationClassifier implements SituationClassifier {
 
     List<SituationActivation> parseResponse(String text) {
         String json = extractJson(text);
-        if (json == null) return List.of();
+        if (json == null) {
+            if (text != null && !text.isBlank()) {
+                LOG.warning("LLM classifier returned non-JSON response (model misconfiguration?): "
+                        + text.substring(0, Math.min(200, text.length())));
+            }
+            return List.of();
+        }
 
         try {
             JsonNode root = mapper.readTree(json);
