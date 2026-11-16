@@ -34,6 +34,7 @@ public final class AppraisalDriveModulator {
                 deltas.merge(mapping.secondary, mapping.secondaryWeight * intensity, Double::sum);
             }
         }
+        deltas.replaceAll((axis, v) -> Math.tanh(v));
         return deltas;
     }
 
@@ -57,7 +58,7 @@ public final class AppraisalDriveModulator {
             Map.entry(EmotionType.FEAR,         new DriveMapping(DriveAxis.AUTONOMY, BOOST)),
             Map.entry(EmotionType.DISTRESS,     new DriveMapping(DriveAxis.AUTONOMY, BOOST)),
             Map.entry(EmotionType.FEARS_CONFIRMED, new DriveMapping(DriveAxis.AUTONOMY, BOOST)),
-            Map.entry(EmotionType.SHAME,        new DriveMapping(DriveAxis.AUTONOMY, BOOST, DriveAxis.AFFILIATION, REDUCE)),
+            Map.entry(EmotionType.SHAME,        new DriveMapping(DriveAxis.AUTONOMY, BOOST)),
             Map.entry(EmotionType.REMORSE,      new DriveMapping(DriveAxis.AUTONOMY, SECONDARY_BOOST)),
             Map.entry(EmotionType.DISAPPOINTMENT, new DriveMapping(DriveAxis.AUTONOMY, SECONDARY_BOOST)),
 

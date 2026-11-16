@@ -51,10 +51,10 @@ class AppraisalDriveModulatorTest {
     }
 
     @Test
-    void shameBoostsAutonomyReducesAffiliation() {
+    void shameBoostsAutonomyWithoutSuppressingAffiliation() {
         var mods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.SHAME, 0.7)));
         assertThat(mods.get(DriveAxis.AUTONOMY)).isGreaterThan(0.05);
-        assertThat(mods.get(DriveAxis.AFFILIATION)).isLessThan(0);
+        assertThat(mods.get(DriveAxis.AFFILIATION)).isCloseTo(0.0, offset(0.001));
     }
 
     @Test
@@ -103,4 +103,20 @@ class AppraisalDriveModulatorTest {
         assertThat(mods.get(DriveAxis.AFFILIATION)).isCloseTo(0.0, offset(0.001));
         assertThat(mods.get(DriveAxis.AUTONOMY)).isCloseTo(0.0, offset(0.001));
     }
+
+    @Test
+    void coOccurringEmotions_diminishingReturns() {
+        var mods = AppraisalDriveModulator.modulate(List.of(
+                emotion(EmotionType.FEAR, 0.9),
+                emotion(EmotionType.SHAME, 0.9)));
+        assertThat(mods.get(DriveAxis.AUTONOMY))
+                .as("FEAR+SHAME should not saturate AUTONOMY at 1.0")
+                .isLessThan(0.9);
+        assertThat(mods.get(DriveAxis.AUTONOMY))
+                .as("Combined should still be higher than single emotion")
+                .isGreaterThan(
+                        AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.FEAR, 0.9)))
+                                               .get(DriveAxis.AUTONOMY));
+    }
+
 }

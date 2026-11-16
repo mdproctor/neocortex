@@ -2,6 +2,7 @@ package io.casehub.neocortex.caps.llm;
 
 import io.casehub.neocortex.caps.CapsNode;
 import io.casehub.neocortex.caps.CapsTopology;
+import io.casehub.neocortex.caps.ClassificationContext;
 import io.casehub.neocortex.caps.NodeRange;
 import io.casehub.neocortex.caps.NodeType;
 import io.casehub.neocortex.caps.SituationActivation;
@@ -27,8 +28,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import io.casehub.neocortex.caps.ClassificationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -180,6 +179,36 @@ class LlmSituationClassifierTest {
         assertThat(LlmSituationClassifier.extractJson("prefix {\"a\": 1} suffix"))
             .isEqualTo("{\"a\": 1}");
     }
+
+    @Test
+    void parseResponse_nonJsonText_logsWarning() {
+        var classifier = new LlmSituationClassifier(stubPipeline("{}"), TOPOLOGY);
+        var handler = new java.util.logging.Handler() {
+            final List<java.util.logging.LogRecord> records = new ArrayList<>();
+
+            @Override
+            public void publish(java.util.logging.LogRecord record) {records.add(record);}
+
+            @Override
+            public void flush()                                     {}
+
+            @Override
+            public void close()                                     {}
+        };
+        var logger = java.util.logging.Logger.getLogger(LlmSituationClassifier.class.getName());
+        logger.addHandler(handler);
+        try {
+            var result = classifier.parseResponse(
+                    "The model claude-fable-5-2 is not available on your vertex deployment");
+            assertThat(result).isEmpty();
+            assertThat(handler.records).anyMatch(r ->
+                                                         r.getLevel() == java.util.logging.Level.WARNING
+                                                         && r.getMessage().contains("non-JSON response"));
+        } finally {
+            logger.removeHandler(handler);
+        }
+    }
+
 
     @Test
     void classify_pathA_appendsDispositionToUserPrompt() {

@@ -55,7 +55,7 @@ public class CbrCachingSituationDecorator implements SituationClassifier {
         "disposition.socialOrient"
     };
 
-    private static final CbrRecordSchema SCHEMA = CbrRecordSchema.of(CASE_TYPE,
+    static final CbrRecordSchema SCHEMA = CbrRecordSchema.of(CASE_TYPE,
         FeatureField.semanticText("description"),
         FeatureField.categorical("event-type"),
         FeatureField.categorical("cognitiveKind"),
