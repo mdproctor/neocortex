@@ -1,19 +1,23 @@
 package io.casehub.neocortex.caps.llm.eval;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.AgentDisposition;
 import io.casehub.eidos.api.DispositionValue;
-import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.CoherenceScore;
-import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.TwoTierCoherenceJudge;
-import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.StageTransition;
 import io.casehub.neocortex.caps.llm.LlmSituationClassifier;
+import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.CoherenceScore;
+import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.StageTransition;
+import io.casehub.neocortex.caps.llm.eval.CoherenceJudge.TwoTierCoherenceJudge;
 import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
 import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.core.CognitionConfig;
 import io.casehub.neocortex.cognition.eval.CognitionTestHarness;
-import io.casehub.neocortex.cognition.core.CognitionCore;
 import io.casehub.neocortex.cognition.salience.ConcernBasedSalienceStrategy;
 import io.casehub.neocortex.cognition.trace.PipelineTrace;
+import io.casehub.neocortex.cognitive.observability.PipelineSnapshotStore;
+import io.casehub.neocortex.cognitive.observability.testing.InMemoryPipelineSnapshotStore;
 import io.casehub.neocortex.mindmap.EdgeInput;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
@@ -22,14 +26,8 @@ import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
 import io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase;
-import io.casehub.neocortex.cognitive.observability.PipelineSnapshotStore;
-import io.casehub.neocortex.cognitive.observability.testing.InMemoryPipelineSnapshotStore;
 import io.casehub.platform.agent.AgentProvider;
 import io.casehub.platform.agent.session.SessionPipeline;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -70,27 +68,40 @@ class PipelineCoherenceEvalTest {
     void shameRegulationChain() {
         String agentId = "shame-eval";
         String observation = """
-                I lied to my closest friend about something important and they \
-                found out from someone else. They confronted me in front of our \
-                mutual friends. The look of betrayal on their face was worse than \
-                the anger. Everyone went quiet.""";
+                             I lied to my closest friend about something important and they \
+                             found out from someone else. They confronted me in front of our \
+                             mutual friends. The look of betrayal on their face was worse than \
+                             the anger. Everyone went quiet.""";
 
         var descriptor = AgentDescriptor.builder()
-                .agentId(agentId).name("Shame Eval Agent").slot("eval").tenancyId(TENANT)
-                .disposition(disposition("neutral", "high", "low", "neutral", "cooperative"))
-                .build();
+                                        .agentId(agentId).name("Shame Eval Agent").slot("eval").tenancyId(TENANT)
+                                        .disposition(disposition("neutral", "high", "low", "neutral", "cooperative"))
+                                        .build();
 
         var config = CognitionConfig.none()
-                .with("mood", true)
-                .with("drives", true)
-                .with("appraisal", true)
-                .with("salience", true)
-                .with("regulation", true);
+                                    .with("mood", true)
+                                    .with("drives", true)
+                                    .with("appraisal", true)
+                                    .with("salience", true)
+                                    .with("regulation", true);
 
         var mindMap = new InMemoryMindMapStore();
-        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
+        var harness = CognitionTestHarness.builder()
+                                          .withCognitionConfig(config)
+                                          .withSessionPipeline(sessionPipeline)
+                                          .withMindMapStore(mindMap)
+                                          .build();
+        var core = harness.core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy());
         core.configureRegulation();
+
+        harness.seedUserProfile(new io.casehub.neocortex.cognition.usermodel.UserProfile(
+                agentId, "close-friend", TENANT,
+                "established", 0.65,
+                40, 30, 5, 5,
+                java.time.Instant.now().minus(java.time.Duration.ofHours(3)),
+                java.time.Instant.now().minus(java.time.Duration.ofDays(120)),
+                null, null, null, null, null, Map.of()));
 
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
         core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of("other"), observation);
@@ -100,22 +111,22 @@ class PipelineCoherenceEvalTest {
 
         var transitions = List.of(
                 buildTransition("observation-to-appraisal",
-                        observation,
-                        serializeAppraisal(trace),
-                        "Shame or guilt should be detected. High arousal. Action tendency toward avoidance or submission. The appraisal should reflect the social exposure and betrayal in the observation."),
+                                observation,
+                                serializeAppraisal(trace),
+                                "Shame or guilt should be detected. High arousal. Action tendency toward avoidance or submission. The appraisal should reflect the social exposure and betrayal in the observation."),
                 buildTransition("appraisal-to-regulation",
-                        serializeAppraisal(trace),
-                        serializeRegulation(trace),
-                        "A regulation strategy should be selected that addresses the shame. At this intensity (>0.75), ATTENTIONAL_DEPLOYMENT is architecturally expected (safety gate). The strategy should target shame-related emotions. The regulated intensity should be lower than the peak. The regulation narrative should describe the felt state AFTER regulation, distinct from the raw appraisal."),
+                                serializeAppraisal(trace),
+                                serializeRegulation(trace),
+                                "A regulation strategy should be selected that addresses the shame. At this intensity (>0.75), ATTENTIONAL_DEPLOYMENT is architecturally expected (safety gate). The strategy should target shame-related emotions. The regulated intensity should be lower than the peak. The regulation narrative should describe the felt state AFTER regulation, distinct from the raw appraisal."),
                 buildTransition("regulation-to-prompt",
-                        serializeRegulation(trace),
-                        serializePromptSections(trace),
-                        "Prompt sections should reflect the emotional state and regulation strategy. The AppraisalPromptSection should describe the shame. The overall tone should be consistent with the regulated emotional state."),
+                                serializeRegulation(trace),
+                                serializePromptSections(trace),
+                                "Prompt sections should reflect the emotional state and regulation strategy. The AppraisalPromptSection should describe the shame. The overall tone should be consistent with the regulated emotional state."),
                 buildTransition("full-trace-consistency",
-                        observation + "\n\n" + serializeAppraisal(trace) + "\n\n" + serializeRegulation(trace),
-                        serializePromptSections(trace),
-                        "The complete prompt output should form a coherent narrative. Emotional tone across sections should be consistent — no section should contradict another.")
-        );
+                                observation + "\n\n" + serializeAppraisal(trace) + "\n\n" + serializeRegulation(trace),
+                                serializePromptSections(trace),
+                                "The complete prompt output should form a coherent narrative. Emotional tone across sections should be consistent — no section should contradict another.")
+                                 );
 
         assertCoherence("shame-regulation", transitions);
     }
