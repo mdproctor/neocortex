@@ -19,30 +19,33 @@ public class DriveComposer {
                                 String agentId, String tenantId, Instant now) {
         if (rawDrives.isEmpty()) {
             return new DriveProfile(agentId, tenantId, Map.of(), 0.0,
-                    DriveAxis.CURIOSITY, now);
+                                    DriveAxis.CURIOSITY, now);
         }
 
         var modulated = new EnumMap<DriveAxis, DriveIntensity>(DriveAxis.class);
 
         for (var entry : rawDrives.entrySet()) {
             var axis = entry.getKey();
-            var raw = entry.getValue();
-            double intensity = raw.intensity();
+            var raw  = entry.getValue();
+
+            double totalDelta     = 0.0;
+            double appraisalDelta = 0.0;
 
             if (mood != null) {
-                intensity = applyMoodModulation(intensity, axis, mood, config);
+                totalDelta += moodDelta(axis, mood, config);
             }
             if (disposition != null) {
-                intensity = applyPersonalityModulation(intensity, axis, disposition, config);
+                totalDelta += personalityDelta(axis, disposition, config);
             }
-            double appraisalDelta = 0;
             for (var layer : modulations) {
                 double delta = layer.modulation().getOrDefault(axis, 0.0) * layer.strength();
-                intensity += delta;
-                if ("appraisal".equals(layer.source())) appraisalDelta += delta;
+                totalDelta += delta;
+                if ("appraisal".equals(layer.source())) {appraisalDelta += delta;}
             }
 
+            double intensity = raw.intensity() + Math.tanh(totalDelta);
             intensity = Math.clamp(intensity, config.minIntensity(), config.maxIntensity());
+
             String trigger = raw.trigger();
             if (Math.abs(appraisalDelta) > 0.2) {
                 trigger = appraisalDelta > 0 ? "elevated by emotional response" : "dampened by emotional response";
@@ -50,35 +53,34 @@ public class DriveComposer {
             modulated.put(axis, new DriveIntensity(axis, intensity, trigger));
         }
 
-        double composite = computeComposite(modulated, config);
-        DriveAxis dominant = findDominant(modulated);
+        double    composite = computeComposite(modulated, config);
+        DriveAxis dominant  = findDominant(modulated);
 
         return new DriveProfile(agentId, tenantId, modulated, composite, dominant, now);
     }
 
-    private double applyMoodModulation(double intensity, DriveAxis axis,
-                                       MoodState mood, DriveConfig config) {
+    private double moodDelta(DriveAxis axis, MoodState mood, DriveConfig config) {
         double pleasureMod = mood.pleasure() * config.moodPleasureModulation();
-        double arousalMod = mood.arousal() * config.moodArousalModulation();
+        double arousalMod  = mood.arousal() * config.moodArousalModulation();
 
-        intensity += arousalMod;
+        double delta = arousalMod;
 
         if (axis == DriveAxis.AFFILIATION || axis == DriveAxis.COMPETENCE) {
-            intensity += pleasureMod;
+            delta += pleasureMod;
         } else {
-            intensity += pleasureMod * config.secondaryPleasureModulationFactor();
+            delta += pleasureMod * config.secondaryPleasureModulationFactor();
         }
 
         if (axis == DriveAxis.AUTONOMY && mood.dominance() < 0) {
-            intensity += Math.abs(mood.dominance()) * config.moodPleasureModulation();
+            delta += Math.abs(mood.dominance()) * config.moodPleasureModulation();
         }
 
-        return intensity;
+        return delta;
     }
 
-    private double applyPersonalityModulation(double intensity, DriveAxis axis,
-                                              AgentDisposition disposition,
-                                              DriveConfig config) {
+    private double personalityDelta(DriveAxis axis,
+                                    AgentDisposition disposition,
+                                    DriveConfig config) {
         var matchedAxis = switch (axis) {
             case CURIOSITY -> DispositionAxis.RISK_APPETITE;
             case COMPETENCE -> DispositionAxis.RULE_FOLLOWING;
@@ -87,10 +89,10 @@ public class DriveComposer {
         };
 
         var values = disposition.get(matchedAxis);
-        if (values.isEmpty()) return intensity;
+        if (values.isEmpty()) {return 0.0;}
 
         double weight = values.getFirst().weight();
-        return intensity + (weight * config.personalityModulationStrength());
+        return weight * config.personalityModulationStrength();
     }
 
     private double computeComposite(Map<DriveAxis, DriveIntensity> drives, DriveConfig config) {
