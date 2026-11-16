@@ -34,6 +34,9 @@ public final class TopologyChannelWeighter {
     );
 
     private static final Map<String, String> NODE_TO_CATEGORY = buildNodeCategoryMap();
+    private static final ChannelWeightProfile ATTENDING_PROFILE =
+            new ChannelWeightProfile(0.15, 0.45, 0.15, 0.25);
+
 
     private static Map<String, String> buildNodeCategoryMap() {
         return Map.ofEntries(
@@ -113,6 +116,25 @@ public final class TopologyChannelWeighter {
                 actionTendency / sum
         );
     }
+
+    public static ChannelWeightProfile weight(List<SituationActivation> activations,
+                                              List<ActionTendency> actionTendencies) {
+        ChannelWeightProfile base = weight(activations);
+        if (actionTendencies == null || actionTendencies.isEmpty()) {
+            return base;
+        }
+        double attendingIntensity = 0.0;
+        for (var at : actionTendencies) {
+            if (at.readiness() == ActionReadiness.ATTENDING && at.intensity() > attendingIntensity) {
+                attendingIntensity = at.intensity();
+            }
+        }
+        if (attendingIntensity <= 0.3) {
+            return base;
+        }
+        return base.blend(ATTENDING_PROFILE, attendingIntensity * 0.4);
+    }
+
 
     public static Set<String> knownCategories() {
         return CATEGORY_PROFILES.keySet();
