@@ -34,6 +34,7 @@ public final class AppraisalDriveModulator {
                 deltas.merge(mapping.secondary, mapping.secondaryWeight * intensity, Double::sum);
             }
         }
+        deltas.replaceAll((axis, v) -> Math.tanh(v));
         return deltas;
     }
 
