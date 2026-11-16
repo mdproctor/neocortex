@@ -51,10 +51,10 @@ class AppraisalDriveModulatorTest {
     }
 
     @Test
-    void shameBoostsAutonomyWithoutSuppressingAffiliation() {
+    void shameBoostsAutonomyAndAffiliation() {
         var mods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.SHAME, 0.7)));
         assertThat(mods.get(DriveAxis.AUTONOMY)).isGreaterThan(0.05);
-        assertThat(mods.get(DriveAxis.AFFILIATION)).isCloseTo(0.0, offset(0.001));
+        assertThat(mods.get(DriveAxis.AFFILIATION)).as("SHAME should boost AFFILIATION via secondary mapping").isGreaterThan(0.1);
     }
 
     @Test

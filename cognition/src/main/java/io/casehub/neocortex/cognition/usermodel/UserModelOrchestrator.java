@@ -8,7 +8,6 @@ import org.jspecify.annotations.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -111,6 +110,19 @@ public class UserModelOrchestrator {
                      .filter(java.util.Objects::nonNull)
                      .toList();
     }
+
+    public void seedProfile(UserProfile profile) {
+        String key   = profile.agentId() + ":" + profile.subjectId() + ":" + profile.tenantId();
+        var    state = new SubjectState(profile.agentId(), profile.subjectId(), profile.tenantId());
+        state.currentProfile           = profile;
+        state.totalInteractions        = profile.totalInteractions();
+        state.cumulativePositive       = profile.positiveSignals();
+        state.cumulativeNegative       = profile.negativeSignals();
+        state.cumulativeNeutral        = profile.neutralSignals();
+        state.lastInteractionTimestamp = profile.lastInteraction();
+        states.put(key, state);
+    }
+
 
     public static double computeFamiliarity(int positive, int negative, int neutral,
                                      RelationshipStageConfig stageConfig,

@@ -35,6 +35,21 @@ public final class TopologyChannelWeighter {
 
     private static final Map<String, String> NODE_TO_CATEGORY = buildNodeCategoryMap();
 
+    private static final double               ATTENDING_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               ATTENDING_BLEND_FACTOR         = 0.4;
+    private static final ChannelWeightProfile ATTENDING_PROFILE =
+            new ChannelWeightProfile(0.15, 0.45, 0.15, 0.25);
+    private static final double               AVOIDANCE_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               AVOIDANCE_BLEND_FACTOR = 0.4;
+    private static final ChannelWeightProfile AVOIDANCE_PROFILE =
+            new ChannelWeightProfile(0.35, 0.10, 0.15, 0.40);
+
+    private static final double               ANTAGONISM_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               ANTAGONISM_BLEND_FACTOR         = 0.4;
+    private static final ChannelWeightProfile ANTAGONISM_PROFILE              =
+            new ChannelWeightProfile(0.40, 0.10, 0.15, 0.35);
+
+
     private static Map<String, String> buildNodeCategoryMap() {
         return Map.ofEntries(
                 Map.entry("secure_attachment", "relationship"),
@@ -113,6 +128,37 @@ public final class TopologyChannelWeighter {
                 actionTendency / sum
         );
     }
+
+    public static ChannelWeightProfile weight(List<SituationActivation> activations,
+                                              List<ActionTendency> actionTendencies) {
+        ChannelWeightProfile base = weight(activations);
+        if (actionTendencies == null || actionTendencies.isEmpty()) {
+            return base;
+        }
+        double attendingIntensity  = 0.0;
+        double avoidanceIntensity  = 0.0;
+        double antagonismIntensity = 0.0;
+        for (var at : actionTendencies) {
+            switch (at.readiness()) {
+                case ATTENDING -> attendingIntensity = Math.max(attendingIntensity, at.intensity());
+                case AVOIDANCE -> avoidanceIntensity = Math.max(avoidanceIntensity, at.intensity());
+                case ANTAGONISM -> antagonismIntensity = Math.max(antagonismIntensity, at.intensity());
+                default -> {}
+            }
+        }
+        ChannelWeightProfile result = base;
+        if (avoidanceIntensity > AVOIDANCE_ACTIVATION_THRESHOLD) {
+            result = result.blend(AVOIDANCE_PROFILE, avoidanceIntensity * AVOIDANCE_BLEND_FACTOR);
+        }
+        if (antagonismIntensity > ANTAGONISM_ACTIVATION_THRESHOLD) {
+            result = result.blend(ANTAGONISM_PROFILE, antagonismIntensity * ANTAGONISM_BLEND_FACTOR);
+        }
+        if (attendingIntensity > ATTENDING_ACTIVATION_THRESHOLD) {
+            result = result.blend(ATTENDING_PROFILE, attendingIntensity * ATTENDING_BLEND_FACTOR);
+        }
+        return result;
+    }
+
 
     public static Set<String> knownCategories() {
         return CATEGORY_PROFILES.keySet();
