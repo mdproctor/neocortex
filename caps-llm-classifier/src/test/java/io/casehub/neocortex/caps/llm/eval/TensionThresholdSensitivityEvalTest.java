@@ -116,7 +116,7 @@ class TensionThresholdSensitivityEvalTest {
 
         resultsByThreshold = new HashMap<>();
         for (double threshold : THRESHOLDS) {
-            var classifier = new LlmSituationClassifier(pipeline, topology, "haiku", threshold);
+            var classifier = new LlmSituationClassifier(pipeline, topology, null, threshold);
             Map<String, Map<String, double[]>> profileResults = new HashMap<>();
 
             for (Profile profile : PROFILES) {
@@ -370,7 +370,7 @@ class TensionThresholdSensitivityEvalTest {
         String  observation = OBSERVATIONS.get(0);
 
         for (double threshold : THRESHOLDS) {
-            var classifier = new LlmSituationClassifier(pipeline, topology, "haiku", threshold);
+            var classifier = new LlmSituationClassifier(pipeline, topology, null, threshold);
             ClassificationResult result = classifier.classify(
                     observation, profile.disposition(),
                     ClassificationContext.of(TENANT, "debug-" + threshold));

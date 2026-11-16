@@ -38,7 +38,7 @@ public class LlmSituationClassifier implements SituationClassifier {
     private final double tensionThreshold;
 
     public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology) {
-        this(pipeline, topology, "haiku", DEFAULT_TENSION_THRESHOLD);
+        this(pipeline, topology, null, DEFAULT_TENSION_THRESHOLD);
     }
 
     public LlmSituationClassifier(SessionPipeline pipeline, CapsTopology topology, String model) {
@@ -82,9 +82,12 @@ public class LlmSituationClassifier implements SituationClassifier {
             var tensionEntry = DispositionTension.topTension(metadata).orElseThrow();
             String personalitySystem = PersonalityPromptBuilder.personalitySystemPrompt(
                 metadata, tensionEntry, topology);
-            init = AgentSessionInit.of(personalitySystem).withModel(model);
+            init = AgentSessionInit.of(personalitySystem);
         } else {
-            init = AgentSessionInit.of(systemPrompt).withModel(model);
+            init = AgentSessionInit.of(systemPrompt);
+        }
+        if (model != null) {
+            init = init.withModel(model);
         }
 
         var session = pipeline.openSession(sessionId, init);
