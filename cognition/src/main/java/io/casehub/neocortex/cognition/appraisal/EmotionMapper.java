@@ -17,21 +17,21 @@ public final class EmotionMapper {
     private EmotionMapper() {}
 
     public static List<CognitiveEmotion> mapEmotions(List<SecResult> results, String subjectId) {
-        var dims = mergeDimensions(results);
+        var dims     = mergeDimensions(results);
         var emotions = new ArrayList<CognitiveEmotion>();
-        var now = Instant.now();
+        var now      = Instant.now();
 
-        double relevance = dims.getOrDefault(SecDimensions.RELEVANCE, 0.0);
-        double novelty = dims.getOrDefault(SecDimensions.NOVELTY, 0.0);
-        double urgency = dims.getOrDefault(SecDimensions.URGENCY, 0.0);
-        double conduciveness = dims.getOrDefault(SecDimensions.CONDUCIVENESS, 0.0);
+        double relevance       = dims.getOrDefault(SecDimensions.RELEVANCE, 0.0);
+        double novelty         = dims.getOrDefault(SecDimensions.NOVELTY, 0.0);
+        double urgency         = dims.getOrDefault(SecDimensions.URGENCY, 0.0);
+        double conduciveness   = dims.getOrDefault(SecDimensions.CONDUCIVENESS, 0.0);
         double controllability = dims.getOrDefault(SecDimensions.CONTROLLABILITY, 0.5);
-        double internalStd = dims.getOrDefault(SecDimensions.INTERNAL_STANDARDS, 1.0);
-        double externalStd = dims.getOrDefault(SecDimensions.EXTERNAL_STANDARDS, 1.0);
+        double internalStd     = dims.getOrDefault(SecDimensions.INTERNAL_STANDARDS, 1.0);
+        double externalStd     = dims.getOrDefault(SecDimensions.EXTERNAL_STANDARDS, 1.0);
 
-        if (relevance < 0.2) return emotions;
+        if (relevance < 0.2) {return emotions;}
 
-        double arousalBoost = urgency * 0.5;
+        double arousalBoost = urgency * 0.4 + novelty * 0.3;
 
         double fearThreshold = urgency > 0.7 ? 0.6 : 0.4;
         if (conduciveness < -0.2 && controllability < fearThreshold) {
@@ -43,7 +43,7 @@ public final class EmotionMapper {
             emotions.add(emotion(EmotionType.ANGER, intensity, subjectId, now, arousalBoost));
         }
         if (conduciveness < -0.2 && !containsType(emotions, EmotionType.FEAR)
-                && !containsType(emotions, EmotionType.ANGER)) {
+            && !containsType(emotions, EmotionType.ANGER)) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
             emotions.add(emotion(EmotionType.DISTRESS, intensity, subjectId, now, arousalBoost));
         }
@@ -58,7 +58,15 @@ public final class EmotionMapper {
             emotions.add(emotion(EmotionType.HOPE, intensity, subjectId, now, arousalBoost));
         }
 
-        if (internalStd < 0.5) {
+        if (novelty > 0.5 && conduciveness >= 0 && relevance > 0.3) {
+            double intensity = clampIntensity(relevance * novelty * 0.8);
+            emotions.add(emotion(EmotionType.INTEREST, intensity, subjectId, now, arousalBoost));
+        }
+
+        if (internalStd < 0.5 && controllability > 0.5) {
+            double intensity = clampIntensity(relevance * (1.0 - internalStd));
+            emotions.add(emotion(EmotionType.REMORSE, intensity, subjectId, now, arousalBoost));
+        } else if (internalStd < 0.5) {
             double intensity = clampIntensity(relevance * (1.0 - internalStd));
             emotions.add(emotion(EmotionType.SHAME, intensity, subjectId, now, arousalBoost));
         }
@@ -72,12 +80,13 @@ public final class EmotionMapper {
     }
 
     public static List<ActionTendency> mapTendencies(List<SecResult> results) {
-        var dims = mergeDimensions(results);
+        var dims       = mergeDimensions(results);
         var tendencies = new ArrayList<ActionTendency>();
 
-        double conduciveness = dims.getOrDefault(SecDimensions.CONDUCIVENESS, 0.0);
+        double conduciveness   = dims.getOrDefault(SecDimensions.CONDUCIVENESS, 0.0);
         double controllability = dims.getOrDefault(SecDimensions.CONTROLLABILITY, 0.5);
-        double novelty = dims.getOrDefault(SecDimensions.NOVELTY, 0.0);
+        double novelty         = dims.getOrDefault(SecDimensions.NOVELTY, 0.0);
+        double urgency         = dims.getOrDefault(SecDimensions.URGENCY, 0.0);
 
         if (conduciveness > 0.3) {
             tendencies.add(new ActionTendency(ActionReadiness.APPROACH, clampIntensity(conduciveness), ""));
@@ -85,6 +94,10 @@ public final class EmotionMapper {
             tendencies.add(new ActionTendency(ActionReadiness.AVOIDANCE, clampIntensity(Math.abs(conduciveness)), ""));
         } else if (conduciveness < -0.3 && controllability > 0.5) {
             tendencies.add(new ActionTendency(ActionReadiness.ANTAGONISM, clampIntensity(Math.abs(conduciveness)), ""));
+        }
+
+        if (urgency > 0.6 && conduciveness < -0.2) {
+            tendencies.add(new ActionTendency(ActionReadiness.DOMINANCE, clampIntensity(urgency), ""));
         }
 
         if (novelty > 0.5) {

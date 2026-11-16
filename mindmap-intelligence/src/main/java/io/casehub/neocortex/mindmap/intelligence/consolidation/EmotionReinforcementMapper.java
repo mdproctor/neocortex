@@ -21,6 +21,7 @@ public final class EmotionReinforcementMapper {
 
         var posBas = new ReinforcementSignal(1.0, Set.of("bas"));
         m.put(EmotionType.HOPE, posBas);
+        m.put(EmotionType.INTEREST, posBas);
         m.put(EmotionType.RELIEF, posBas);
         m.put(EmotionType.JOY, posBas);
         m.put(EmotionType.SATISFACTION, posBas);

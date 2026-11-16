@@ -8,6 +8,8 @@ public enum EmotionType {
     HOPE, FEAR, SATISFACTION, DISAPPOINTMENT, RELIEF, FEARS_CONFIRMED,
     // Well-being
     JOY, DISTRESS,
+    // Epistemic (Silvia 2006 extension)
+    INTEREST,
     // Fortunes of others
     HAPPY_FOR, PITY,
     // Attribution
@@ -37,6 +39,9 @@ public enum EmotionType {
             Map.entry("contempt", REPROACH),
             Map.entry("regret", REMORSE),
             Map.entry("guilt", REMORSE),
+            Map.entry("curiosity", INTEREST),
+            Map.entry("fascination", INTEREST),
+            Map.entry("intrigue", INTEREST),
             Map.entry("sympathy", PITY),
             Map.entry("resolve", GRATIFICATION),
             Map.entry("jealousy", RESENTMENT),
@@ -48,17 +53,17 @@ public enum EmotionType {
             Map.entry("determination", HOPE),
             Map.entry("defiance", PRIDE),
             Map.entry("creative-defiance", PRIDE)
-    );
+                                                                         );
 
     public String canonicalName() {
         return name().toLowerCase().replace('_', '-');
     }
 
     public static Optional<EmotionType> normalise(String input) {
-        if (input == null || input.isBlank()) return Optional.empty();
+        if (input == null || input.isBlank()) {return Optional.empty();}
         String key = input.strip().toLowerCase().replace('_', '-');
         for (EmotionType t : values()) {
-            if (t.canonicalName().equals(key)) return Optional.of(t);
+            if (t.canonicalName().equals(key)) {return Optional.of(t);}
         }
         return Optional.ofNullable(ALIASES.get(key));
     }
