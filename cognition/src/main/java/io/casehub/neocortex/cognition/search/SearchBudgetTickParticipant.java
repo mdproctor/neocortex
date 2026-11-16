@@ -135,11 +135,11 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
             var cwOpt = appraisalParticipant.currentChannelWeights(agentId, tenantId);
             if (cwOpt.isPresent() && !cwOpt.get().isDefault()) {
                 var cw = cwOpt.get();
-                double deviation = 0.10;
-                if (cw.somatic() > 0.30) convergence += (cw.somatic() - 0.25) * deviation * 4;
-                if (cw.attentional() > 0.30) breadth += (cw.attentional() - 0.25) * deviation * 4;
-                if (cw.temporal() > 0.30) depth += (cw.temporal() - 0.25) * deviation * 4;
-                if (cw.actionTendency() > 0.30) convergence += (cw.actionTendency() - 0.25) * deviation * 4;
+                double scale = 0.40;
+                if (cw.somatic() > 0.30) convergence += (cw.somatic() - 0.25) * scale;
+                if (cw.attentional() > 0.30) breadth += (cw.attentional() - 0.25) * scale;
+                if (cw.temporal() > 0.30) depth += (cw.temporal() - 0.25) * scale;
+                if (cw.actionTendency() > 0.30) convergence += (cw.actionTendency() - 0.25) * scale;
             }
         }
 

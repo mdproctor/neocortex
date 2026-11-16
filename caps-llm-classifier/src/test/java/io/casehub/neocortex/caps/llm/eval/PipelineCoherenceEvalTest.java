@@ -390,9 +390,25 @@ class PipelineCoherenceEvalTest {
         var classifier = new LlmSituationClassifier(sessionPipeline, topology);
         var phase = new BehavioralSynthesisPhase(mindMap, capsEngine, classifier, 20);
 
-        var core = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build().core();
+        var harness = CognitionTestHarness.builder().withCognitionConfig(config).withSessionPipeline(sessionPipeline).withMindMapStore(mindMap).build();
+        var core = harness.core();
         core.configureAppraisal(new LlmAppraisalStrategy(sessionPipeline), new ConcernBasedSalienceStrategy(), null, classifier);
         core.configureBehavioralSynthesis(phase);
+
+        harness.seedUserProfile(new io.casehub.neocortex.cognition.usermodel.UserProfile(
+                agentId, "team-colleague", TENANT,
+                "established", 0.50,
+                25, 15, 3, 2,
+                java.time.Instant.now().minus(java.time.Duration.ofHours(8)),
+                java.time.Instant.now().minus(java.time.Duration.ofDays(90)),
+                null, null, null, null, null, Map.of()));
+        harness.seedUserProfile(new io.casehub.neocortex.cognition.usermodel.UserProfile(
+                agentId, "close-collaborator", TENANT,
+                "established", 0.70,
+                35, 25, 8, 4,
+                java.time.Instant.now().minus(java.time.Duration.ofDays(14)),
+                java.time.Instant.now().minus(java.time.Duration.ofDays(180)),
+                null, null, null, null, null, Map.of()));
 
         phase.run(TENANT, List.of());
 
@@ -507,6 +523,13 @@ class PipelineCoherenceEvalTest {
         sb.append("Convergence: %s\n".formatted(settling.convergenceType()));
         sb.append("Iterations: %d\n".formatted(settling.iterations()));
         sb.append("Saturation ratio: %.3f\n".formatted(settling.saturationRatio()));
+        if (!settling.attractors().isEmpty()) {
+            sb.append("### Behavioral Attractors\n");
+            settling.attractors().stream()
+                    .sorted((a, b) -> Double.compare(b.strength(), a.strength()))
+                    .forEach(a -> sb.append("- %s (%s): strength=%.3f\n".formatted(
+                            a.category(), a.nodeId(), a.strength())));
+        }
         sb.append("### Node Activations\n");
         settling.activations().entrySet().stream()
                 .sorted((a, b) -> Double.compare(Math.abs(b.getValue()), Math.abs(a.getValue())))

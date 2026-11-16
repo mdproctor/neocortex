@@ -28,6 +28,18 @@ public record PipelineTrace(
             Map<String, Double> activations,
             int iterations,
             String convergenceType,
-            double saturationRatio
-    ) {}
+            double saturationRatio,
+            List<AttractorSnapshot> attractors
+    ) {
+        public CapsSettlingSnapshot {
+            attractors = attractors != null ? List.copyOf(attractors) : List.of();
+        }
+
+        public CapsSettlingSnapshot(Map<String, Double> activations, int iterations,
+                                    String convergenceType, double saturationRatio) {
+            this(activations, iterations, convergenceType, saturationRatio, List.of());
+        }
+    }
+
+    public record AttractorSnapshot(String category, String nodeId, double strength) {}
 }

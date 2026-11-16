@@ -1100,8 +1100,13 @@ public @Nullable String lastTargetAgentId() {
             var settling = behavioralSynthesis.lastSettlingResult(agentId);
             if (settling.isPresent()) {
                 var sr = settling.get();
+                var attractorSnapshots = sr.attractors().stream()
+                        .map(a -> new io.casehub.neocortex.cognition.trace.PipelineTrace.AttractorSnapshot(
+                                a.category(), a.nodeId(), a.strength()))
+                        .toList();
                 capsSnapshot = new io.casehub.neocortex.cognition.trace.PipelineTrace.CapsSettlingSnapshot(
-                        sr.activations(), sr.iterations(), sr.convergence().name(), sr.saturationRatio());
+                        sr.activations(), sr.iterations(), sr.convergence().name(), sr.saturationRatio(),
+                        attractorSnapshots);
             }
         }
 

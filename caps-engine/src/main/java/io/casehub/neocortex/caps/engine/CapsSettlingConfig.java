@@ -57,8 +57,10 @@ public record CapsSettlingConfig(
          * signals surface, producing more nuanced but noisier behavior.
          * Related: saturationActivationThreshold.
          *
-         * Range: [0.01, 0.5]. Default 0.1 — consistent with typical
-         * connectionist activation noise floors.
+         * Range: [0.01, 0.9]. Default 0.55 — above the unstimulated
+         * unipolar logistic resting level (~0.5) to filter out nodes
+         * that weren't activated by the input, while retaining
+         * genuinely excited outputs (0.6+).
          */
         double attractorStrengthMinFilter,
 
@@ -94,7 +96,8 @@ public record CapsSettlingConfig(
          * Higher = more inertia, slower convergence but fewer oscillations;
          * lower = faster convergence but oscillation-prone.
          *
-         * Range: [0.0, 0.5]. Default 0.3 — standard Hopfield network damping.
+         * Range: [0.0, 0.7]. Default 0.4 — moderate damping that suppresses
+         * multi-cycle oscillation while preserving signal propagation.
          *
          * @see Hopfield, J.J. (1984). Neurons with graded response have
          * collective computational properties like those of two-state neurons.
@@ -103,6 +106,6 @@ public record CapsSettlingConfig(
         double dampingFactor
 ) {
     public static CapsSettlingConfig defaults() {
-        return new CapsSettlingConfig(0.05, 0.1, 0.99, 0.3);
+        return new CapsSettlingConfig(0.05, 0.55, 0.99, 0.4);
     }
 }

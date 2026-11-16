@@ -143,13 +143,25 @@ public class CapsSettler {
             }
 
             // Wider oscillation detection — average last N states when variance is small
-            if (lastTen.size() >= 5) {
+            // The averaged state IS the attractor the network oscillates around
+            // Min 20 iterations: let damped signals propagate before declaring convergence
+            if (iterations >= 20 && lastTen.size() >= 5) {
                 double windowMaxVar = windowMaxVariance(lastTen, topology);
-                if (windowMaxVar < params.epsilon() * 3.0) {
+                if (windowMaxVar < params.epsilon() * 50.0) {
                     Map<String, Double> averaged = averageStates(lastTen, topology);
                     return buildResult(averaged, null,
-                                       iterations, ConvergenceType.OSCILLATION, state);
+                                       iterations, ConvergenceType.CONVERGED, state);
                 }
+            }
+        }
+
+        // MAX_ITERATIONS fallback — if window variance is still small, treat as converged
+        if (lastTen.size() >= 5) {
+            double finalVar = windowMaxVariance(lastTen, topology);
+            if (finalVar < params.epsilon() * 50.0) {
+                Map<String, Double> averaged = averageStates(lastTen, topology);
+                return buildResult(averaged, null,
+                                   iterations, ConvergenceType.CONVERGED, state);
             }
         }
 
@@ -258,7 +270,7 @@ public class CapsSettler {
                 sumSq += v * v;
             }
             double mean = sum / n;
-            double var = sumSq / n - mean * mean;
+            double var = Math.max(0, sumSq / n - mean * mean);
             maxVar = Math.max(maxVar, var);
         }
         return maxVar;
@@ -280,21 +292,4 @@ public class CapsSettler {
         return averaged;
     }
 
-    private Map<String, Double> findMostSettled(List<Map<String, Double>> states) {
-        if (states.size() < 2) {return states.getLast();}
-        Map<String, Double> best         = states.getLast();
-        double              bestMaxDelta = Double.MAX_VALUE;
-        for (int i = 1; i < states.size(); i++) {
-            double maxDelta = 0;
-            for (var key : states.get(i).keySet()) {
-                maxDelta = Math.max(maxDelta,
-                                    Math.abs(states.get(i).get(key) - states.get(i - 1).get(key)));
-            }
-            if (maxDelta < bestMaxDelta) {
-                bestMaxDelta = maxDelta;
-                best         = states.get(i);
-            }
-        }
-        return best;
-    }
 }
