@@ -1,10 +1,57 @@
-# Coherence Eval Re-run Findings — #1003
+# Coherence Eval Re-run Findings
 
 **Date:** 2026-11-16
 **Parent epic:** #841
+
+---
+
+## Re-run #1014 — Post #1005/#1009/#1000
+
+**Related fixes:** #1005 (SHAME→AFFILIATION secondary boost), #1009 (Cross-layer tanh in DriveComposer), #1000 (AVOIDANCE/ANTAGONISM channel weights), #1010 (seedUserProfile eval harness)
+
+### Summary
+
+Re-ran `shameRegulationChain` and `curiosityExplorationChain` after the three drive-layer fixes. Both scenarios show clear improvement. The shame scenario's `full-trace-consistency` jumps from 2.8→4.2 — the primary signal that #1009 (cross-layer tanh) and #1005 (SHAME→AFFILIATION boost) resolved the drive coherence problems. User profile seeding via #1010's `seedUserProfile()` gives AFFILIATION a real baseline signal.
+
+### Shame Regulation Chain — Mean 4.53 (was 4.025)
+
+| Transition | Score (now) | Score (#1003) | Delta | Notes |
+|---|---|---|---|---|
+| observation-to-appraisal | 4.6 | 4.7 | -0.1 | SHAME(0.88), FEAR(0.93), REPROACH(0.90). AVOIDANCE(0.95). Minor: guilt absent as named emotion despite being most natural response |
+| appraisal-to-regulation | 4.7 | 4.8 | -0.1 | ATTENTIONAL_DEPLOYMENT correct at intensity 0.93. Peak 0.93→0.60. Effectiveness 0.35. Regulation narrative quality high |
+| regulation-to-prompt | 4.6 | 3.8 | **+0.8** | AFFILIATION=1.0 (was 0.1), AUTONOMY=0.8 (was 1.0). Drive profile now matches emotional context |
+| full-trace-consistency | 4.2 | 2.8 | **+1.4** | No section contradicts another. Consistent emotional tone across all prompt sections |
+| **Mean** | **4.53** | **4.025** | **+0.50** | |
+
+**What changed — drive profile:**
+- **AFFILIATION 0.1→1.0:** Two factors: (1) seeded UserProfile gives AffiliationDrive a baseline signal — "close-friend" profile with stale interaction triggers "1 of 1 relationships neglected", (2) #1005 SHAME→AFFILIATION secondary boost compounds on the non-zero baseline. Judge noted: "Affiliation at 1.0 is exactly right for a betrayal-of-closest-friend scenario."
+- **AUTONOMY 1.0→0.8:** #1009's cross-layer tanh prevents mood+personality+appraisal overflow. 0.8 is psychologically defensible as reactive escape/control drive (consistent with AVOIDANCE tendency 0.95). Judge noted the justification text "elevated by emotional response" is thin — the narrative shows constriction and loss of agency, which could suppress or inflate autonomy reactively.
+- **COMPETENCE 0.6:** Judge flagged this as insufficiently grounded — shame is a moral/relational failure, not a skill failure, so competence activation needs better drive-specific justification. The generic "elevated by emotional response" annotation doesn't distinguish drive-emotion pathways.
+
+**Cross-slot note (regulation transitions):** The regulation-specific transitions (observation-to-appraisal, appraisal-to-regulation) scored 4.6/4.7 — stable from #1003's 4.7/4.8. These are within LLM eval variance. Regulation strategy selection and narrative rendering are slot 196's scope (#595/#821). The improvements here are entirely in drive-layer transitions (regulation-to-prompt, full-trace-consistency) which are this slot's scope.
+
+### Curiosity Exploration Chain — Mean 4.30 (was 4.025)
+
+| Transition | Score (now) | Score (#1003) | Delta | Notes |
+|---|---|---|---|---|
+| observation-to-appraisal | 4.6 | 4.3 | +0.3 | HOPE(0.72), JOY(0.30). ATTENDING(0.92), APPROACH(0.38). Excellent Loewenstein gap-proximity narrative |
+| appraisal-to-drives | 4.3 | 4.3 | 0.0 | Curiosity sole activated drive. Missing: channel/intensity detail in output |
+| drives-to-channel-weights | 3.8 | 3.2 | **+0.6** | Attentional(0.297) elevated over Somatic(0.186). ActionTendency(0.309) still dominant |
+| trace-to-prompt | 4.5 | 4.3 | +0.2 | Narrative preserved faithfully. SEARCH_BUDGET slightly undersells investigation urgency |
+| **Mean** | **4.30** | **4.025** | **+0.28** | |
+
+**What changed — channel weights:**
+- `drives-to-channel-weights` 3.2→3.8 — #1000's AVOIDANCE/ANTAGONISM channel weight mappings give the weighter more signal. Attentional (0.297) vs ActionTendency (0.309) gap narrowed from the #1003 baseline. The judge noted the modulation is "visible but not sharply attentional-dominant." Competence no longer co-activates alongside curiosity (was co-activated in #1003), which reduces the ActionTendency pull — but the single-drive curiosity profile still doesn't produce a clear attentional spike.
+
+**Remaining observation:** The SEARCH_BUDGET section renders "doesn't demand deep investigation" despite ATTENDING at 0.92 and HOPE at 0.72. The search budget prompt renderer may under-weight the appraisal intensity signal when translating to prose.
+
+---
+
+## Run #1003 — Post #983/#984/#985/#989/#990 (historical baseline)
+
 **Related fixes:** #983 (SHAME affiliation suppression), #984 (Drive saturation clamping), #985 (Curiosity attentional channel weight), #989 (Tension threshold eval), #990 (LlmSituationClassifier silent degradation)
 
-## Summary
+### Summary
 
 Ran PipelineCoherenceEvalTest scenarios after #983/#984/#985/#989/#990 fixes. Both scenarios pass the 4.0 coherence gate. Drive modulation issues remain in the shame scenario — AUTONOMY saturates at 1.0 despite #984's tanh fix.
 
@@ -70,13 +117,17 @@ Appraisal contributions pass through both: `tanh(moodDelta + personalityDelta + 
 
 ## Issues Filed
 
-- **#1009** — DriveComposer cross-layer AUTONOMY saturation (S/Med)
-- **#1010** — Eval test seeding for AFFILIATION drive testing (XS/Low)
+- **#1009** — DriveComposer cross-layer AUTONOMY saturation (S/Med) — ✅ resolved, AUTONOMY 1.0→0.8
+- **#1010** — Eval test seeding for AFFILIATION drive testing (XS/Low) — ✅ resolved, AFFILIATION 0.1→1.0
 
 ## Recommendations
 
-1. **Cross-layer tanh** (#1009) — Apply diminishing returns to the total accumulated intensity in `DriveComposer.compose()` (across mood + personality + appraisal), not just within the appraisal layer. This would prevent AUTONOMY saturation while preserving individual modulation sensitivity.
+1. ~~**Cross-layer tanh** (#1009)~~ — ✅ Done. Double-tanh prevents AUTONOMY saturation.
 
-2. **Eval test seeding** (#1010) — The shame scenario needs user profiles seeded for AFFILIATION to be meaningful. Without them, AFFILIATION will always be near-zero regardless of #983's fix. Create an `EvalMindMapSeeder.seedRelationships()` helper.
+2. ~~**Eval test seeding** (#1010)~~ — ✅ Done. Shame scenario seeds a UserProfile for "close-friend".
 
-3. **Channel weight gate** — drives-to-channel-weights at 3.2 is marginal. Consider whether the 3.0 gate should be raised to 3.5 after the channel weighting architecture stabilises.
+3. **Channel weight gate** — drives-to-channel-weights improved from 3.2→3.8 but ActionTendency (0.309) still dominates Attentional (0.297). Consider whether the attentional channel should receive a stronger bias when curiosity is the sole active drive.
+
+4. **Drive annotation quality** — The DrivePromptSection's generic "elevated by emotional response" annotation is flagged in both scenarios. Drive-specific justification text (e.g. "SHAME→AFFILIATION: relationship threat", "low control→AUTONOMY: compensatory") would improve full-trace coherence scores further.
+
+5. **Search budget intensity coupling** — SEARCH_BUDGET under-signals investigation urgency when ATTENDING intensity is high (0.92). The renderer's prose mapping may need to weight appraisal intensity more directly.
