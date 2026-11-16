@@ -45,6 +45,70 @@ Re-ran `shameRegulationChain` and `curiosityExplorationChain` after the three dr
 
 **Remaining observation:** The SEARCH_BUDGET section renders "doesn't demand deep investigation" despite ATTENDING at 0.92 and HOPE at 0.72. The search budget prompt renderer may under-weight the appraisal intensity signal when translating to prose.
 
+### Full Suite Run — All 5 Scenarios
+
+Second run of all 5 scenarios to establish complete floor analysis:
+
+| Scenario | Transition | Score | Status |
+|---|---|---|---|
+| Curiosity | observation-to-appraisal | 4.3 | At risk |
+| Curiosity | appraisal-to-drives | **3.3** | FAIL |
+| Curiosity | drives-to-channel-weights | **3.8** | FAIL |
+| Curiosity | trace-to-prompt | 4.5 | OK |
+| Curiosity | **Mean** | **3.97** | **FAIL** |
+| Shame | observation-to-appraisal | 4.6 | OK |
+| Shame | appraisal-to-regulation | 4.6 | OK |
+| Shame | regulation-to-prompt | 4.5 | OK |
+| Shame | full-trace-consistency | 4.3 | At risk |
+| Shame | **Mean** | **4.50** | Pass |
+| Security | observation-to-appraisal | 4.3 | At risk |
+| Security | appraisal-to-channel-weights | **3.8** | FAIL |
+| Security | channel-weights-to-prompt | 4.3 | At risk |
+| Security | **Mean** | **4.13** | Pass |
+| Trajectory | 10-tick coherence | **3.8** | FAIL |
+| CAPS | graduated-nodes-to-caps-input | 4.6 | OK |
+| CAPS | caps-input-to-settling | **2.8** | FAIL |
+| CAPS | settling-to-behavioral-prompt | **3.8** | FAIL |
+| CAPS | full-consolidation-coherence | **3.2** | FAIL |
+| CAPS | **Mean** | **3.60** | **FAIL** |
+
+**Summary:** 8 transitions below 4.0, 4 transitions in the 4.0-4.3 risk zone. 3 of 5 scenarios fail the gate.
+
+### Root Cause Analysis — 6 Structural Problems
+
+| # | Problem | Affected transitions | Root cause |
+|---|---|---|---|
+| 1 | Channel weight distribution too flat | drives-to-channel-weights (3.8×3) | Additive modulation + normalization compresses polarization |
+| 2 | Drive output is a black box | appraisal-to-drives (3.3/4.3) | `activatedDriveCategories()` = `Set<String>`, no sub-threshold trace |
+| 3 | SearchBudget prose ignores appraisal | trace-to-prompt, channel-weights-to-prompt | Renderer has no access to arousal/intensity |
+| 4 | Drive annotations lack provenance | full-trace-consistency (4.2-4.3) | DriveComposer discards modulation source info |
+| 5 | LLM appraisal under-specifies OCC | observation-to-appraisal (4.3) | Missing guilt, interest, distress; empty targets |
+| 6 | CAPS settling diverges on social-threat | caps-input-to-settling (2.8) | Oscillation between withdrawal and reactive aggression |
+| 7 | Drive activation has no temporal memory | trajectory (3.8) | Per-tick evaluation with no smoothing |
+
+### Issues Filed
+
+| Issue | Title | Scale | Complexity | Target transitions |
+|---|---|---|---|---|
+| #1020 | Channel weight polarization | M | Med | drives-to-channel-weights, appraisal-to-channel-weights |
+| #1021 | Drive activation trace enrichment | M | Med | appraisal-to-drives |
+| #1022 | SearchBudget intensity coupling | S | Med | trace-to-prompt, channel-weights-to-prompt |
+| #1023 | Drive annotation provenance | S | Med | full-trace-consistency |
+| #1024 | LLM appraisal vocabulary | S | Low | observation-to-appraisal |
+| #1025 | AppraisalDriveModulator secondary boosts | S | Low | appraisal-to-drives |
+| #1026 | Drive temporal smoothing | S | Med | trajectory |
+| #1027 | CAPS settling convergence | M | High | caps-input-to-settling, full-consolidation-coherence |
+
+**Recommended execution order:**
+1. #1024 (LLM vocabulary) — upstream, improves all downstream transitions
+2. #1020 (channel polarization) — fixes 3 deterministic 3.8s
+3. #1021 (drive trace enrichment) — foundational API change, unblocks #1022 and #1023
+4. #1027 (CAPS settling) — fixes the worst scenario (mean 3.60)
+5. #1025 (secondary boost mappings) — quick win alongside #1024
+6. #1026 (drive temporal smoothing) — trajectory-specific
+7. #1023 (drive provenance) — builds on #1021
+8. #1022 (SearchBudget coupling) — builds on #1021
+
 ---
 
 ## Run #1003 — Post #983/#984/#985/#989/#990 (historical baseline)
