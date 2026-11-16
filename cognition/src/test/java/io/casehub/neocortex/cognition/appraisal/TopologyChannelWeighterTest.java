@@ -126,6 +126,83 @@ class TopologyChannelWeighterTest {
     }
 
     @Test
+    void avoidanceTendencyBoostsSomaticAndActionTendency() {
+        var activations = List.of(
+                new SituationActivation("rejection", 0.7),
+                new SituationActivation("social_threat", 0.6));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.AVOIDANCE, 0.85, ""));
+        var boosted = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(boosted.somatic())
+                .as("AVOIDANCE tendency should boost somatic channel")
+                .isGreaterThan(baseLine.somatic());
+        assertThat(boosted.actionTendency())
+                .as("AVOIDANCE tendency should boost action tendency channel")
+                .isGreaterThanOrEqualTo(baseLine.actionTendency());
+        assertThat(boosted.attentional())
+                .as("AVOIDANCE should reduce attentional (Easterbrook narrowing)")
+                .isLessThan(baseLine.attentional());
+    }
+
+    @Test
+    void antagonismTendencyBoostsSomatic() {
+        var activations = List.of(
+                new SituationActivation("dominance", 0.7),
+                new SituationActivation("competition", 0.5));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.ANTAGONISM, 0.80, ""));
+        var boosted = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(boosted.somatic())
+                .as("ANTAGONISM tendency should boost somatic channel")
+                .isGreaterThan(baseLine.somatic());
+        assertThat(boosted.attentional())
+                .as("ANTAGONISM should reduce attentional")
+                .isLessThan(baseLine.attentional());
+    }
+
+    @Test
+    void lowAvoidanceTendencyNoEffect() {
+        var activations = List.of(
+                new SituationActivation("physical_threat", 0.8));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.AVOIDANCE, 0.2, ""));
+        var result = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(result.somatic())
+                .isCloseTo(baseLine.somatic(), offset(0.001));
+    }
+
+    @Test
+    void multipleTendenciesBlendSequentially() {
+        var activations = List.of(
+                new SituationActivation("acceptance", 0.8));
+
+        var avoidanceOnly = TopologyChannelWeighter.weight(activations, List.of(
+                new ActionTendency(ActionReadiness.AVOIDANCE, 0.75, "")));
+        var attendingOnly = TopologyChannelWeighter.weight(activations, List.of(
+                new ActionTendency(ActionReadiness.ATTENDING, 0.60, "")));
+        var both = TopologyChannelWeighter.weight(activations, List.of(
+                new ActionTendency(ActionReadiness.AVOIDANCE, 0.75, ""),
+                new ActionTendency(ActionReadiness.ATTENDING, 0.60, "")));
+
+        assertThat(both.somatic())
+                .as("With both tendencies, somatic higher than ATTENDING-only (AVOIDANCE contributes)")
+                .isGreaterThan(attendingOnly.somatic());
+        assertThat(both.attentional())
+                .as("With both tendencies, attentional higher than AVOIDANCE-only (ATTENDING contributes)")
+                .isGreaterThan(avoidanceOnly.attentional());
+    }
+
+
+    @Test
     void lowAttendingTendencyNoEffect() {
         var activations = List.of(
                 new SituationActivation("physical_threat", 0.8));
