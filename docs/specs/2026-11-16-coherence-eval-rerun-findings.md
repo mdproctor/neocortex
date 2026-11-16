@@ -60,6 +60,14 @@ AFFILIATION=0.1 is primarily a test setup issue. `AffiliationDrive` returns 0.0 
 
 **Note:** Stdout sensitivity report (routing table and stability metrics) was lost due to surefire fork timeout after test completion. All assertion-based validations passed — the data was valid but the detailed report was not captured. The fork timeout is a known issue with `ClaudeAgentClient` session cleanup.
 
+## Post-Fix Note: Double-Tanh Compression
+
+After #1009, the drive modulation pipeline has two tanh layers:
+1. `AppraisalDriveModulator.modulate()` (line 37) — compresses per-emotion delta accumulation (prevents FEAR+SHAME stacking)
+2. `DriveComposer.compose()` (line 46) — compresses cross-source total (prevents mood+personality+appraisal overflow)
+
+Appraisal contributions pass through both: `tanh(moodDelta + personalityDelta + tanh(rawAppraisalDelta))`. This makes appraisal slightly more conservative than mood/personality modulation. If appraisal needs stronger influence in future tuning, the BOOST/SECONDARY_BOOST constants in AppraisalDriveModulator can be increased — the double-tanh provides a safety margin rather than a hard ceiling.
+
 ## Issues Filed
 
 - **#1009** — DriveComposer cross-layer AUTONOMY saturation (S/Med)
