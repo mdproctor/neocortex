@@ -94,13 +94,13 @@ Second run of all 5 scenarios to establish complete floor analysis:
 | #1021 | Drive activation trace enrichment | M | Med | appraisal-to-drives |
 | #1022 | SearchBudget intensity coupling | S | Med | trace-to-prompt, channel-weights-to-prompt |
 | #1023 | Drive annotation provenance | S | Med | full-trace-consistency |
-| #1024 | LLM appraisal vocabulary | S | Low | observation-to-appraisal |
+| #1024 | LLM appraisal vocabulary | S | Low | observation-to-appraisal | ✅ implemented |
 | #1025 | AppraisalDriveModulator secondary boosts | S | Low | appraisal-to-drives |
 | #1026 | Drive temporal smoothing | S | Med | trajectory |
 | #1027 | CAPS settling convergence | M | High | caps-input-to-settling, full-consolidation-coherence |
 
 **Recommended execution order:**
-1. #1024 (LLM vocabulary) — upstream, improves all downstream transitions
+1. ~~#1024 (LLM vocabulary)~~ — ✅ Done. INTEREST, REMORSE/GUILT split, DOMINANCE tendency, arousal boost from novelty, calibration anchors. Also fixed EmotionReinforcementMapper crash.
 2. #1020 (channel polarization) — fixes 3 deterministic 3.8s
 3. #1021 (drive trace enrichment) — foundational API change, unblocks #1022 and #1023
 4. #1027 (CAPS settling) — fixes the worst scenario (mean 3.60)
