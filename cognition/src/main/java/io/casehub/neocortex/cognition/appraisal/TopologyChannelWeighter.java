@@ -36,18 +36,18 @@ public final class TopologyChannelWeighter {
     private static final Map<String, String> NODE_TO_CATEGORY = buildNodeCategoryMap();
 
     private static final double               ATTENDING_ACTIVATION_THRESHOLD = 0.3;
-    private static final double               ATTENDING_BLEND_FACTOR         = 0.4;
+    private static final double               ATTENDING_BLEND_FACTOR         = 0.75;
     private static final ChannelWeightProfile ATTENDING_PROFILE =
-            new ChannelWeightProfile(0.15, 0.45, 0.15, 0.25);
+            new ChannelWeightProfile(0.10, 0.50, 0.15, 0.25);
     private static final double               AVOIDANCE_ACTIVATION_THRESHOLD = 0.3;
-    private static final double               AVOIDANCE_BLEND_FACTOR = 0.4;
+    private static final double               AVOIDANCE_BLEND_FACTOR = 0.75;
     private static final ChannelWeightProfile AVOIDANCE_PROFILE =
-            new ChannelWeightProfile(0.35, 0.10, 0.15, 0.40);
+            new ChannelWeightProfile(0.40, 0.05, 0.10, 0.45);
 
     private static final double               ANTAGONISM_ACTIVATION_THRESHOLD = 0.3;
-    private static final double               ANTAGONISM_BLEND_FACTOR         = 0.4;
+    private static final double               ANTAGONISM_BLEND_FACTOR         = 0.75;
     private static final ChannelWeightProfile ANTAGONISM_PROFILE              =
-            new ChannelWeightProfile(0.40, 0.10, 0.15, 0.35);
+            new ChannelWeightProfile(0.45, 0.05, 0.10, 0.40);
 
 
     private static Map<String, String> buildNodeCategoryMap() {

@@ -53,8 +53,11 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
             - An exciting discovery or genuine surprise: novelty ≥ 0.7, urgency depends on time pressure
             - An active crisis with ongoing harm: urgency ≥ 0.8, conduciveness ≤ -0.5
             - A personal moral failure the character caused: internal-standards ≤ 0.3, \
-            controllability reflects whether they had a choice (high = guilt, low = helpless shame)
+            controllability reflects whether they had a choice (high = guilt, low = helpless shame), \
+            conduciveness reflects the harm done, NOT the character's anger at others
             - A social norm violation by someone else: external-standards ≤ 0.3, controllability high
+            - An active crisis just discovered: novelty ≥ 0.6 (the specific situation is new even \
+            if the category is familiar), urgency ≥ 0.8
 
             Respond with JSON only:
             {

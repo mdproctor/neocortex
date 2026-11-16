@@ -330,7 +330,7 @@ private volatile           io.casehub.neocortex.cognition.journal.CognitiveJourn
             safeRun(() -> drives.tick(agentId, tenantId, descriptor));
             cognitiveJournal.record(new io.casehub.neocortex.cognition.journal.CognitiveEntry.DriveActivated(
                     tenantId, agentId, tickEventRef, java.time.Instant.now(),
-                    activatedDriveCategories(), java.util.Map.of()));
+                    activatedDriveCategories(), driveIntensities()));
         }
         runCustomParticipants(CognitionPhase.DERIVED, context);
 
@@ -368,7 +368,7 @@ private volatile           io.casehub.neocortex.cognition.journal.CognitiveJourn
                 safeRun(() -> drives.tick(agentId, tenantId, descriptor));
                 cognitiveJournal.record(new io.casehub.neocortex.cognition.journal.CognitiveEntry.DriveActivated(
                         tenantId, agentId, tickEventRef, java.time.Instant.now(),
-                        activatedDriveCategories(), java.util.Map.of()));
+                        activatedDriveCategories(), driveIntensities()));
             }
         }
 
@@ -685,6 +685,18 @@ private volatile           io.casehub.neocortex.cognition.journal.CognitiveJourn
         return List.copyOf(activated);
     }
 
+    public java.util.Map<String, Double> driveIntensities() {
+        if (drives == null || lastAgentId == null || lastTenantId == null) {
+            return java.util.Map.of();
+        }
+        var profileOpt = drives.currentDrives(lastAgentId, lastTenantId);
+        if (profileOpt.isEmpty()) return java.util.Map.of();
+        var intensities = new java.util.LinkedHashMap<String, Double>();
+        for (var di : profileOpt.get().drives().entrySet()) {
+            intensities.put(di.getKey().name().toLowerCase(), di.getValue().intensity());
+        }
+        return java.util.Map.copyOf(intensities);
+    }
 
     public List<CognitionPromptRenderer> promptSections() {
         var sections = new ArrayList<CognitionPromptRenderer>();
@@ -1112,7 +1124,7 @@ public @Nullable String lastTargetAgentId() {
         return java.util.Optional.of(new io.casehub.neocortex.cognition.trace.PipelineTrace(
                 appraisal, concernSalience, capsInputs, capsSnapshot,
                 regulation, channelWeights, habituation,
-                activatedDriveCategories(), renderedSections));
+                activatedDriveCategories(), driveIntensities(), renderedSections));
     }
 
     @Override

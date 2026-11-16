@@ -222,6 +222,29 @@ class SearchBudgetTickParticipantTest {
         assertEquals(baseline.breadth(), budget.breadth(), 0.001);
         assertEquals(baseline.depth(), budget.depth(), 0.001);
     }
+    @Test
+    void channel_weight_somatic_dominance_boosts_convergence() {
+        var driveOrch = mockDriveOrch(DriveAxis.COMPETENCE, 0.5);
+        var appraisal = mock(AppraisalTickParticipant.class);
+        var cw = new io.casehub.neocortex.cognition.appraisal.ChannelWeightProfile(0.40, 0.15, 0.10, 0.35);
+        when(appraisal.currentChannelWeights(AGENT, TENANT)).thenReturn(Optional.of(cw));
+        when(appraisal.currentResult(AGENT, TENANT)).thenReturn(Optional.empty());
+
+        var withCw = new SearchBudgetTickParticipant(
+                driveOrch, appraisal, null, null, registry(), null, null, null);
+        withCw.tick(context());
+        var cwBudget = withCw.currentBudget(AGENT, TENANT).orElseThrow();
+
+        var noCw = new SearchBudgetTickParticipant(
+                driveOrch, null, null, null, registry(), null, null, null);
+        noCw.tick(context());
+        var baseBudget = noCw.currentBudget(AGENT, TENANT).orElseThrow();
+
+        assertTrue(cwBudget.convergence() > baseBudget.convergence(),
+                "Somatic+actionTendency dominant channel weights should boost convergence: " +
+                cwBudget.convergence() + " vs " + baseBudget.convergence());
+    }
+
 // --- activation decay tests ---
 
     @Test

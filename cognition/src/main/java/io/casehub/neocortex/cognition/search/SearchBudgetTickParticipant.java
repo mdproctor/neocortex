@@ -130,6 +130,19 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
             }
         }
 
+        // Channel weight modulation — Easterbrook (1959) attentional narrowing
+        if (appraisalParticipant != null) {
+            var cwOpt = appraisalParticipant.currentChannelWeights(agentId, tenantId);
+            if (cwOpt.isPresent() && !cwOpt.get().isDefault()) {
+                var cw = cwOpt.get();
+                double deviation = 0.10;
+                if (cw.somatic() > 0.30) convergence += (cw.somatic() - 0.25) * deviation * 4;
+                if (cw.attentional() > 0.30) breadth += (cw.attentional() - 0.25) * deviation * 4;
+                if (cw.temporal() > 0.30) depth += (cw.temporal() - 0.25) * deviation * 4;
+                if (cw.actionTendency() > 0.30) convergence += (cw.actionTendency() - 0.25) * deviation * 4;
+            }
+        }
+
         // Fatigue reallocation — per-parameter signed effects (Hockey 1997)
         SearchFatigueEffects fatigueEffects = config.fatigueEffects();
         if (fatigueEffects != null && cognitiveResourcePool != null) {

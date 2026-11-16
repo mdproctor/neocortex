@@ -396,7 +396,12 @@ class PipelineCoherenceEvalTest {
 
         phase.run(TENANT, List.of());
 
-        core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of(), null);
+        String capsObservation = """
+                Reflecting on a pattern of social exclusion — being deliberately left out of \
+                strategic decisions, having ideas publicly dismissed without engagement, and \
+                losing a close collaborator without any direct communication. These experiences \
+                feel connected and reveal something about how others see me in this environment.""";
+        core.tick(agentId, TENANT, descriptor, (a, t) -> Set.of("social"), capsObservation);
 
         var trace = core.currentTrace(agentId, TENANT).orElseThrow(
                 () -> new AssertionError("No trace after tick"));
@@ -638,10 +643,22 @@ class PipelineCoherenceEvalTest {
 
     private String serializeDrives(PipelineTrace trace) {
         if (trace.activatedDriveCategories().isEmpty()) return "[No activated drives]";
-        return "## Activated Drive Categories\n" +
-                trace.activatedDriveCategories().stream()
-                        .map(d -> "- " + d)
-                        .collect(joining("\n"));
+        var sb = new StringBuilder("## Activated Drive Categories\n");
+        for (String drive : trace.activatedDriveCategories()) {
+            Double intensity = trace.driveIntensities().get(drive);
+            if (intensity != null) {
+                sb.append("- %s: intensity=%.2f\n".formatted(drive, intensity));
+            } else {
+                sb.append("- %s (concern-salience activated)\n".formatted(drive));
+            }
+        }
+        if (!trace.driveIntensities().isEmpty()) {
+            sb.append("### All Drive Intensities\n");
+            trace.driveIntensities().entrySet().stream()
+                    .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                    .forEach(e -> sb.append("- %s: %.2f\n".formatted(e.getKey(), e.getValue())));
+        }
+        return sb.toString();
     }
 
     private String serializePromptSections(PipelineTrace trace) {

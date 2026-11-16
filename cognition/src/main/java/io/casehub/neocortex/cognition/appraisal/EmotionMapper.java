@@ -32,13 +32,16 @@ public final class EmotionMapper {
         if (relevance < 0.2) {return emotions;}
 
         double arousalBoost = urgency * 0.4 + novelty * 0.3;
+        boolean selfBlame = internalStd < 0.5;
 
         double fearThreshold = urgency > 0.7 ? 0.6 : 0.4;
         if (conduciveness < -0.2 && controllability < fearThreshold) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
             emotions.add(emotion(EmotionType.FEAR, intensity, subjectId, now, arousalBoost));
         }
-        if (conduciveness < -0.2 && controllability > 0.5) {
+        // ANGER = other-directed blame. Suppress when self-blame (low internal-standards)
+        // — self-caused negative outcomes with high controllability route to REMORSE/SHAME below
+        if (conduciveness < -0.2 && controllability > 0.5 && !selfBlame) {
             double intensity = clampIntensity(relevance * Math.abs(conduciveness));
             emotions.add(emotion(EmotionType.ANGER, intensity, subjectId, now, arousalBoost));
         }
@@ -87,21 +90,35 @@ public final class EmotionMapper {
         double controllability = dims.getOrDefault(SecDimensions.CONTROLLABILITY, 0.5);
         double novelty         = dims.getOrDefault(SecDimensions.NOVELTY, 0.0);
         double urgency         = dims.getOrDefault(SecDimensions.URGENCY, 0.0);
+        double internalStd     = dims.getOrDefault(SecDimensions.INTERNAL_STANDARDS, 1.0);
+        boolean selfBlame      = internalStd < 0.5;
 
         if (conduciveness > 0.3) {
             tendencies.add(new ActionTendency(ActionReadiness.APPROACH, clampIntensity(conduciveness), ""));
         } else if (conduciveness < -0.3 && controllability < 0.4) {
             tendencies.add(new ActionTendency(ActionReadiness.AVOIDANCE, clampIntensity(Math.abs(conduciveness)), ""));
+        } else if (conduciveness < -0.3 && selfBlame) {
+            // Self-blame: wanting to hide/withdraw, not to fight
+            tendencies.add(new ActionTendency(ActionReadiness.AVOIDANCE, clampIntensity(Math.abs(conduciveness)), ""));
+            if (controllability > 0.5) {
+                tendencies.add(new ActionTendency(ActionReadiness.SUBMISSION, clampIntensity(controllability * (1.0 - internalStd)), ""));
+            }
         } else if (conduciveness < -0.3 && controllability > 0.5) {
             tendencies.add(new ActionTendency(ActionReadiness.ANTAGONISM, clampIntensity(Math.abs(conduciveness)), ""));
         }
 
-        if (urgency > 0.6 && conduciveness < -0.2) {
+        // DOMINANCE = need for control. Suppress under self-blame — moral failure doesn't
+        // produce control-seeking, it produces avoidance/submission
+        if (urgency > 0.6 && conduciveness < -0.2 && !selfBlame) {
             tendencies.add(new ActionTendency(ActionReadiness.DOMINANCE, clampIntensity(urgency), ""));
         }
 
-        if (novelty > 0.5) {
-            tendencies.add(new ActionTendency(ActionReadiness.ATTENDING, clampIntensity(novelty), ""));
+        // ATTENDING fires on novelty (new information) OR urgency (threat demands focus)
+        // — Öhman (1986): threat-relevant stimuli capture attention pre-attentively
+        double attendingIntensity = Math.max(novelty > 0.5 ? novelty : 0.0,
+                                             urgency > 0.6 ? urgency * 0.9 : 0.0);
+        if (attendingIntensity > 0.0) {
+            tendencies.add(new ActionTendency(ActionReadiness.ATTENDING, clampIntensity(attendingIntensity), ""));
         } else if (novelty < 0.2) {
             tendencies.add(new ActionTendency(ActionReadiness.INTERRUPTION, clampIntensity(1.0 - novelty), ""));
         }

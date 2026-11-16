@@ -80,9 +80,29 @@ public record CapsSettlingConfig(
          * count as saturated, following standard neural network saturation
          * definitions.
          */
-        double saturationActivationThreshold
+        double saturationActivationThreshold,
+
+        /**
+         * Momentum damping factor for activation updates.
+         *
+         * Each iteration blends the new computed activation with the previous
+         * value: newAct = damping * oldAct + (1 - damping) * f(netInput).
+         * This smooths multi-cycle oscillations that two-cycle detection misses
+         * — particularly in topologies with competing excitatory pathways
+         * (e.g. withdrawal vs reactive aggression under social threat).
+         *
+         * Higher = more inertia, slower convergence but fewer oscillations;
+         * lower = faster convergence but oscillation-prone.
+         *
+         * Range: [0.0, 0.5]. Default 0.3 — standard Hopfield network damping.
+         *
+         * @see Hopfield, J.J. (1984). Neurons with graded response have
+         * collective computational properties like those of two-state neurons.
+         * PNAS, 81(10), 3088-3092.
+         */
+        double dampingFactor
 ) {
     public static CapsSettlingConfig defaults() {
-        return new CapsSettlingConfig(0.05, 0.1, 0.99);
+        return new CapsSettlingConfig(0.05, 0.1, 0.99, 0.3);
     }
 }

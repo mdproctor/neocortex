@@ -310,6 +310,56 @@ class EmotionMapperTest {
     }
 
     @Test
+    void selfBlame_suppressesAnger() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.NOVELTY, 0.5),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.7),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.7),
+                SecResult.of("normative", SecDimensions.INTERNAL_STANDARDS, 0.2, SecDimensions.EXTERNAL_STANDARDS, 0.8));
+
+        var emotions = EmotionMapper.mapEmotions(results, "my-lie");
+
+        assertThat(emotions).extracting("type").doesNotContain(EmotionType.ANGER);
+        assertThat(emotions).extracting("type").contains(EmotionType.REMORSE);
+    }
+
+    @Test
+    void selfBlame_producesAvoidanceNotAntagonism() {
+        var results = List.of(
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.7),
+                SecResult.of("coping", SecDimensions.CONTROLLABILITY, 0.7),
+                SecResult.of("normative", SecDimensions.INTERNAL_STANDARDS, 0.2, SecDimensions.EXTERNAL_STANDARDS, 0.8));
+
+        var tendencies = EmotionMapper.mapTendencies(results);
+
+        assertThat(tendencies).extracting("readiness").contains(ActionReadiness.AVOIDANCE, ActionReadiness.SUBMISSION);
+        assertThat(tendencies).extracting("readiness").doesNotContain(ActionReadiness.ANTAGONISM);
+    }
+
+    @Test
+    void selfBlame_suppressesDominance() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.URGENCY, 0.8),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.6),
+                SecResult.of("normative", SecDimensions.INTERNAL_STANDARDS, 0.2, SecDimensions.EXTERNAL_STANDARDS, 0.8));
+
+        var tendencies = EmotionMapper.mapTendencies(results);
+
+        assertThat(tendencies).extracting("readiness").doesNotContain(ActionReadiness.DOMINANCE);
+    }
+
+    @Test
+    void attendingFromHighUrgencyEvenWithLowNovelty() {
+        var results = List.of(
+                SecResult.of("relevance", SecDimensions.NOVELTY, 0.3, SecDimensions.URGENCY, 0.8),
+                SecResult.of("implication", SecDimensions.CONDUCIVENESS, -0.5));
+
+        var tendencies = EmotionMapper.mapTendencies(results);
+
+        assertThat(tendencies).extracting("readiness").contains(ActionReadiness.ATTENDING);
+    }
+
+    @Test
     void arousalBoostedByNoveltyEvenWithoutUrgency() {
         var results = List.of(
                 SecResult.of("relevance", SecDimensions.RELEVANCE, 0.8, SecDimensions.NOVELTY, 0.9),

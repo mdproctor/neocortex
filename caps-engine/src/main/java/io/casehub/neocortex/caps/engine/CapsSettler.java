@@ -87,12 +87,16 @@ public class CapsSettler {
                                     .getOrDefault(node.id(), NodeState.DEFAULT);
 
                 // Activation functions — Rumelhart, Hinton & Williams (1986) PDP; tanh=bipolar, logistic=unipolar
-                double newAct;
+                double rawAct;
                 if (node.range() == NodeRange.BIPOLAR) {
-                    newAct = Math.tanh(netInput - ns.activationThreshold());
+                    rawAct = Math.tanh(netInput - ns.activationThreshold());
                 } else {
-                    newAct = logistic(netInput - ns.activationThreshold());
+                    rawAct = logistic(netInput - ns.activationThreshold());
                 }
+
+                // Momentum damping — Hopfield (1984): blend with previous to suppress multi-cycle oscillation
+                double oldAct = activations.getOrDefault(node.id(), 0.0);
+                double newAct = config.dampingFactor() * oldAct + (1.0 - config.dampingFactor()) * rawAct;
 
                 newActivations.put(node.id(), newAct);
             }
@@ -137,9 +141,19 @@ public class CapsSettler {
                 return buildResult(activations, null,
                                    iterations, ConvergenceType.CONVERGED, state);
             }
+
+            // Wider oscillation detection — average last N states when variance is small
+            if (lastTen.size() >= 5) {
+                double windowMaxVar = windowMaxVariance(lastTen, topology);
+                if (windowMaxVar < params.epsilon() * 3.0) {
+                    Map<String, Double> averaged = averageStates(lastTen, topology);
+                    return buildResult(averaged, null,
+                                       iterations, ConvergenceType.OSCILLATION, state);
+                }
+            }
         }
 
-        Map<String, Double> bestState = findMostSettled(lastTen);
+        Map<String, Double> bestState = averageStates(lastTen, topology);
         return buildResult(bestState, null,
                            iterations, ConvergenceType.MAX_ITERATIONS, state);
     }
@@ -229,6 +243,41 @@ public class CapsSettler {
                                  .filter(n -> Math.abs(activations.getOrDefault(n.id(), 0.0)) > config.saturationActivationThreshold())
                                  .count();
         return (double) saturated / mediating;
+    }
+
+    private static double windowMaxVariance(List<Map<String, Double>> states, CapsTopology topo) {
+        double maxVar = 0.0;
+        for (var entry : topo.nodes().entrySet()) {
+            if (entry.getValue().type() == NodeType.INPUT) continue;
+            String nodeId = entry.getKey();
+            double sum = 0, sumSq = 0;
+            int n = states.size();
+            for (var s : states) {
+                double v = s.getOrDefault(nodeId, 0.0);
+                sum += v;
+                sumSq += v * v;
+            }
+            double mean = sum / n;
+            double var = sumSq / n - mean * mean;
+            maxVar = Math.max(maxVar, var);
+        }
+        return maxVar;
+    }
+
+    private static Map<String, Double> averageStates(List<Map<String, Double>> states, CapsTopology topo) {
+        Map<String, Double> averaged = new HashMap<>();
+        int n = states.size();
+        for (var entry : topo.nodes().entrySet()) {
+            String nodeId = entry.getKey();
+            if (entry.getValue().type() == NodeType.INPUT) {
+                averaged.put(nodeId, states.getLast().getOrDefault(nodeId, 0.0));
+            } else {
+                double sum = 0;
+                for (var s : states) sum += s.getOrDefault(nodeId, 0.0);
+                averaged.put(nodeId, sum / n);
+            }
+        }
+        return averaged;
     }
 
     private Map<String, Double> findMostSettled(List<Map<String, Double>> states) {

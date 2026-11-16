@@ -18,8 +18,12 @@ public record PipelineTrace(
         @Nullable ChannelWeightProfile channelWeights,
         @Nullable HabituationState habituation,
         List<String> activatedDriveCategories,
+        Map<String, Double> driveIntensities,
         Map<String, String> promptSections
 ) {
+    public PipelineTrace {
+        driveIntensities = driveIntensities != null ? Map.copyOf(driveIntensities) : Map.of();
+    }
     public record CapsSettlingSnapshot(
             Map<String, Double> activations,
             int iterations,

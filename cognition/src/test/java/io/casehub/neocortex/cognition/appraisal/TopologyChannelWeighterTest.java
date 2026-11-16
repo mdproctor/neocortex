@@ -228,6 +228,69 @@ class TopologyChannelWeighterTest {
 
 
     @Test
+    void highAttendingProducesAttentionalDominance() {
+        var activations = List.of(
+                new SituationActivation("mastery", 0.6),
+                new SituationActivation("agency_granted", 0.5));
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.ATTENDING, 0.85, ""));
+        var result = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(result.attentional())
+                .as("High ATTENDING should make attentional the dominant channel")
+                .isGreaterThan(result.actionTendency());
+        assertThat(result.attentional())
+                .as("Attentional should be well above 0.30 for strong curiosity")
+                .isGreaterThan(0.30);
+        double spread = result.attentional() - Math.min(result.somatic(),
+                                                        Math.min(result.temporal(), result.actionTendency()));
+        assertThat(spread)
+                .as("Spread should be at least 0.20 for single-drive dominance")
+                .isGreaterThan(0.20);
+    }
+
+
+    @Test
+    void highAvoidanceOnThreatProducesSharpPolarization() {
+        var activations = List.of(
+                new SituationActivation("physical_threat", 0.8),
+                new SituationActivation("failure", 0.4),
+                new SituationActivation("powerlessness", 0.3));
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.AVOIDANCE, 0.85, ""));
+        var result = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(result.somatic() + result.actionTendency())
+                .as("Somatic + actionTendency should dominate for threat+avoidance")
+                .isGreaterThan(0.70);
+        assertThat(result.attentional())
+                .as("Attentional should be suppressed under threat (Easterbrook)")
+                .isLessThan(0.15);
+        double spread = Math.max(result.somatic(), result.actionTendency())
+                        - Math.min(result.attentional(), result.temporal());
+        assertThat(spread)
+                .as("Spread should exceed 0.20 for crisis polarization")
+                .isGreaterThan(0.20);
+    }
+
+
+    @Test
+    void avoidanceProfileDiffersFromThreatCategory() {
+        var threatOnly = TopologyChannelWeighter.weight(List.of(
+                new SituationActivation("physical_threat", 0.8)));
+        var withAvoidance = TopologyChannelWeighter.weight(List.of(
+                                                                   new SituationActivation("physical_threat", 0.8)),
+                                                           List.of(new ActionTendency(ActionReadiness.AVOIDANCE, 0.7, "")));
+
+        assertThat(withAvoidance.somatic())
+                .as("AVOIDANCE should push somatic beyond threat baseline")
+                .isGreaterThan(threatOnly.somatic());
+        assertThat(withAvoidance.actionTendency())
+                .as("AVOIDANCE should push actionTendency beyond threat baseline")
+                .isGreaterThan(threatOnly.actionTendency());
+    }
+
+    @Test
     void profileWeightsSumToOne() {
         for (var category : TopologyChannelWeighter.knownCategories()) {
             var profile = TopologyChannelWeighter.profileForCategory(category);
