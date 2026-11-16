@@ -51,10 +51,15 @@ AFFILIATION=0.1 is primarily a test setup issue. `AffiliationDrive` returns 0.0 
 
 **Status:** Running (84 LLM classifications across 7 profiles × 4 observations × 3 thresholds). Results pending.
 
+## Issues Filed
+
+- **#1009** — DriveComposer cross-layer AUTONOMY saturation (S/Med)
+- **#1010** — Eval test seeding for AFFILIATION drive testing (XS/Low)
+
 ## Recommendations
 
-1. **Cross-layer tanh** — Apply diminishing returns to the total accumulated intensity in `DriveComposer.compose()` (across mood + personality + appraisal), not just within the appraisal layer. This would prevent AUTONOMY saturation while preserving individual modulation sensitivity.
+1. **Cross-layer tanh** (#1009) — Apply diminishing returns to the total accumulated intensity in `DriveComposer.compose()` (across mood + personality + appraisal), not just within the appraisal layer. This would prevent AUTONOMY saturation while preserving individual modulation sensitivity.
 
-2. **Eval test seeding** — The shame scenario needs user profiles seeded for AFFILIATION to be meaningful. Without them, AFFILIATION will always be near-zero regardless of #983's fix. Create an `EvalMindMapSeeder.seedRelationships()` helper.
+2. **Eval test seeding** (#1010) — The shame scenario needs user profiles seeded for AFFILIATION to be meaningful. Without them, AFFILIATION will always be near-zero regardless of #983's fix. Create an `EvalMindMapSeeder.seedRelationships()` helper.
 
 3. **Channel weight gate** — drives-to-channel-weights at 3.2 is marginal. Consider whether the 3.0 gate should be raised to 3.5 after the channel weighting architecture stabilises.
