@@ -128,6 +128,14 @@ public class CognitionTestHarness {
         }
     }
 
+    public void seedUserProfile(io.casehub.neocortex.cognition.usermodel.UserProfile profile) {
+        var userModel = core.userModel();
+        if (userModel != null) {
+            userModel.seedProfile(profile);
+        }
+    }
+
+
     // --- Pipeline execution ---
 
     public void tick(String agentId, String tenantId) {
