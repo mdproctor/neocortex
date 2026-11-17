@@ -86,6 +86,16 @@
 | `entity-token/` | `casehub-neocortex-entity-token` | Pure Java, zero deps | `EntityIdentity` (type-extensible entity record — canonical name parts, pronouns, preferred forms, aliases → surface forms), `TokenFormat` (parse/emit/extractEntityIds/stripTokens for `{{entity_id:variant:surface_form}}` inline tokens), `SurfaceFormTrie` (Aho-Corasick multi-pattern scanner with word-boundary filtering), `EntityTokeniser` (text + trie → tokenised text), `EntityRenderer` (tokenised text + identity resolver → display text, `RenderMode` CANONICAL/SURFACE), `ParsedToken`, `SurfaceForm`, `TrieMatch`, `EntityReferenceIndex` SPI (entity→source reverse lookup), `InMemoryEntityReferenceIndex` |
 | `entity-token-cdi/` | `casehub-neocortex-entity-token-cdi` | CDI module | `EntityIdentityCache` (MindMapStore → EntityIdentity per tenant), `SurfaceFormTrieManager` (debounced trie rebuild), `TokenisingEnrichmentStep` (CaseEnrichmentStep — tokenises memory text at store time via Aho-Corasick), `TokenisingBiographyPreprocessor` (BiographyProfilePreprocessor — strips bracket syntax, triggers trie rebuild after import), `EntityReferenceRecordingObserver` (CDI observer — records entity references from tokenised memories), `SqliteEntityReferenceIndex` (SQLite + HikariCP WAL + Flyway), `EntityMergeTokenHandler`, `EntityErasureTokenHandler`, `MemoryErasureReferenceHandler` |
 
+### CAPS Modules
+
+| Module | artifactId | Type | Purpose |
+|--------|-----------|------|---------|
+| `caps-api/` | `casehub-neocortex-caps-api` | Pure Java | `CapsTopology` (species-level network), `CapsNode` (INPUT/MEDIATING/OUTPUT with BIPOLAR/UNIPOLAR `NodeRange`), `CapsConnection`, `ConnectionWeight` (dual-weight: excitatory + inhibitory overlay + decay resistance + precision), `NodeState` (activation threshold + resting activation), `AgentCapsState`, `SettlingResult` (convergence/oscillation/max-iterations + `BehavioralAttractor` list), `SituationClassifier` SPI, `ClassificationResult`, `CapsEngine` SPI (topology + state management + settling + weight update), `DistortionDefinition` |
+| `caps-engine/` | `casehub-neocortex-caps-engine` | JVM library | `CapsTopologyLoader` (YAML classpath resource), `CapsSettler` (synchronous parallel update, per-node-type activation: logistic for unipolar, tanh for bipolar, momentum damping, convergence/oscillation detection, peak-based attractor extraction with baseline-relative `attractorStrengthMargin`), `CapsWeightUpdater` (Rescorla-Wagner + Pearce-Hall), `DispositionWeightMapper`, `SqliteCapsEngine` (SQLite + HikariCP WAL + Flyway), `RuleBasedSituationClassifier` (keyword-matching, multi-label), `SubThoughtSituationDecorator` |
+| `caps-testing/` | `casehub-neocortex-caps-testing` | Test library | `InMemoryCapsEngine` @Alternative, `CapsEngineContractTest` abstract base, `CognitiveEmergenceTest` (scenario builder for disposition seeding, experience application, CAPS settling, attractor assertions) |
+| `caps-llm-classifier/` | `casehub-neocortex-caps-llm-classifier` | JVM library | `LlmSituationClassifier` (LLM-backed SituationClassifier via SessionPipeline; topology-aware system prompt with node IDs and keywords), `LlmSituationClassifierProducer`, eval test suite |
+| `caps-situation-cbr/` | `casehub-neocortex-caps-situation-cbr` | JVM library | `CbrCachingSituationDecorator` (@Decorator @Priority(60) on SituationClassifier — checks CBR for cached classification via embedding similarity before delegating to LLM; SHA-256 deterministic caseId; model-version cache invalidation) |
+
 ### Examples and Evaluation
 
 | Module | Type | Purpose |
@@ -849,6 +859,18 @@ Flushes write-behind `storageStrength` counters from `RetrievalAccessTracker` to
 **Tick-generation caching:** `beginTick()` increments a counter. `swapAndReset()` snapshot is taken once per tick (not per tenant) — ensures multi-tenant correctness: all tenants see the same snapshot, preventing double-counting.
 
 For each accessed node: reads existing `storageStrength` property (default 0), adds the increment, writes back with `lastAccessed` timestamp.
+
+#### BehavioralSynthesisPhase (Priority 19)
+
+Bridges graduated experience nodes from the COGNITIVE subgraph to crystallised behavioral attractors in the BEHAVIORAL subgraph via CAPS settling.
+
+**Pipeline:** Scans COGNITIVE subgraph for graduated experience nodes → classifies each into CAPS input activations via `SituationClassifier` (virtual thread per classification for LLM-backed classifiers) → settles the CAPS network → extracts behavioral attractors from settled output nodes → creates/strengthens `CapsGenerated` nodes in BEHAVIORAL subgraph with EMA strength updates.
+
+**Drive intensity merging:** When multiple experiences activate the same CAPS input node, activations are merged via max (not sum) to prevent saturation from repeated similar experiences.
+
+**CBR outcome recording:** Collects `caseId`s from `ClassificationResult`, evaluates settling quality via `ClassificationOutcomeEvaluator` (convergence × max attractor strength), and calls `recordOutcome()` for outcome-weighted retrieval. Convergence scores: CONVERGED=1.0, OSCILLATION=0.3, MAX_ITERATIONS=0.1.
+
+**Graceful degradation:** When `CapsEngine`, `SituationClassifier`, or `CbrRecordStore` are not on the classpath, the phase is a no-op.
 
 #### MergeDetectionPhase (Priority 20)
 
