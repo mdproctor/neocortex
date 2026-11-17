@@ -299,7 +299,65 @@ class LlmAppraisalStrategyTest {
                 HabituationState.empty(), null);
     }
 
-    private static LlmAppraisalStrategy stubStrategy(String response) {
+
+@Test
+void actionTargetsPopulateTendencyTargets() {
+    var json = """
+            {
+              "narrative": "Something is terribly wrong here.",
+              "dimensions": {
+                "relevance": 0.9,
+                "conduciveness": -0.8,
+                "controllability": 0.2,
+                "novelty": 0.7,
+                "urgency": 0.5,
+                "internal-standards": 1.0,
+                "external-standards": 1.0
+              },
+              "action_targets": {
+                "avoidance": "the exposed server",
+                "attending": "the unfamiliar pattern"
+              }
+            }""";
+    var strategy = stubStrategy(json);
+    var ctx = context("A data breach has been discovered",
+            List.of(new Drive("protection", DriveCategory.CHARACTER, 0.8, "")));
+
+    var result = strategy.appraise(ctx);
+
+    var avoidance = result.actionTendencies().stream()
+            .filter(t -> t.readiness() == ActionReadiness.AVOIDANCE).findFirst();
+    assertThat(avoidance).isPresent();
+    assertThat(avoidance.get().target()).isEqualTo("the exposed server");
+
+    var attending = result.actionTendencies().stream()
+            .filter(t -> t.readiness() == ActionReadiness.ATTENDING).findFirst();
+    assertThat(attending).isPresent();
+    assertThat(attending.get().target()).isEqualTo("the unfamiliar pattern");
+}
+
+@Test
+void missingActionTargets_tendenciesStillWork() {
+    var json = """
+            {
+              "narrative": "Something catches your eye.",
+              "dimensions": {
+                "relevance": 0.7,
+                "conduciveness": 0.5,
+                "controllability": 0.6,
+                "novelty": 0.8,
+                "internal-standards": 1.0,
+                "external-standards": 1.0
+              }
+            }""";
+    var strategy = stubStrategy(json);
+    var ctx = context("A hidden clue appears",
+            List.of(new Drive("curiosity", DriveCategory.CHARACTER, 0.7, "")));
+
+    var result = strategy.appraise(ctx);
+    assertThat(result.actionTendencies()).isNotEmpty();
+}
+private static LlmAppraisalStrategy stubStrategy(String response) {
         var strategy = new LlmAppraisalStrategy(StubPipelines.create(init -> new AgentSession() {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().item(new AgentEvent.TextDelta(response));

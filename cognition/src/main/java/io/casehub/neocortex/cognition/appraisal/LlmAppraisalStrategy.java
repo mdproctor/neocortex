@@ -71,8 +71,17 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
                 "urgency": <0.0-1.0, how time-pressured is the response>,
                 "internal-standards": <0.0-1.0, does this align with self-standards (1.0=fine)>,
                 "external-standards": <0.0-1.0, does this align with social norms (1.0=fine)>
+              },
+              "action_targets": {
+                "<tendency>": "<what the tendency is directed at>",
+                "approach": "the discovery",
+                "avoidance": "social exposure"
               }
-            }""";
+            }
+            action_targets: for each Frijda action tendency that fires, name what it is \
+            directed at. Keys are lowercase tendency names (approach, avoidance, attending, \
+            rejection, antagonism, interruption, submission, dominance). Only include \
+            tendencies that are relevant.""";
 
     private final @Nullable SessionPipeline sessionPipeline;
 
@@ -114,6 +123,7 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
         String subjectId = context.situation().narrative();
         var emotions = EmotionMapper.mapEmotions(secResults, subjectId);
         var tendencies = EmotionMapper.mapTendencies(secResults);
+        tendencies = applyTargets(tendencies, root.path("action_targets"));
 
         double novelty = dims.getOrDefault(SecDimensions.NOVELTY, 1.0);
         var habituation = updateHabituation(context, novelty);
@@ -137,6 +147,27 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
         });
         return dims;
     }
+private static List<ActionTendency> applyTargets(List<ActionTendency> tendencies, JsonNode targetsNode) {
+    if (targetsNode == null || targetsNode.isMissingNode() || !targetsNode.isObject()) {
+        return tendencies;
+    }
+    var targets = new HashMap<String, String>();
+    targetsNode.fields().forEachRemaining(entry -> {
+        if (entry.getValue().isTextual()) {
+            targets.put(entry.getKey().toLowerCase(), entry.getValue().asText());
+        }
+    });
+    if (targets.isEmpty()) return tendencies;
+    return tendencies.stream().map(t -> {
+        String key = t.readiness().name().toLowerCase();
+        String target = targets.get(key);
+        if (target != null && !target.isBlank() && t.target().isEmpty()) {
+            return new ActionTendency(t.readiness(), t.intensity(), target);
+        }
+        return t;
+    }).toList();
+}
+
 
     private String invokeLlm(AppraisalContext context) {
         var pipeline = this.sessionPipeline;
