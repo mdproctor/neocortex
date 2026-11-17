@@ -140,7 +140,7 @@ class BehavioralPromptSectionTest {
     }
 
     @Test
-    void limitsToTopFiveByStrength() {
+    void rendersAllAboveThresholdAttractors() {
         var sgId = store.createSubgraph(
             new SubgraphInput("Behavioral", SubgraphTypes.BEHAVIORAL, null), "t1");
         for (int i = 1; i <= 7; i++) {
@@ -157,10 +157,9 @@ class BehavioralPromptSectionTest {
 
         var rendered = section.render(context);
         assertThat(rendered).isNotNull();
-        assertThat(rendered).contains("pattern-7");
-        assertThat(rendered).contains("pattern-3");
-        assertThat(rendered).doesNotContain("pattern-1");
-        assertThat(rendered).doesNotContain("pattern-2");
+        for (int i = 1; i <= 7; i++) {
+            assertThat(rendered).contains("pattern-" + i);
+        }
     }
 
     @Test
@@ -379,7 +378,7 @@ class BehavioralPromptSectionTest {
     }
 
     @Test
-    void activatedDriveBumpsIntoTopFive() {
+    void activatedDriveSortsBeforeInactiveRegardlessOfCount() {
         var sgId = store.createSubgraph(
                 new SubgraphInput("Behavioral", SubgraphTypes.BEHAVIORAL, null), "t1");
         for (int i = 1; i <= 6; i++) {
@@ -408,6 +407,84 @@ class BehavioralPromptSectionTest {
         var rendered = section.render(activatedContext);
         assertThat(rendered).isNotNull();
         assertThat(rendered).contains("activated-low");
+        int activatedPos = rendered.indexOf("activated-low");
+        int firstInactivePos = rendered.indexOf("inactive-");
+        assertThat(activatedPos).isLessThan(firstInactivePos);
+    }
+
+
+    @Test
+    void rendersMidTierApproachAvoidancePair() {
+        var sgId = store.createSubgraph(
+                new SubgraphInput("Behavioral", SubgraphTypes.BEHAVIORAL, null), "t1");
+        store.addNode(NodeInput.of("co_regulation", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "co_regulation",
+                                       "category", "social",
+                                       "strength", "0.868",
+                                       "agent-id", "agent1",
+                                       "source-count", "12")),
+                      "t1");
+        store.addNode(NodeInput.of("cautious_approach", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "cautious_approach",
+                                       "category", "social",
+                                       "strength", "0.788",
+                                       "agent-id", "agent1",
+                                       "source-count", "9")),
+                      "t1");
+        store.addNode(NodeInput.of("proximity_seek", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "proximity_seek",
+                                       "category", "social",
+                                       "strength", "0.650",
+                                       "agent-id", "agent1",
+                                       "source-count", "7")),
+                      "t1");
+        store.addNode(NodeInput.of("withdraw", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "withdraw",
+                                       "category", "approach_avoidance",
+                                       "strength", "0.635",
+                                       "agent-id", "agent1",
+                                       "source-count", "6")),
+                      "t1");
+        // two more strong attractors to push past the old limit of 5
+        store.addNode(NodeInput.of("emotional_regulation", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "emotional_regulation",
+                                       "category", "coping",
+                                       "strength", "0.720",
+                                       "agent-id", "agent1",
+                                       "source-count", "8")),
+                      "t1");
+        store.addNode(NodeInput.of("hypervigilance", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "hypervigilance",
+                                       "category", "threat",
+                                       "strength", "0.710",
+                                       "agent-id", "agent1",
+                                       "source-count", "8")),
+                      "t1");
+
+        var rendered = section.render(context);
+        assertThat(rendered).isNotNull();
+        assertThat(rendered)
+                .as("Mid-tier approach-avoidance attractors must not be dropped")
+                .contains("withdraw")
+                .contains("proximity_seek");
+        assertThat(rendered)
+                .as("All six above-threshold attractors should render")
+                .contains("co_regulation")
+                .contains("cautious_approach")
+                .contains("emotional_regulation")
+                .contains("hypervigilance");
     }
 
     @Test

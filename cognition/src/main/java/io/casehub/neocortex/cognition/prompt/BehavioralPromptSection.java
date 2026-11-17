@@ -56,7 +56,6 @@ public class BehavioralPromptSection implements CognitionPromptRenderer {
                                                        })
                                                        .thenComparing(Comparator.comparingDouble(
                                                                (MindMapNode n) -> parseDouble(n, "strength")).reversed()))
-                                     .limit(5)
                                      .toList();
 
         var sb = new StringBuilder();
