@@ -37,7 +37,7 @@ public class DocumentSearchableProvider implements SearchableProvider {
 
     @Override
     public PipelinePage<CachedEntity> search(KnowledgeQuery query, PipelinePageRequest page) {
-        var search = platform.search(null);
+        var search = platform.search();
         PageRequest connectorPage = new PageRequest(page.cursor(), page.pageSize());
 
         Page<DocumentSummary> result = switch (query) {
