@@ -978,7 +978,11 @@ public @Nullable String lastTargetAgentId() {
         }
         chainSectionCustomizer(sections -> {
             var result = new java.util.ArrayList<>(sections);
-            result.add(new io.casehub.neocortex.cognition.search.SearchBudgetPromptSection(participant, mindMapStore, this.lastContinuumMap));
+            java.util.function.Supplier<io.casehub.neocortex.cognition.appraisal.AppraisalResult> appraisalSup =
+                    appraisalParticipant != null && lastAgentId != null && lastTenantId != null
+                            ? () -> appraisalParticipant.currentResult(lastAgentId, lastTenantId).orElse(null)
+                            : () -> null;
+            result.add(new io.casehub.neocortex.cognition.search.SearchBudgetPromptSection(participant, mindMapStore, this.lastContinuumMap, appraisalSup));
             return result;
         });
     }

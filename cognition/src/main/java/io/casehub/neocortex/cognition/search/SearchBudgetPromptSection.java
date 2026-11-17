@@ -1,8 +1,11 @@
 package io.casehub.neocortex.cognition.search;
 
+import io.casehub.neocortex.cognition.appraisal.ActionReadiness;
+import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
 import io.casehub.neocortex.cognition.prompt.BlockTag;
 import io.casehub.neocortex.cognition.prompt.CognitionPromptRenderer;
 import io.casehub.neocortex.cognition.prompt.CognitionRenderContext;
+import io.casehub.neocortex.cognitive.EmotionType;
 import io.casehub.neocortex.mindmap.ContinuumPosition;
 import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.MindMapStore;
@@ -11,6 +14,8 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Renders the search budget as a cognitive-state description.
@@ -36,13 +41,22 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
     }
 
     private final @Nullable Map<String, ContinuumPosition> continuum;
+    private final @Nullable Supplier<@Nullable AppraisalResult> appraisalSupplier;
 
     public SearchBudgetPromptSection(SearchBudgetTickParticipant participant,
                                      @Nullable MindMapStore mindMapStore,
                                      @Nullable Map<String, ContinuumPosition> continuum) {
-        this.participant  = participant;
-        this.mindMapStore = mindMapStore;
-        this.continuum    = continuum;
+        this(participant, mindMapStore, continuum, null);
+    }
+
+    public SearchBudgetPromptSection(SearchBudgetTickParticipant participant,
+                                     @Nullable MindMapStore mindMapStore,
+                                     @Nullable Map<String, ContinuumPosition> continuum,
+                                     @Nullable Supplier<@Nullable AppraisalResult> appraisalSupplier) {
+        this.participant       = participant;
+        this.mindMapStore      = mindMapStore;
+        this.continuum         = continuum;
+        this.appraisalSupplier = appraisalSupplier;
     }
 
 
@@ -97,6 +111,11 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
                            .orElse(null);
     }
 
+    private static final Set<EmotionType> CRISIS_EMOTIONS = Set.of(
+            EmotionType.FEAR, EmotionType.DISTRESS, EmotionType.FEARS_CONFIRMED);
+    private static final double AROUSAL_URGENCY_THRESHOLD = 0.7;
+    private static final double TENDENCY_URGENCY_THRESHOLD = 0.8;
+
     private String renderFromParameters(SearchBudget budget) {
         if (budget.convergence() < 0.05 && budget.breadth() < 0.15) {
             return "You keep coming back to this. Other thoughts won't stick.";
@@ -116,6 +135,8 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
             case GOAL -> renderGoal(budget);
         };
 
+        base = modulateByAppraisal(base);
+
         String profile = renderProfileShape(budget);
         if (profile != null) {
             base = base + " " + profile;
@@ -130,6 +151,31 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
             base = base + " " + capacity;
         }
 
+        return base;
+    }
+
+    private String modulateByAppraisal(String base) {
+        if (appraisalSupplier == null) return base;
+        var appraisal = appraisalSupplier.get();
+        if (appraisal == null) return base;
+
+        boolean crisisEmotion = appraisal.emotions().stream()
+                .anyMatch(e -> CRISIS_EMOTIONS.contains(e.type()) && e.intensity() > 0.5);
+        double peakArousal = appraisal.secDimensions().getOrDefault("urgency", 0.0);
+        double peakTendencyIntensity = appraisal.actionTendencies().stream()
+                .filter(t -> t.readiness() == ActionReadiness.AVOIDANCE || t.readiness() == ActionReadiness.ANTAGONISM)
+                .mapToDouble(t -> t.intensity())
+                .max().orElse(0.0);
+
+        if (crisisEmotion) {
+            return "This is not idle — something is wrong and demands your attention. " + base;
+        }
+        if (peakArousal > AROUSAL_URGENCY_THRESHOLD && peakTendencyIntensity > TENDENCY_URGENCY_THRESHOLD) {
+            return "The urgency is real — act first, reflect later. " + base;
+        }
+        if (peakArousal > AROUSAL_URGENCY_THRESHOLD) {
+            return "This carries weight — your attention sharpens. " + base;
+        }
         return base;
     }
 

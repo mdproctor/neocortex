@@ -99,4 +99,66 @@ class SearchBudgetPromptSectionTest {
         assertNotNull(result);
         assertFalse(result.isBlank());
     }
+
+@Test
+void crisisEmotion_injectsCrisisQualifier() {
+    var budget = new SearchBudget(0.5, 0.3, 0.6, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
+    var participant = mock(SearchBudgetTickParticipant.class);
+    when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
+
+    var appraisal = new io.casehub.neocortex.cognition.appraisal.AppraisalResult(
+            List.of(new io.casehub.neocortex.cognitive.CognitiveEmotion(
+                    io.casehub.neocortex.cognitive.EmotionType.FEAR, 0.89, "subject",
+                    Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
+                    io.casehub.neocortex.cognitive.PadProjection.NEUTRAL)),
+            List.of(new io.casehub.neocortex.cognition.appraisal.ActionTendency(
+                    io.casehub.neocortex.cognition.appraisal.ActionReadiness.AVOIDANCE, 0.92, "")),
+            io.casehub.neocortex.cognition.appraisal.HabituationState.empty());
+
+    var section = new SearchBudgetPromptSection(participant, null, null, () -> appraisal);
+    var context = new CognitionRenderContext("agent1", "tenant1", null, List.of());
+    String result = section.render(context);
+
+    assertNotNull(result);
+    assertTrue(result.contains("something is wrong"), "Crisis emotion should inject urgency qualifier");
+}
+
+@Test
+void highArousalHighTendency_injectsUrgency() {
+    var budget = new SearchBudget(0.5, 0.3, 0.6, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
+    var participant = mock(SearchBudgetTickParticipant.class);
+    when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
+
+    var appraisal = new io.casehub.neocortex.cognition.appraisal.AppraisalResult(
+            List.of(new io.casehub.neocortex.cognitive.CognitiveEmotion(
+                    io.casehub.neocortex.cognitive.EmotionType.ANGER, 0.8, "subject",
+                    Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
+                    io.casehub.neocortex.cognitive.PadProjection.NEUTRAL)),
+            List.of(new io.casehub.neocortex.cognition.appraisal.ActionTendency(
+                    io.casehub.neocortex.cognition.appraisal.ActionReadiness.ANTAGONISM, 0.85, "")),
+            io.casehub.neocortex.cognition.appraisal.HabituationState.empty(),
+            null, java.util.Map.of("urgency", 0.9));
+
+    var section = new SearchBudgetPromptSection(participant, null, null, () -> appraisal);
+    var context = new CognitionRenderContext("agent1", "tenant1", null, List.of());
+    String result = section.render(context);
+
+    assertNotNull(result);
+    assertTrue(result.contains("urgency is real"), "High arousal + tendency should inject urgency");
+}
+
+@Test
+void noAppraisal_noModulation() {
+    var budget = new SearchBudget(0.5, 0.3, 0.6, 0.4, SearchMotivation.CURIOSITY, false, false, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, Instant.now());
+    var participant = mock(SearchBudgetTickParticipant.class);
+    when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
+
+    var section = new SearchBudgetPromptSection(participant, null, null, null);
+    var context = new CognitionRenderContext("agent1", "tenant1", null, List.of());
+    String result = section.render(context);
+
+    assertNotNull(result);
+    assertFalse(result.contains("urgency"), "No appraisal should not inject urgency");
+    assertFalse(result.contains("wrong"), "No appraisal should not inject crisis");
+}
 }
