@@ -6,10 +6,14 @@ import io.casehub.neocortex.memory.mood.MoodState;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 public class DriveComposer {
+
+    public record CompositionResult(DriveProfile profile, List<DriveEvaluation> evaluations) {}
 
     public DriveProfile compose(Map<DriveAxis, DriveIntensity> rawDrives,
                                 @Nullable AgentDisposition disposition,
@@ -17,32 +21,44 @@ public class DriveComposer {
                                 java.util.List<ModulationLayer> modulations,
                                 DriveConfig config,
                                 String agentId, String tenantId, Instant now) {
+        return composeWithEvaluations(rawDrives, disposition, mood, modulations, config,
+                agentId, tenantId, now).profile();
+    }
+
+    public CompositionResult composeWithEvaluations(Map<DriveAxis, DriveIntensity> rawDrives,
+                                                    @Nullable AgentDisposition disposition,
+                                                    @Nullable MoodState mood,
+                                                    java.util.List<ModulationLayer> modulations,
+                                                    DriveConfig config,
+                                                    String agentId, String tenantId, Instant now) {
         if (rawDrives.isEmpty()) {
-            return new DriveProfile(agentId, tenantId, Map.of(), 0.0,
-                                    DriveAxis.CURIOSITY, now);
+            return new CompositionResult(
+                    new DriveProfile(agentId, tenantId, Map.of(), 0.0, DriveAxis.CURIOSITY, now),
+                    List.of());
         }
 
-        var modulated = new EnumMap<DriveAxis, DriveIntensity>(DriveAxis.class);
+        var modulated   = new EnumMap<DriveAxis, DriveIntensity>(DriveAxis.class);
+        var evaluations = new ArrayList<DriveEvaluation>();
 
         for (var entry : rawDrives.entrySet()) {
             var axis = entry.getKey();
             var raw  = entry.getValue();
 
-            double totalDelta     = 0.0;
-            double appraisalDelta = 0.0;
+            double moodDelta_       = mood != null ? moodDelta(axis, mood, config) : 0.0;
+            double personalityDelta_ = disposition != null ? personalityDelta(axis, disposition, config) : 0.0;
+            double appraisalDelta   = 0.0;
+            double otherModDelta    = 0.0;
 
-            if (mood != null) {
-                totalDelta += moodDelta(axis, mood, config);
-            }
-            if (disposition != null) {
-                totalDelta += personalityDelta(axis, disposition, config);
-            }
             for (var layer : modulations) {
                 double delta = layer.modulation().getOrDefault(axis, 0.0) * layer.strength();
-                totalDelta += delta;
-                if ("appraisal".equals(layer.source())) {appraisalDelta += delta;}
+                if ("appraisal".equals(layer.source())) {
+                    appraisalDelta += delta;
+                } else {
+                    otherModDelta += delta;
+                }
             }
 
+            double totalDelta = moodDelta_ + personalityDelta_ + appraisalDelta + otherModDelta;
             double intensity = raw.intensity() + Math.tanh(totalDelta);
             intensity = Math.clamp(intensity, config.minIntensity(), config.maxIntensity());
 
@@ -51,12 +67,17 @@ public class DriveComposer {
                 trigger = appraisalDelta > 0 ? "elevated by emotional response" : "dampened by emotional response";
             }
             modulated.put(axis, new DriveIntensity(axis, intensity, trigger));
+
+            evaluations.add(new DriveEvaluation(axis, raw.intensity(),
+                    moodDelta_, personalityDelta_, appraisalDelta, otherModDelta,
+                    intensity, false, trigger));
         }
 
         double    composite = computeComposite(modulated, config);
         DriveAxis dominant  = findDominant(modulated);
+        var profile = new DriveProfile(agentId, tenantId, modulated, composite, dominant, now);
 
-        return new DriveProfile(agentId, tenantId, modulated, composite, dominant, now);
+        return new CompositionResult(profile, List.copyOf(evaluations));
     }
 
     private double moodDelta(DriveAxis axis, MoodState mood, DriveConfig config) {

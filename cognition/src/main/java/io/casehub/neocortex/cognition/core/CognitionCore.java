@@ -698,6 +698,19 @@ private volatile           io.casehub.neocortex.cognition.journal.CognitiveJourn
         return java.util.Map.copyOf(intensities);
     }
 
+    public java.util.List<io.casehub.neocortex.cognition.drive.DriveEvaluation> driveEvaluations() {
+        if (drives == null || lastAgentId == null || lastTenantId == null) {
+            return java.util.List.of();
+        }
+        double threshold = appraisalParticipant != null
+                           ? appraisalParticipant.thresholds().driveActivationThreshold()
+                           : 0.3;
+        return drives.lastDriveEvaluations(lastAgentId, lastTenantId).stream()
+                     .map(e -> e.withActivated(e.composedIntensity() > threshold))
+                     .toList();
+    }
+
+
     public List<CognitionPromptRenderer> promptSections() {
         var sections = new ArrayList<CognitionPromptRenderer>();
         var desc     = lastDescriptor;
@@ -1126,10 +1139,11 @@ public @Nullable String lastTargetAgentId() {
             }
         }
 
+        var driveEvals = driveEvaluations();
         return java.util.Optional.of(new io.casehub.neocortex.cognition.trace.PipelineTrace(
                 appraisal, concernSalience, capsInputs, capsSnapshot,
                 regulation, channelWeights, habituation,
-                activatedDriveCategories(), driveIntensities(), renderedSections));
+                activatedDriveCategories(), driveIntensities(), driveEvals, renderedSections));
     }
 
     @Override

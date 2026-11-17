@@ -32,6 +32,7 @@ public class DriveOrchestrator {
 
 
     private final ConcurrentHashMap<String, DriveProfile> profiles = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<DriveEvaluation>> lastEvaluations = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<DriveAxis, Double>> pendingAppraisalModulations = new ConcurrentHashMap<>();
 
@@ -99,8 +100,10 @@ public class DriveOrchestrator {
                 modulations.add(new ModulationLayer(appraisalMod, 1.0, "appraisal"));
             }
 
-            var newProfile = composer.compose(raw, disposition, mood, modulations, config,
+            var result = composer.composeWithEvaluations(raw, disposition, mood, modulations, config,
                     agentId, tenantId, now);
+            var newProfile = result.profile();
+            lastEvaluations.put(key, result.evaluations());
 
             var previous = profiles.get(key);
             profiles.put(key, newProfile);
@@ -140,6 +143,11 @@ public class DriveOrchestrator {
     public Optional<DriveProfile> currentDrives(String agentId, String tenantId) {
         return Optional.ofNullable(profiles.get(agentId + ":" + tenantId));
     }
+
+    public List<DriveEvaluation> lastDriveEvaluations(String agentId, String tenantId) {
+        return lastEvaluations.getOrDefault(agentId + ":" + tenantId, List.of());
+    }
+
 
     private <T> T withLock(String key, Supplier<T> action) {
         var lock = tickLocks.computeIfAbsent(key, k -> new ReentrantLock());

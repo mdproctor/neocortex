@@ -3,6 +3,7 @@ package io.casehub.neocortex.cognition.trace;
 import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
 import io.casehub.neocortex.cognition.appraisal.ChannelWeightProfile;
 import io.casehub.neocortex.cognition.appraisal.HabituationState;
+import io.casehub.neocortex.cognition.drive.DriveEvaluation;
 import io.casehub.neocortex.cognition.regulation.EmotionRegulationResult;
 import org.jspecify.annotations.Nullable;
 
@@ -19,10 +20,12 @@ public record PipelineTrace(
         @Nullable HabituationState habituation,
         List<String> activatedDriveCategories,
         Map<String, Double> driveIntensities,
+        List<DriveEvaluation> driveEvaluations,
         Map<String, String> promptSections
 ) {
     public PipelineTrace {
         driveIntensities = driveIntensities != null ? Map.copyOf(driveIntensities) : Map.of();
+        driveEvaluations = driveEvaluations != null ? List.copyOf(driveEvaluations) : List.of();
     }
     public record CapsSettlingSnapshot(
             Map<String, Double> activations,

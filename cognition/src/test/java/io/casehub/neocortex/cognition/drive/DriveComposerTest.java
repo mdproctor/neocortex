@@ -217,4 +217,54 @@ class DriveComposerTest {
                 .isEqualTo(0.5);
     }
 
+
+    @Test
+    void composeWithEvaluations_tracksPerAxisDeltas() {
+        var raw = Map.of(
+                DriveAxis.CURIOSITY, new DriveIntensity(DriveAxis.CURIOSITY, 0.5, "gaps"),
+                DriveAxis.AFFILIATION, new DriveIntensity(DriveAxis.AFFILIATION, 0.3, "stable"));
+
+        var mood = new MoodState("a", "t", null, 0.5, 0.6, 0.0, "test", null, Set.of(), Map.of());
+        var appraisalMod = new ModulationLayer(
+                Map.of(DriveAxis.CURIOSITY, 0.4, DriveAxis.AFFILIATION, -0.1), 1.0, "appraisal");
+
+        var result = composer.composeWithEvaluations(raw, null, mood,
+                                                     List.of(appraisalMod), DriveConfig.defaults(), "a", "t", now);
+
+        assertThat(result.evaluations()).hasSize(2);
+        var curiosityEval = result.evaluations().stream()
+                                  .filter(e -> e.axis() == DriveAxis.CURIOSITY).findFirst().orElseThrow();
+        assertThat(curiosityEval.rawIntensity()).isCloseTo(0.5, within(0.001));
+        assertThat(curiosityEval.appraisalDelta()).isCloseTo(0.4, within(0.001));
+        assertThat(curiosityEval.moodDelta()).isNotEqualTo(0.0);
+        assertThat(curiosityEval.personalityDelta()).isCloseTo(0.0, within(0.001));
+        assertThat(curiosityEval.composedIntensity()).isGreaterThan(curiosityEval.rawIntensity());
+
+        var affiliationEval = result.evaluations().stream()
+                                    .filter(e -> e.axis() == DriveAxis.AFFILIATION).findFirst().orElseThrow();
+        assertThat(affiliationEval.rawIntensity()).isCloseTo(0.3, within(0.001));
+        assertThat(affiliationEval.appraisalDelta()).isCloseTo(-0.1, within(0.001));
+    }
+
+    @Test
+    void composeWithEvaluations_emptyRawDrives_emptyEvaluations() {
+        var result = composer.composeWithEvaluations(Map.of(), null, null,
+                                                     List.of(), DriveConfig.defaults(), "a", "t", now);
+        assertThat(result.evaluations()).isEmpty();
+        assertThat(result.profile().drives()).isEmpty();
+    }
+
+    @Test
+    void composeWithEvaluations_separatesAppraisalAndOtherModulations() {
+        var raw          = Map.of(DriveAxis.CURIOSITY, new DriveIntensity(DriveAxis.CURIOSITY, 0.5, "x"));
+        var appraisalMod = new ModulationLayer(Map.of(DriveAxis.CURIOSITY, 0.3), 1.0, "appraisal");
+        var narrativeMod = new ModulationLayer(Map.of(DriveAxis.CURIOSITY, 0.2), 0.5, "narrative");
+
+        var result = composer.composeWithEvaluations(raw, null, null,
+                                                     List.of(appraisalMod, narrativeMod), DriveConfig.defaults(), "a", "t", now);
+
+        var eval = result.evaluations().getFirst();
+        assertThat(eval.appraisalDelta()).isCloseTo(0.3, within(0.001));
+        assertThat(eval.otherModulationDelta()).isCloseTo(0.1, within(0.001));
+    }
 }

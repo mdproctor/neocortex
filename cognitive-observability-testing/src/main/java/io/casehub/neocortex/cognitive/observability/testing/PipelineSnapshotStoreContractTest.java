@@ -18,7 +18,7 @@ public abstract class PipelineSnapshotStoreContractTest {
     private PipelineSnapshotStore store;
 
     private static final PipelineTrace EMPTY_TRACE = new PipelineTrace(
-            null, Map.of(), Map.of(), null, null, null, null, List.of(), Map.of(), Map.of());
+            null, Map.of(), Map.of(), null, null, null, null, List.of(), Map.of(), List.of(), Map.of());
 
     @BeforeEach
     void setUp() {
@@ -93,8 +93,8 @@ public abstract class PipelineSnapshotStoreContractTest {
 
     @Test
     void shouldHandleDuplicateTickByUpsert() {
-        var trace1 = new PipelineTrace(null, Map.of(), Map.of(), null, null, null, null, List.of(), Map.of(), Map.of("key", "v1"));
-        var trace2 = new PipelineTrace(null, Map.of(), Map.of(), null, null, null, null, List.of(), Map.of(), Map.of("key", "v2"));
+        var trace1 = new PipelineTrace(null, Map.of(), Map.of(), null, null, null, null, List.of(), Map.of(), List.of(), Map.of("key", "v1"));
+        var trace2 = new PipelineTrace(null, Map.of(), Map.of(), null, null, null, null, List.of(), Map.of(), List.of(), Map.of("key", "v2"));
 
         store.store("t1", "agent1", 1, Instant.now(), trace1);
         store.store("t1", "agent1", 1, Instant.now(), trace2);
@@ -109,7 +109,7 @@ public abstract class PipelineSnapshotStoreContractTest {
         var trace = new PipelineTrace(
                 null, Map.of("curiosity", 0.8), Map.of("input1", 0.5),
                 null, null, null, null, List.of("CURIOSITY", "AFFILIATION"),
-                Map.of("CURIOSITY", 0.7, "AFFILIATION", 0.5),
+                Map.of("CURIOSITY", 0.7, "AFFILIATION", 0.5), List.of(),
                 Map.of("mood", "calm and alert"));
 
         store.store("t1", "agent1", 10, Instant.now(), trace);
