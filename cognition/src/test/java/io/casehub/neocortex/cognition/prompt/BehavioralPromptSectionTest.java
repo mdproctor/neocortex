@@ -506,7 +506,8 @@ class BehavioralPromptSectionTest {
         assertThat(rendered).isNotNull();
         assertThat(rendered)
                 .as("Oscillation attractor should be framed as tension, not stable tendency")
-                .contains("competing");
+                .contains("competing")
+                .contains("ambivalence");
         assertThat(rendered)
                 .as("Should NOT use 'deeply ingrained' or 'noticeable' labels for oscillation")
                 .doesNotContain("deeply ingrained")
