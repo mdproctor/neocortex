@@ -267,4 +267,18 @@ class DriveComposerTest {
         assertThat(eval.appraisalDelta()).isCloseTo(0.3, within(0.001));
         assertThat(eval.otherModulationDelta()).isCloseTo(0.1, within(0.001));
     }
+
+@Test
+void composeWithEvaluations_appraisalProvenance_namesDominantEmotion() {
+    var raw = Map.of(DriveAxis.AUTONOMY, new DriveIntensity(DriveAxis.AUTONOMY, 0.3, "baseline"));
+    var descriptions = Map.of(DriveAxis.AUTONOMY, "SHAME");
+    var appraisalMod = new ModulationLayer(Map.of(DriveAxis.AUTONOMY, 0.5), 1.0, "appraisal", descriptions);
+
+    var result = composer.composeWithEvaluations(raw, null, null,
+            List.of(appraisalMod), DriveConfig.defaults(), "a", "t", now);
+
+    var eval = result.evaluations().getFirst();
+    assertThat(eval.trigger()).contains("SHAME");
+    assertThat(eval.trigger()).doesNotContain("emotional response");
+}
 }

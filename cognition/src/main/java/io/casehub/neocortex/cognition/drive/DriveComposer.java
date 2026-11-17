@@ -64,7 +64,14 @@ public class DriveComposer {
 
             String trigger = raw.trigger();
             if (Math.abs(appraisalDelta) > 0.2) {
-                trigger = appraisalDelta > 0 ? "elevated by emotional response" : "dampened by emotional response";
+                String emotionName = resolveAppraisalDescription(axis, modulations);
+                if (emotionName != null) {
+                    trigger = appraisalDelta > 0
+                            ? "elevated by " + emotionName
+                            : "dampened by " + emotionName;
+                } else {
+                    trigger = appraisalDelta > 0 ? "elevated by emotional response" : "dampened by emotional response";
+                }
             }
             modulated.put(axis, new DriveIntensity(axis, intensity, trigger));
 
@@ -134,4 +141,14 @@ public class DriveComposer {
                 .map(Map.Entry::getKey)
                 .orElse(DriveAxis.CURIOSITY);
     }
+
+    private static @Nullable String resolveAppraisalDescription(DriveAxis axis, List<ModulationLayer> modulations) {
+        for (var layer : modulations) {
+            if ("appraisal".equals(layer.source()) && layer.descriptions() != null) {
+                return layer.descriptions().get(axis);
+            }
+        }
+        return null;
+    }
+
 }

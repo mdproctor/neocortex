@@ -353,7 +353,8 @@ private volatile           io.casehub.neocortex.cognition.journal.CognitiveJourn
                 }
                 if (config.drivesEnabled()) {
                     var driveDeltas = io.casehub.neocortex.cognition.drive.AppraisalDriveModulator.modulate(r.emotions());
-                    drives.recordAppraisalModulation(agentId, tenantId, driveDeltas);
+                    var driveDescriptions = io.casehub.neocortex.cognition.drive.AppraisalDriveModulator.dominantContributions(r.emotions());
+                    drives.recordAppraisalModulation(agentId, tenantId, driveDeltas, driveDescriptions);
                 }
             });
             if (config.moodEnabled()) {

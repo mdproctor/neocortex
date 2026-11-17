@@ -38,6 +38,29 @@ public final class AppraisalDriveModulator {
         return deltas;
     }
 
+    public static Map<DriveAxis, String> dominantContributions(List<CognitiveEmotion> emotions) {
+        var contributions = new EnumMap<DriveAxis, String>(DriveAxis.class);
+        var maxDeltas     = new EnumMap<DriveAxis, Double>(DriveAxis.class);
+        for (var emotion : emotions) {
+            var mapping = MAPPINGS.get(emotion.type());
+            if (mapping == null) {continue;}
+            double primaryDelta = Math.abs(mapping.primaryWeight * emotion.intensity());
+            if (primaryDelta > maxDeltas.getOrDefault(mapping.primary, 0.0)) {
+                maxDeltas.put(mapping.primary, primaryDelta);
+                contributions.put(mapping.primary, emotion.type().name());
+            }
+            if (mapping.secondary != null) {
+                double secondaryDelta = Math.abs(mapping.secondaryWeight * emotion.intensity());
+                if (secondaryDelta > maxDeltas.getOrDefault(mapping.secondary, 0.0)) {
+                    maxDeltas.put(mapping.secondary, secondaryDelta);
+                    contributions.put(mapping.secondary, emotion.type().name());
+                }
+            }
+        }
+        return contributions;
+    }
+
+
     private record DriveMapping(DriveAxis primary, double primaryWeight,
                                 DriveAxis secondary, double secondaryWeight) {
         DriveMapping(DriveAxis primary, double primaryWeight) {

@@ -35,6 +35,7 @@ public class DriveOrchestrator {
     private final ConcurrentHashMap<String, List<DriveEvaluation>> lastEvaluations = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<DriveAxis, Double>> pendingAppraisalModulations = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Map<DriveAxis, String>> pendingAppraisalDescriptions = new ConcurrentHashMap<>();
 
     public DriveOrchestrator(DriveSource curiosity, DriveSource competence,
                              DriveSource affiliation, DriveSource autonomy,
@@ -97,7 +98,8 @@ public class DriveOrchestrator {
             }
             var appraisalMod = pendingAppraisalModulations.remove(key);
             if (appraisalMod != null) {
-                modulations.add(new ModulationLayer(appraisalMod, 1.0, "appraisal"));
+                var appraisalDesc = pendingAppraisalDescriptions.remove(key);
+                modulations.add(new ModulationLayer(appraisalMod, 1.0, "appraisal", appraisalDesc));
             }
 
             var result = composer.composeWithEvaluations(raw, disposition, mood, modulations, config,
@@ -132,7 +134,17 @@ public class DriveOrchestrator {
     }
 
     public void recordAppraisalModulation(String agentId, String tenantId, Map<DriveAxis, Double> modulation) {
-        pendingAppraisalModulations.put(agentId + ":" + tenantId, modulation);
+        recordAppraisalModulation(agentId, tenantId, modulation, null);
+    }
+
+    public void recordAppraisalModulation(String agentId, String tenantId,
+                                           Map<DriveAxis, Double> modulation,
+                                           @Nullable Map<DriveAxis, String> descriptions) {
+        var key = agentId + ":" + tenantId;
+        pendingAppraisalModulations.put(key, modulation);
+        if (descriptions != null) {
+            pendingAppraisalDescriptions.put(key, descriptions);
+        }
     }
 
     public void setSubThoughtParticipant(io.casehub.neocortex.cognition.subthought.SubThoughtTickParticipant participant) {
