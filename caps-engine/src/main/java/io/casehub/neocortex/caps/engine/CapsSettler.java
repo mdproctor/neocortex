@@ -255,7 +255,9 @@ public class CapsSettler {
                                      .getOrDefault(node.id(), NodeState.DEFAULT);
             double strength = Math.min(1.0, settled + ns.restingActivation())
                               * strengthMultiplier;
-            if (strength > config.attractorStrengthMinFilter()) {
+            double baseline = Math.min(1.0, node.range().restingLevel() + ns.restingActivation())
+                              * strengthMultiplier;
+            if (strength - baseline > config.attractorStrengthMargin()) {
                 attractors.add(new CapsAttractor(
                         node.category(), node.id(), strength, highSat, generation));
             }

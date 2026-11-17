@@ -52,7 +52,7 @@ class SocialThreatOscillationTest {
         var base = new CapsTopologyLoader().loadFromClasspath("caps-topology.yaml");
         var topology = withMaxIterations(base, 4);
         var settler = new CapsSettler(topology,
-                new CapsSettlingConfig(0.05, 0.55, 0.99, 0.0));
+                new CapsSettlingConfig(0.05, 0.05, 0.99, 0.0));
         var mapper = new DispositionWeightMapper(base);
         AgentCapsState state = mapper.initializeWeights("test", "agent", COOPERATIVE_CAUTIOUS);
 
@@ -74,7 +74,7 @@ class SocialThreatOscillationTest {
         var base = new CapsTopologyLoader().loadFromClasspath("caps-topology.yaml");
         var topology = withMaxIterations(base, 4);
         var settler = new CapsSettler(topology,
-                new CapsSettlingConfig(0.05, 0.55, 0.99, 0.0));
+                new CapsSettlingConfig(0.05, 0.05, 0.99, 0.0));
         var mapper = new DispositionWeightMapper(base);
         AgentCapsState state = mapper.initializeWeights("test", "agent", COOPERATIVE_CAUTIOUS);
 
@@ -95,7 +95,7 @@ class SocialThreatOscillationTest {
         var base = new CapsTopologyLoader().loadFromClasspath("caps-topology.yaml");
         var topology = withMaxIterations(base, 4);
         var settler = new CapsSettler(topology,
-                new CapsSettlingConfig(0.05, 0.55, 0.99, 0.0));
+                new CapsSettlingConfig(0.05, 0.05, 0.99, 0.0));
         var mapper = new DispositionWeightMapper(base);
         AgentCapsState state = mapper.initializeWeights("test", "agent", COOPERATIVE_CAUTIOUS);
 

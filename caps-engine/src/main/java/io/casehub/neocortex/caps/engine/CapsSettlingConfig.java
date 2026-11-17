@@ -15,11 +15,12 @@ package io.casehub.neocortex.caps.engine;
  * <p>
  * Parameter interactions: minEffectiveDistortionThreshold controls which
  * distortions fire during settling — it operates independently of the
- * output-stage parameters. attractorStrengthMinFilter and
+ * output-stage parameters. attractorStrengthMargin and
  * saturationActivationThreshold both affect what the settling result
- * reports: the former filters individual attractors, the latter
- * determines the saturation ratio which modulates attractor metadata
- * (highSat flag). saturationActivationThreshold works in tandem with
+ * reports: the former filters individual attractors relative to their
+ * activation-function baseline, the latter determines the saturation
+ * ratio which modulates attractor metadata (highSat flag).
+ * saturationActivationThreshold works in tandem with
  * saturationWarningThreshold in WeightUpdateParameters — one defines
  * what counts as saturated, the other defines when to warn about it.
  *
@@ -45,24 +46,22 @@ public record CapsSettlingConfig(
         double minEffectiveDistortionThreshold,
 
         /**
-         * Minimum attractor strength for inclusion in settling results.
+         * Margin above an output node's activation-function baseline for
+         * inclusion in settling results.
          *
-         * Output nodes with activation below this threshold are not
-         * reported as behavioral attractors. Filters noise from weakly
-         * activated outputs that would generate meaningless behavioral
-         * tendencies.
+         * The baseline is derived from the node's {@link io.casehub.neocortex.caps.NodeRange}:
+         * unipolar logistic rests at 0.5, bipolar tanh rests at 0.0.
+         * An output node is reported as a behavioral attractor only when
+         * its computed strength exceeds its baseline by at least this margin.
          *
-         * Higher = only strong behavioral tendencies are reported,
+         * Higher = only strongly activated outputs are reported,
          * producing fewer but more decisive attractors; lower = weaker
-         * signals surface, producing more nuanced but noisier behavior.
+         * signals above baseline surface, producing more nuanced behavior.
          * Related: saturationActivationThreshold.
          *
-         * Range: [0.01, 0.9]. Default 0.55 — above the unstimulated
-         * unipolar logistic resting level (~0.5) to filter out nodes
-         * that weren't activated by the input, while retaining
-         * genuinely excited outputs (0.6+).
+         * Range: [0.01, 0.5]. Default 0.05.
          */
-        double attractorStrengthMinFilter,
+        double attractorStrengthMargin,
 
         /**
          * Activation magnitude above which a mediating node is considered
@@ -75,7 +74,7 @@ public record CapsSettlingConfig(
          * Higher (closer to 1.0) = only extreme activations count as
          * saturated, fewer warnings; lower = more nodes count as
          * saturated, more frequent saturation warnings.
-         * Related: attractorStrengthMinFilter,
+         * Related: attractorStrengthMargin,
          * saturationWarningThreshold (in WeightUpdateParameters).
          *
          * Range: [0.9, 1.0]. Default 0.99 — only near-ceiling activations
@@ -106,6 +105,6 @@ public record CapsSettlingConfig(
         double dampingFactor
 ) {
     public static CapsSettlingConfig defaults() {
-        return new CapsSettlingConfig(0.05, 0.55, 0.99, 0.4);
+        return new CapsSettlingConfig(0.05, 0.05, 0.99, 0.4);
     }
 }
