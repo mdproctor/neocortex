@@ -58,6 +58,14 @@ class AppraisalDriveModulatorTest {
     }
 
     @Test
+    void remorseBoostsAutonomyAndAffiliation() {
+        var mods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.REMORSE, 0.7)));
+        assertThat(mods.get(DriveAxis.AUTONOMY)).as("REMORSE should boost AUTONOMY via primary mapping").isGreaterThan(0.05);
+        assertThat(mods.get(DriveAxis.AFFILIATION)).as("REMORSE should boost AFFILIATION via secondary mapping — Tangney relational argument").isGreaterThan(0.05);
+    }
+
+
+    @Test
     void intensityScalesModulation() {
         var low = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.ANGER, 0.2)));
         var high = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.ANGER, 0.8)));

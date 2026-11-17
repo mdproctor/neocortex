@@ -59,7 +59,7 @@ public final class AppraisalDriveModulator {
             Map.entry(EmotionType.DISTRESS,     new DriveMapping(DriveAxis.AUTONOMY, BOOST)),
             Map.entry(EmotionType.FEARS_CONFIRMED, new DriveMapping(DriveAxis.AUTONOMY, BOOST)),
             Map.entry(EmotionType.SHAME,        new DriveMapping(DriveAxis.AUTONOMY, BOOST, DriveAxis.AFFILIATION, SECONDARY_BOOST)),
-            Map.entry(EmotionType.REMORSE,      new DriveMapping(DriveAxis.AUTONOMY, SECONDARY_BOOST)),
+            Map.entry(EmotionType.REMORSE,      new DriveMapping(DriveAxis.AUTONOMY, SECONDARY_BOOST, DriveAxis.AFFILIATION, SECONDARY_BOOST)),
             Map.entry(EmotionType.DISAPPOINTMENT, new DriveMapping(DriveAxis.AUTONOMY, SECONDARY_BOOST)),
 
             // Approach → CURIOSITY (explore, engage)
