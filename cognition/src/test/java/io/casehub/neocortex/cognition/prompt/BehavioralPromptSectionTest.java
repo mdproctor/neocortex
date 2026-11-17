@@ -453,7 +453,6 @@ class BehavioralPromptSectionTest {
                                        "agent-id", "agent1",
                                        "source-count", "6")),
                       "t1");
-        // two more strong attractors to push past the old limit of 5
         store.addNode(NodeInput.of("emotional_regulation", sgId)
                                .withTraits(Set.of("CapsGenerated"))
                                .withProperties(Map.of(

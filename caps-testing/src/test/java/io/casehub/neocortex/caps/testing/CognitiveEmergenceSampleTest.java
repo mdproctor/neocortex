@@ -67,7 +67,7 @@ class CognitiveEmergenceSampleTest extends CognitiveEmergenceTest {
             "cooperative", "moderate", "calculated", "moderate", "analytical"));
 
         SettlingResult result = scenario.settleFromDescription(
-            "He was rejected and abandoned by his trusted friend who betrayed him");
+            "He was rejected and abandoned by his close friend who betrayed him");
 
         assertAttractorPresent(result, "distrust");
     }

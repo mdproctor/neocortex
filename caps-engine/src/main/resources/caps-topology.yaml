@@ -653,6 +653,18 @@ connections:
     provenance: empirical
     source: "Zhang et al. 2022, r=.28 avoidance→mental health"
     tags: []
+  - from: self_worth
+    to: distrust
+    weight: -0.40
+    provenance: derived
+    source: "inverse of self_worth→trust; low self-worth promotes distrust"
+    tags: []
+  - from: other_reliability
+    to: distrust
+    weight: -0.45
+    provenance: derived
+    source: "inverse of other_reliability→trust; low reliability promotes distrust"
+    tags: []
 
   # Disposition-activated: social/achievement → self_worth
   - from: acceptance
