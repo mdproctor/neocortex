@@ -73,10 +73,8 @@ Implements `CognitionPromptRenderer`. Constructor takes `MindMapStore`.
    `context.agentId()` and trait `CapsGenerated`.
 2. Filter to nodes with `strength` > 0.1 (below this threshold, the pattern
    is too weak to influence behavior).
-3. Sort by strength descending.
-4. Limit to top 5 attractors (token budget — each attractor renders as
-   1-2 sentences).
-5. For each attractor, render an evocative sentence:
+3. Sort by activated-drive priority, then strength descending.
+4. For each attractor, render an evocative sentence:
    - **Strength** → qualitative word: >0.7 "deeply ingrained", >0.4
      "noticeable", >0.2 "emerging"
    - **Trend** → modifier: "and strengthening", "but fading", omitted
@@ -163,7 +161,7 @@ metadata from persisting on stabilised attractors.
 
 - Null/empty: no BEHAVIORAL nodes → returns null
 - Single attractor: renders with correct strength label and source context
-- Multiple attractors: sorted by strength descending, limited to 5
+- Multiple attractors: sorted by activated-drive priority then strength descending, all above-threshold rendered
 - Trend rendering: strengthening, fading, stable each produce correct phrasing
 - Threshold filtering: strength ≤ 0.1 excluded
 - Missing source-names: renders without "rooted in" clause

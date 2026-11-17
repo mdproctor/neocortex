@@ -55,6 +55,8 @@ All 5 scenarios now pass the 4.0 coherence gate — up from 2 of 5 in the #1014 
 
 The single change with the largest impact was raising `attractorStrengthMinFilter` from 0.1 to 0.55. Unipolar output nodes produce `logistic(0) = 0.5` when unstimulated. With the old threshold, **every output node in the topology** was reported as a behavioral attractor — including autonomy nodes (depend, comply, rebel, self_direct) sitting at their resting level with zero input signal. BehavioralSynthesisPhase then wrote all of them into the MindMap as CapsGenerated nodes, and BehavioralPromptSection rendered them alongside genuinely activated attractors. The judge saw baseline noise drowning the actual behavioral signal and scored accordingly.
 
+**Subsequent refinement (#1034):** `attractorStrengthMinFilter` was renamed to `attractorStrengthMargin` (default 0.05) and made baseline-relative via `NodeRange.restingLevel()` — the filter now compares against each output node's activation-function resting level rather than using an absolute threshold. Same behavior for unipolar nodes; correct behavior for future bipolar output nodes.
+
 ---
 
 ## Re-run #1014 — Post #1005/#1009/#1000
