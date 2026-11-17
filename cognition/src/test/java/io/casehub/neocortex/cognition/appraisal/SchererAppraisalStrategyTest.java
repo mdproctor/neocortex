@@ -61,7 +61,9 @@ class SchererAppraisalStrategyTest {
         var full = allOn.appraise(ctx);
         var partial = relevanceOnly.appraise(ctx);
 
-        assertThat(full.emotions().size()).isGreaterThanOrEqualTo(partial.emotions().size());
+        assertThat(full.secDimensions().size())
+                .as("All SECs enabled should produce more dimensions than relevance-only")
+                .isGreaterThan(partial.secDimensions().size());
     }
 
     @Test
