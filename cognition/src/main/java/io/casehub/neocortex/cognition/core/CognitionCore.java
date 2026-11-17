@@ -705,7 +705,7 @@ private volatile           io.casehub.neocortex.cognition.journal.CognitiveJourn
         }
         double threshold = appraisalParticipant != null
                            ? appraisalParticipant.thresholds().driveActivationThreshold()
-                           : 0.3;
+                           : io.casehub.neocortex.cognition.appraisal.AppraisalThresholds.defaults().driveActivationThreshold();
         return drives.lastDriveEvaluations(lastAgentId, lastTenantId).stream()
                      .map(e -> e.withActivated(e.composedIntensity() > threshold))
                      .toList();

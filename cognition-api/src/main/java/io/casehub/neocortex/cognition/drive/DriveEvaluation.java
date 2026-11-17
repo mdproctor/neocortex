@@ -4,10 +4,15 @@ import java.util.Objects;
 
 /**
  * Per-axis breakdown of drive composition: raw source intensity plus each
- * modulation delta, the final composed value, and whether the drive crossed
+ * modulation delta, the composed value, and whether the drive crossed
  * the activation threshold. Makes sub-threshold evaluations visible so
  * downstream consumers can distinguish "evaluated and sub-threshold" from
  * "signal lost."
+ *
+ * <p>{@code composedIntensity} reflects the pre-smoothing value from
+ * {@link DriveComposer}. The orchestrator may apply temporal smoothing
+ * afterward, so the actual profile intensity can differ on downward
+ * transitions.
  */
 public record DriveEvaluation(
         DriveAxis axis,
