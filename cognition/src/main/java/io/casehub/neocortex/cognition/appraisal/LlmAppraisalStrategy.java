@@ -73,15 +73,14 @@ public class LlmAppraisalStrategy implements AppraisalStrategy {
                 "external-standards": <0.0-1.0, does this align with social norms (1.0=fine)>
               },
               "action_targets": {
-                "<tendency>": "<what the tendency is directed at>",
-                "approach": "the discovery",
-                "avoidance": "social exposure"
+                "<tendency>": "<what the tendency is directed at>"
               }
             }
             action_targets: for each Frijda action tendency that fires, name what it is \
             directed at. Keys are lowercase tendency names (approach, avoidance, attending, \
             rejection, antagonism, interruption, submission, dominance). Only include \
-            tendencies that are relevant.""";
+            tendencies that are relevant. Example: {"approach": "the discovery", \
+            "avoidance": "social exposure"}.""";
 
     private final @Nullable SessionPipeline sessionPipeline;
 
