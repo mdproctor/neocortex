@@ -167,6 +167,67 @@ class TopologyChannelWeighterTest {
     }
 
     @Test
+    void approachTendencyBoostsAttentionalAndTemporal() {
+        var activations = List.of(
+                new SituationActivation("mastery", 0.6),
+                new SituationActivation("agency_granted", 0.5));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.APPROACH, 0.80, ""));
+        var boosted = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(boosted.attentional())
+                .as("APPROACH tendency should boost attentional channel (scanning)")
+                .isGreaterThan(baseLine.attentional());
+        assertThat(boosted.temporal())
+                .as("APPROACH tendency should boost temporal channel (planning)")
+                .isGreaterThan(baseLine.temporal());
+    }
+
+    @Test
+    void submissionTendencyBoostsTemporal() {
+        var activations = List.of(
+                new SituationActivation("submission", 0.7),
+                new SituationActivation("controlled", 0.5));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.SUBMISSION, 0.80, ""));
+        var boosted = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(boosted.temporal())
+                .as("SUBMISSION tendency should boost temporal channel (waiting, yielding)")
+                .isGreaterThan(baseLine.temporal());
+        assertThat(boosted.actionTendency())
+                .as("SUBMISSION should reduce action tendency (passive)")
+                .isLessThan(baseLine.actionTendency());
+    }
+
+    @Test
+    void dominanceTendencyBoostsActionTendencyAndSomatic() {
+        var activations = List.of(
+                new SituationActivation("dominance", 0.7),
+                new SituationActivation("competition", 0.5));
+        var baseLine = TopologyChannelWeighter.weight(activations);
+
+        var tendencies = List.of(
+                new ActionTendency(ActionReadiness.DOMINANCE, 0.80, ""));
+        var boosted = TopologyChannelWeighter.weight(activations, tendencies);
+
+        assertThat(boosted.actionTendency())
+                .as("DOMINANCE tendency should boost action tendency channel")
+                .isGreaterThanOrEqualTo(baseLine.actionTendency());
+        assertThat(boosted.somatic())
+                .as("DOMINANCE tendency should boost somatic channel (physical assertion)")
+                .isGreaterThan(baseLine.somatic());
+        assertThat(boosted.attentional())
+                .as("DOMINANCE should reduce attentional (narrowed by certainty)")
+                .isLessThan(baseLine.attentional());
+    }
+
+
+    @Test
     void lowAvoidanceTendencyNoEffect() {
         var activations = List.of(
                 new SituationActivation("physical_threat", 0.8));

@@ -49,6 +49,21 @@ public final class TopologyChannelWeighter {
     private static final ChannelWeightProfile ANTAGONISM_PROFILE              =
             new ChannelWeightProfile(0.45, 0.05, 0.10, 0.40);
 
+    private static final double               APPROACH_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               APPROACH_BLEND_FACTOR         = 0.75;
+    private static final ChannelWeightProfile APPROACH_PROFILE              =
+            new ChannelWeightProfile(0.15, 0.35, 0.30, 0.20);
+
+    private static final double               SUBMISSION_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               SUBMISSION_BLEND_FACTOR         = 0.75;
+    private static final ChannelWeightProfile SUBMISSION_PROFILE              =
+            new ChannelWeightProfile(0.15, 0.25, 0.40, 0.20);
+
+    private static final double               DOMINANCE_ACTIVATION_THRESHOLD = 0.3;
+    private static final double               DOMINANCE_BLEND_FACTOR         = 0.75;
+    private static final ChannelWeightProfile DOMINANCE_PROFILE              =
+            new ChannelWeightProfile(0.30, 0.10, 0.15, 0.45);
+
 
     private static Map<String, String> buildNodeCategoryMap() {
         return Map.ofEntries(
@@ -138,11 +153,17 @@ public final class TopologyChannelWeighter {
         double attendingIntensity  = 0.0;
         double avoidanceIntensity  = 0.0;
         double antagonismIntensity = 0.0;
+        double approachIntensity   = 0.0;
+        double submissionIntensity = 0.0;
+        double dominanceIntensity  = 0.0;
         for (var at : actionTendencies) {
             switch (at.readiness()) {
                 case ATTENDING -> attendingIntensity = Math.max(attendingIntensity, at.intensity());
                 case AVOIDANCE -> avoidanceIntensity = Math.max(avoidanceIntensity, at.intensity());
                 case ANTAGONISM -> antagonismIntensity = Math.max(antagonismIntensity, at.intensity());
+                case APPROACH -> approachIntensity = Math.max(approachIntensity, at.intensity());
+                case SUBMISSION -> submissionIntensity = Math.max(submissionIntensity, at.intensity());
+                case DOMINANCE -> dominanceIntensity = Math.max(dominanceIntensity, at.intensity());
                 default -> {}
             }
         }
@@ -152,6 +173,15 @@ public final class TopologyChannelWeighter {
         }
         if (antagonismIntensity > ANTAGONISM_ACTIVATION_THRESHOLD) {
             result = result.blend(ANTAGONISM_PROFILE, antagonismIntensity * ANTAGONISM_BLEND_FACTOR);
+        }
+        if (approachIntensity > APPROACH_ACTIVATION_THRESHOLD) {
+            result = result.blend(APPROACH_PROFILE, approachIntensity * APPROACH_BLEND_FACTOR);
+        }
+        if (submissionIntensity > SUBMISSION_ACTIVATION_THRESHOLD) {
+            result = result.blend(SUBMISSION_PROFILE, submissionIntensity * SUBMISSION_BLEND_FACTOR);
+        }
+        if (dominanceIntensity > DOMINANCE_ACTIVATION_THRESHOLD) {
+            result = result.blend(DOMINANCE_PROFILE, dominanceIntensity * DOMINANCE_BLEND_FACTOR);
         }
         if (attendingIntensity > ATTENDING_ACTIVATION_THRESHOLD) {
             result = result.blend(ATTENDING_PROFILE, attendingIntensity * ATTENDING_BLEND_FACTOR);
