@@ -330,15 +330,25 @@ The PCSinR reference uses a similar per-type approach. The gain
 parameter k controls steepness; 1.0 is the standard default.
 Calibration may adjust k per node category.
 
-**Oscillation → dual-attractor extraction:** When period-2 oscillation
-is detected (activation vector at iteration N matches N-2 within ε),
-both alternating states are recorded:
-1. Extract states from iterations N-1 and N (the two oscillating points)
-2. Derive two separate attractor sets — one from each state
-3. Assign relative strength 0.5 to each (equal viability)
-4. Write both attractor sets to the BEHAVIORAL subgraph with their
-   relative strengths. This models fearful-avoidant oscillation between
-   approach and avoidance — psychologically valid per Bartholomew (1990).
+**Oscillation → peak-attractor extraction:** When oscillation is
+detected, attractors are extracted from peak activations (the maximum
+each output node achieves across the oscillation window) rather than
+the averaged state. The averaged state dilutes oscillating outputs
+below the attractor threshold, producing zero attractors. Peak-based
+extraction captures what the network activates during each oscillation
+phase — psychologically valid per Mischel & Shoda (1995): oscillation
+between competing tendencies IS a meaningful cognitive-affective state.
+
+Three detection paths exist:
+1. **Period-2** (activation vector at iteration N matches N-2 within ε)
+2. **Near-convergence** (window variance < ε×50 after 20+ iterations)
+3. **Multi-cycle at MAX_ITERATIONS** (#1027: when output node amplitude
+   exceeds ε×10 at the iteration limit, reclassify as OSCILLATION)
+
+Attractor nodes from oscillation carry `convergence-type=oscillation`
+metadata. `BehavioralPromptSection` renders these as tension ("competing
+pull") rather than stable tendencies ("deeply ingrained"). The property
+is cleared when subsequent settling converges normally.
 
 ### 4.3 Distortion Application (During Settling)
 

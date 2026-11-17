@@ -77,7 +77,22 @@ public class BehavioralPromptSection implements CognitionPromptRenderer {
     }
 
     private String renderAttractor(MindMapNode node) {
-        double strength = parseDouble(node, "strength");
+        double  strength    = parseDouble(node, "strength");
+        boolean oscillating = "oscillation".equals(node.property("convergence-type").orElse(null));
+
+        String sourceContext = "";
+        var    sourceNames   = node.property("source-names");
+        if (sourceNames.isPresent() && !sourceNames.get().isBlank()) {
+            sourceContext = " — rooted in " + sourceNames.get();
+        }
+
+        String attractorName = node.property("personality-label").orElse(node.name());
+
+        if (oscillating) {
+            return String.format("You feel a competing pull toward %s%s — your mind hasn't settled on this.",
+                                 attractorName, sourceContext);
+        }
+
         String label = strength > deepRootedThreshold() ? "deeply ingrained"
                                                         : strength > noticeableThreshold() ? "noticeable"
                                                                                            : "emerging";
@@ -91,13 +106,6 @@ public class BehavioralPromptSection implements CognitionPromptRenderer {
             } else if (strength < previous - trendDelta()) {trend = " but it's fading";}
         }
 
-        String sourceContext = "";
-        var    sourceNames   = node.property("source-names");
-        if (sourceNames.isPresent() && !sourceNames.get().isBlank()) {
-            sourceContext = " — rooted in " + sourceNames.get();
-        }
-
-        String attractorName = node.property("personality-label").orElse(node.name());
         return String.format("You have a %s %s%s%s.",
                              label, attractorName, trend, sourceContext);
     }

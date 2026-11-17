@@ -410,5 +410,33 @@ class BehavioralPromptSectionTest {
         assertThat(rendered).contains("activated-low");
     }
 
+    @Test
+    void rendersOscillationAttractorAsTension() {
+        var sgId = store.createSubgraph(
+                new SubgraphInput("Behavioral", SubgraphTypes.BEHAVIORAL, null), "t1");
+        store.addNode(NodeInput.of("withdrawal-oscillation", sgId)
+                               .withTraits(Set.of("CapsGenerated"))
+                               .withProperties(Map.of(
+                                       "caps-node-id", "withdraw",
+                                       "category", "approach_avoidance",
+                                       "strength", "0.65",
+                                       "agent-id", "agent1",
+                                       "source-count", "5",
+                                       "source-names", "social exclusion, public criticism",
+                                       "convergence-type", "oscillation")),
+                      "t1");
+
+        var rendered = section.render(context);
+        assertThat(rendered).isNotNull();
+        assertThat(rendered)
+                .as("Oscillation attractor should be framed as tension, not stable tendency")
+                .contains("competing");
+        assertThat(rendered)
+                .as("Should NOT use 'deeply ingrained' or 'noticeable' labels for oscillation")
+                .doesNotContain("deeply ingrained")
+                .doesNotContain("noticeable")
+                .doesNotContain("emerging");
+    }
+
 
 }

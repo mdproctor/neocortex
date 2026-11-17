@@ -4,6 +4,7 @@ import io.casehub.neocortex.caps.AgentCapsState;
 import io.casehub.neocortex.caps.CapsAttractor;
 import io.casehub.neocortex.caps.CapsConnection;
 import io.casehub.neocortex.caps.CapsEngine;
+import io.casehub.neocortex.caps.ConvergenceType;
 import io.casehub.neocortex.caps.ClassificationContext;
 import io.casehub.neocortex.caps.ClassificationResult;
 import io.casehub.neocortex.caps.DriveCompetitionDetector;
@@ -204,7 +205,8 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
                     }
                     createOrStrengthenAttractor(
                         tenantId, behavioralSgId, agentId, enriched,
-                        existingAttractors, nodeNames, dominantInput);
+                        existingAttractors, nodeNames, dominantInput,
+                        result.convergence());
                 }
 
                 AgentCapsState updated = state;
@@ -302,7 +304,8 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
                                              CapsAttractor attractor,
                                              Set<String> existingAttractors,
                                              List<String> sourceNodeNames,
-                                             String dominantInput) {
+                                             String dominantInput,
+                                             ConvergenceType convergence) {
         Optional<MindMapNode> existing = store.search(
                                                       MindMapQuery.of(tenantId, 2000).withType(SubgraphTypes.BEHAVIORAL))
                                               .stream()
@@ -341,6 +344,11 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
             if (attractor.personalityLabel() != null) {
                 props.put("personality-label", attractor.personalityLabel());
             }
+            if (convergence == ConvergenceType.OSCILLATION) {
+                props.put("convergence-type", "oscillation");
+            } else if (node.property("convergence-type").isPresent()) {
+                props.put("convergence-type", "");
+            }
 
             store.updateNode(node.id(),
                              NodeUpdate.empty().withPropertiesToSet(props),
@@ -360,6 +368,9 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
             props.put("dominant-input", dominantInput);
             if (attractor.personalityLabel() != null) {
                 props.put("personality-label", attractor.personalityLabel());
+            }
+            if (convergence == ConvergenceType.OSCILLATION) {
+                props.put("convergence-type", "oscillation");
             }
 
             store.addNode(

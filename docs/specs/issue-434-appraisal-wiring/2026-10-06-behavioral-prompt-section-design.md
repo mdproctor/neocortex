@@ -144,6 +144,19 @@ Add a `BehavioralPromptSection` entry to the `DIRECTIVES` map:
 Add `behavioralEnabled` to the default config producer. Default: `false`
 (opt-in, like appraisalEnabled).
 
+### 7. Oscillation Rendering (#1027)
+
+When a CAPS settling result has `convergence-type=oscillation`, the attractor
+represents a competing tendency the network couldn't commit to. The rendering
+uses tension framing: "You feel a competing pull toward X — your mind hasn't
+settled on this" rather than strength-based labels (deeply ingrained/noticeable/
+emerging). Source context is included but trend analysis is omitted — oscillation
+attractors don't have meaningful trend data.
+
+The `convergence-type` property is set by `BehavioralSynthesisPhase` and cleared
+when subsequent settling converges normally. This prevents stale oscillation
+metadata from persisting on stabilised attractors.
+
 ## Testing
 
 ### BehavioralPromptSection tests
@@ -155,6 +168,7 @@ Add `behavioralEnabled` to the default config producer. Default: `false`
 - Threshold filtering: strength ≤ 0.1 excluded
 - Missing source-names: renders without "rooted in" clause
 - Agent isolation: only renders attractors for the requesting agent
+- Oscillation rendering: `convergence-type=oscillation` → "competing pull" framing, no strength labels
 
 ### BehavioralSynthesisPhase enrichment tests
 

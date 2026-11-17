@@ -5,11 +5,10 @@ import io.casehub.neocortex.caps.CapsAttractor;
 import io.casehub.neocortex.caps.CapsConnection;
 import io.casehub.neocortex.caps.CapsEngine;
 import io.casehub.neocortex.caps.CapsTopology;
-import io.casehub.neocortex.caps.ClassificationContext;
+import io.casehub.neocortex.caps.ClassificationResult;
 import io.casehub.neocortex.caps.ConnectionWeight;
 import io.casehub.neocortex.caps.ConvergenceType;
 import io.casehub.neocortex.caps.SettlingResult;
-import io.casehub.neocortex.caps.ClassificationResult;
 import io.casehub.neocortex.caps.SituationActivation;
 import io.casehub.neocortex.caps.SituationClassifier;
 import io.casehub.neocortex.caps.WeightProvenance;
@@ -18,13 +17,13 @@ import io.casehub.neocortex.cognitive.index.CognitiveDefaults;
 import io.casehub.neocortex.cognitive.index.CognitiveDefaultsRegistry;
 import io.casehub.neocortex.cognitive.index.DescriptorView;
 import io.casehub.neocortex.cognitive.index.DispositionAxes;
+import io.casehub.neocortex.memory.cbr.CbrOutcome;
+import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrRecordStore;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.SubgraphInput;
 import io.casehub.neocortex.mindmap.SubgraphTypes;
-import io.casehub.neocortex.memory.cbr.CbrOutcome;
-import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrRecordStore;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -354,6 +353,38 @@ class BehavioralSynthesisPhaseTest {
     }
 
     @Test
+    void oscillationSettlingStoresConvergenceType() {
+        var oscEngine = new OscillatingStubCapsEngine();
+        oscEngine.initializeAgent(TENANT, AGENT,
+                                  new DispositionAxes("cooperative", "moderate", "calculated",
+                                                      "moderate", "analytical"));
+        SituationClassifier classifier = (desc, meta, ctx) ->
+                                                 new ClassificationResult(List.of(new SituationActivation("exclusion", 0.9)));
+        var oscPhase = new BehavioralSynthesisPhase(store, oscEngine, classifier, 20);
+
+        store.addNode(NodeInput.of("Excluded from team decisions", cognitiveSubgraphId)
+                               .withProperties(Map.of(
+                                       "source-memory-id", "mem-osc1",
+                                       "agent-id", AGENT,
+                                       "event-type", "observation",
+                                       "graduation-score", "0.8")),
+                      TENANT);
+
+        oscPhase.run(TENANT, List.of());
+
+        List<MindMapNode> behavioral = store.search(
+                MindMapQuery.of(TENANT, 100).withType(SubgraphTypes.BEHAVIORAL));
+        assertThat(behavioral).isNotEmpty();
+        assertThat(behavioral).anySatisfy(n -> {
+            assertThat(n.traits()).contains("CapsGenerated");
+            assertThat(n.property("convergence-type"))
+                    .as("Oscillation attractor should carry convergence-type metadata")
+                    .hasValue("oscillation");
+        });
+    }
+
+
+    @Test
     void driveIntensitiesInfluenceCapsActivations() {
         var capturingEngine = new CapturingCapsEngine();
         capturingEngine.initializeAgent(TENANT, AGENT,
@@ -575,6 +606,19 @@ class BehavioralSynthesisPhaseTest {
                 state.generation() + 1, state.weights(), state.nodeStates());
         }
     }
+
+    static class OscillatingStubCapsEngine extends StubCapsEngine {
+        @Override
+        public SettlingResult settle(AgentCapsState state,
+                                     Map<String, Double> inputActivations) {
+            return new SettlingResult(
+                    inputActivations, 100, ConvergenceType.OSCILLATION, 0.0,
+                    List.of(new CapsAttractor(
+                            "approach_avoidance", "withdraw", 0.65,
+                            false, state.generation())));
+        }
+    }
+
 
     record WeightUpdate(Map<String, Double> activations, double intensity, double valence, double salienceMultiplier) {}
 

@@ -165,6 +165,21 @@ public class CapsSettler {
             }
         }
 
+        // Multi-cycle oscillation detection — Mischel & Shoda (1995): oscillation
+        // between competing behavioral tendencies IS a meaningful cognitive state.
+        // When output nodes show significant amplitude variation in the window,
+        // the network is oscillating rather than stuck. Extract attractors from
+        // peak activations to capture what the network activates during each phase.
+        if (lastTen.size() >= 2) {
+            double outputAmplitude = maxOutputAmplitude(lastTen, topology);
+            if (outputAmplitude > params.epsilon() * 10.0) {
+                Map<String, Double> averaged = averageStates(lastTen, topology);
+                Map<String, Double> peaks = peakOutputActivations(lastTen, topology);
+                return buildResult(averaged, peaks,
+                                   iterations, ConvergenceType.OSCILLATION, state);
+            }
+        }
+
         Map<String, Double> bestState = averageStates(lastTen, topology);
         return buildResult(bestState, null,
                            iterations, ConvergenceType.MAX_ITERATIONS, state);
@@ -210,15 +225,16 @@ public class CapsSettler {
     }
 
     private SettlingResult buildResult(Map<String, Double> primaryState,
-                                       Map<String, Double> secondaryState,
+                                       Map<String, Double> peakOutputState,
                                        int iterations,
                                        ConvergenceType convergence,
                                        AgentCapsState agentState) {
         double  saturationRatio = computeSaturation(primaryState);
         boolean highSat         = saturationRatio > topology.weightUpdate().saturationWarningThreshold();
 
-        List<CapsAttractor> attractors = new ArrayList<>();
-        extractAttractors(primaryState, attractors, highSat,
+        List<CapsAttractor> attractors      = new ArrayList<>();
+        Map<String, Double> attractorSource = peakOutputState != null ? peakOutputState : primaryState;
+        extractAttractors(attractorSource, attractors, highSat,
                           agentState.generation(), 1.0, agentState);
 
         return new SettlingResult(primaryState, iterations,
@@ -291,5 +307,36 @@ public class CapsSettler {
         }
         return averaged;
     }
+
+    private static double maxOutputAmplitude(List<Map<String, Double>> states, CapsTopology topo) {
+        double maxAmp = 0.0;
+        for (var entry : topo.nodes().entrySet()) {
+            if (entry.getValue().type() != NodeType.OUTPUT) {continue;}
+            String nodeId = entry.getKey();
+            double min    = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+            for (var s : states) {
+                double v = s.getOrDefault(nodeId, 0.0);
+                min = Math.min(min, v);
+                max = Math.max(max, v);
+            }
+            maxAmp = Math.max(maxAmp, max - min);
+        }
+        return maxAmp;
+    }
+
+    private static Map<String, Double> peakOutputActivations(List<Map<String, Double>> states, CapsTopology topo) {
+        Map<String, Double> peaks = new HashMap<>();
+        for (var entry : topo.nodes().entrySet()) {
+            if (entry.getValue().type() != NodeType.OUTPUT) {continue;}
+            String nodeId = entry.getKey();
+            double max    = -Double.MAX_VALUE;
+            for (var s : states) {
+                max = Math.max(max, s.getOrDefault(nodeId, 0.0));
+            }
+            peaks.put(nodeId, max);
+        }
+        return peaks;
+    }
+
 
 }
