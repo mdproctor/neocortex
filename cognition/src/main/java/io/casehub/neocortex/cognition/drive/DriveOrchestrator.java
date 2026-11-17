@@ -108,6 +108,7 @@ public class DriveOrchestrator {
             lastEvaluations.put(key, result.evaluations());
 
             var previous = profiles.get(key);
+            newProfile = applySmoothing(newProfile, previous, config.smoothingAlpha());
             profiles.put(key, newProfile);
 
             if (previous == null) {
@@ -158,6 +159,27 @@ public class DriveOrchestrator {
 
     public List<DriveEvaluation> lastDriveEvaluations(String agentId, String tenantId) {
         return lastEvaluations.getOrDefault(agentId + ":" + tenantId, List.of());
+    }
+
+    private static DriveProfile applySmoothing(DriveProfile current, @Nullable DriveProfile previous, double alpha) {
+        if (previous == null || alpha >= 1.0) {return current;}
+        var     smoothed   = new EnumMap<DriveAxis, DriveIntensity>(DriveAxis.class);
+        boolean anyChanged = false;
+        for (var entry : current.drives().entrySet()) {
+            var axis   = entry.getKey();
+            var newDi  = entry.getValue();
+            var prevDi = previous.drives().get(axis);
+            if (prevDi == null || newDi.intensity() >= prevDi.intensity()) {
+                smoothed.put(axis, newDi);
+            } else {
+                double blended = alpha * newDi.intensity() + (1 - alpha) * prevDi.intensity();
+                smoothed.put(axis, new DriveIntensity(axis, Math.clamp(blended, 0.0, 1.0), newDi.trigger()));
+                anyChanged = true;
+            }
+        }
+        if (!anyChanged) {return current;}
+        return new DriveProfile(current.agentId(), current.tenantId(), smoothed,
+                                current.compositeMotivation(), current.dominantDrive(), current.evaluatedAt());
     }
 
 

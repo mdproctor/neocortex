@@ -54,7 +54,21 @@ public record DriveConfig(
          * Range: [0.0, 1.0]. Default 0.5 — half the pleasure modulation
          * strength, preventing mood from dominating non-social drives.
          */
-        double secondaryPleasureModulationFactor
+        double secondaryPleasureModulationFactor,
+
+        /**
+         * Exponential smoothing factor for drive deactivation across ticks.
+         * Only applies when new intensity is LOWER than previous — upward
+         * spikes bypass smoothing (threat activation is instant).
+         *
+         * smoothed = α * new + (1-α) * previous
+         *
+         * Higher = faster decay (1.0 = no smoothing, same as before).
+         * Lower = slower decay, more momentum.
+         *
+         * Range: [0.0, 1.0]. Default 0.3 — drives ramp down over ~3 ticks.
+         */
+        double smoothingAlpha
 ) {
     public DriveConfig {
         Objects.requireNonNull(axisWeights, "axisWeights required");
@@ -74,6 +88,6 @@ public record DriveConfig(
                        DriveAxis.AFFILIATION, 1.0, DriveAxis.AUTONOMY, 1.0),
                 0.05, 0.3, 0.2, 0.25, 1.0, 0.0,
                 0.5, Duration.ofHours(24), 0.6, 0.25, 0.6,
-                0.5);
+                0.5, 0.3);
     }
 }
