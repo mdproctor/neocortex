@@ -63,6 +63,19 @@ class AppraisalDriveModulatorTest {
         assertThat(mods.get(DriveAxis.AUTONOMY)).as("REMORSE should boost AUTONOMY via primary mapping").isGreaterThan(0.05);
         assertThat(mods.get(DriveAxis.AFFILIATION)).as("REMORSE should boost AFFILIATION via secondary mapping — Tangney relational argument").isGreaterThan(0.05);
     }
+@Test
+void interestBoostsCuriosity() {
+    var mods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.INTEREST, 0.7)));
+    assertThat(mods.get(DriveAxis.CURIOSITY)).as("INTEREST should boost CURIOSITY via primary mapping").isGreaterThan(0.1);
+}
+
+@Test
+void distressBoostsAutonomyAndAffiliation() {
+    var mods = AppraisalDriveModulator.modulate(List.of(emotion(EmotionType.DISTRESS, 0.7)));
+    assertThat(mods.get(DriveAxis.AUTONOMY)).as("DISTRESS should boost AUTONOMY via primary mapping").isGreaterThan(0.1);
+    assertThat(mods.get(DriveAxis.AFFILIATION)).as("DISTRESS should boost AFFILIATION via secondary mapping — empathic bonding").isGreaterThan(0.05);
+}
+
 
 
     @Test
