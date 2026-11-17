@@ -44,10 +44,18 @@ final class EvalTestSupport {
                     };
                     sharedClient = new ClaudeAgentClient(props);
                     sharedBackend = new ClaudeAgentProvider(sharedClient);
+                    Runtime.getRuntime().addShutdownHook(new Thread(EvalTestSupport::shutdown, "eval-agent-cleanup"));
                 }
             }
         }
         return sharedBackend;
+    }
+
+    static void shutdown() {
+        var client = sharedClient;
+        if (client != null) {
+            client.shutdown();
+        }
     }
 
     static AgentProvider agentProvider() {
