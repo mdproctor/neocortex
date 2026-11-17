@@ -178,8 +178,12 @@ public class DriveOrchestrator {
             }
         }
         if (!anyChanged) {return current;}
+        DriveAxis dominant = smoothed.entrySet().stream()
+                .max(Map.Entry.comparingByValue((a, b) -> Double.compare(a.intensity(), b.intensity())))
+                .map(Map.Entry::getKey).orElse(current.dominantDrive());
+        double composite = smoothed.values().stream().mapToDouble(DriveIntensity::intensity).average().orElse(0.0);
         return new DriveProfile(current.agentId(), current.tenantId(), smoothed,
-                                current.compositeMotivation(), current.dominantDrive(), current.evaluatedAt());
+                                Math.clamp(composite, 0.0, 1.0), dominant, current.evaluatedAt());
     }
 
 

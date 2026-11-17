@@ -80,6 +80,7 @@ public record DriveConfig(
         if (maxIntensity < minIntensity) {throw new IllegalArgumentException("maxIntensity must be >= minIntensity");}
         if (minIntensity < 0.0) {throw new IllegalArgumentException("minIntensity must be >= 0.0");}
         if (maxIntensity > 1.0) {throw new IllegalArgumentException("maxIntensity must be <= 1.0");}
+        if (smoothingAlpha < 0.0 || smoothingAlpha > 1.0) {throw new IllegalArgumentException("smoothingAlpha must be in [0.0, 1.0]");}
     }
 
     public static DriveConfig defaults() {

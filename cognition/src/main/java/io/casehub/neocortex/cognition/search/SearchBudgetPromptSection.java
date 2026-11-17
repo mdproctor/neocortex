@@ -113,7 +113,7 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
 
     private static final Set<EmotionType> CRISIS_EMOTIONS = Set.of(
             EmotionType.FEAR, EmotionType.DISTRESS, EmotionType.FEARS_CONFIRMED);
-    private static final double AROUSAL_URGENCY_THRESHOLD = 0.7;
+    private static final double URGENCY_THRESHOLD = 0.7;
     private static final double TENDENCY_URGENCY_THRESHOLD = 0.8;
 
     private String renderFromParameters(SearchBudget budget) {
@@ -161,7 +161,7 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
 
         boolean crisisEmotion = appraisal.emotions().stream()
                 .anyMatch(e -> CRISIS_EMOTIONS.contains(e.type()) && e.intensity() > 0.5);
-        double peakArousal = appraisal.secDimensions().getOrDefault("urgency", 0.0);
+        double urgency = appraisal.secDimensions().getOrDefault("urgency", 0.0);
         double peakTendencyIntensity = appraisal.actionTendencies().stream()
                 .filter(t -> t.readiness() == ActionReadiness.AVOIDANCE || t.readiness() == ActionReadiness.ANTAGONISM)
                 .mapToDouble(t -> t.intensity())
@@ -170,10 +170,10 @@ public class SearchBudgetPromptSection implements CognitionPromptRenderer {
         if (crisisEmotion) {
             return "This is not idle — something is wrong and demands your attention. " + base;
         }
-        if (peakArousal > AROUSAL_URGENCY_THRESHOLD && peakTendencyIntensity > TENDENCY_URGENCY_THRESHOLD) {
+        if (urgency > URGENCY_THRESHOLD && peakTendencyIntensity > TENDENCY_URGENCY_THRESHOLD) {
             return "The urgency is real — act first, reflect later. " + base;
         }
-        if (peakArousal > AROUSAL_URGENCY_THRESHOLD) {
+        if (urgency > URGENCY_THRESHOLD) {
             return "This carries weight — your attention sharpens. " + base;
         }
         return base;
