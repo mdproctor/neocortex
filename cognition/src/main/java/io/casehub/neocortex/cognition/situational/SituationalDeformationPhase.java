@@ -5,11 +5,16 @@ import io.casehub.neocortex.cognition.journal.CognitiveJournal;
 import io.casehub.neocortex.cognition.journal.EventRef;
 import io.casehub.neocortex.cognitive.index.EffectiveCognitiveDefaults;
 import io.casehub.neocortex.mindmap.intelligence.consolidation.ConsolidationPhase;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 
+@ApplicationScoped
+@Priority(46)
 public class SituationalDeformationPhase implements ConsolidationPhase {
 
     private static final double EPSILON_PUBLISH = 0.005;
@@ -17,20 +22,32 @@ public class SituationalDeformationPhase implements ConsolidationPhase {
     private final PersonalityStateService    stateService;
     private final PersonalityStateIntegrator integrator;
     private final EffectiveCognitiveDefaults effectiveDefaults;
-    private volatile CognitiveJournal journal;
-    private final Clock clock;
+    private       CognitiveJournal           journal = CognitiveJournal.NOOP;
+    private final Clock                      clock;
 
+    @Inject
     public SituationalDeformationPhase(
+            PersonalityStateService stateService,
+            PersonalityStateIntegrator integrator,
+            EffectiveCognitiveDefaults effectiveDefaults,
+            Clock clock) {
+        this.stateService      = stateService;
+        this.integrator        = integrator;
+        this.effectiveDefaults = effectiveDefaults;
+        this.clock             = clock;
+    }
+
+    SituationalDeformationPhase(
             PersonalityStateService stateService,
             PersonalityStateIntegrator integrator,
             EffectiveCognitiveDefaults effectiveDefaults,
             CognitiveJournal journal,
             Clock clock) {
-        this.stateService = stateService;
-        this.integrator = integrator;
+        this.stateService      = stateService;
+        this.integrator        = integrator;
         this.effectiveDefaults = effectiveDefaults;
-        this.journal = journal;
-        this.clock = clock;
+        this.journal           = journal;
+        this.clock             = clock;
     }
 
     @Override
@@ -39,7 +56,7 @@ public class SituationalDeformationPhase implements ConsolidationPhase {
     }
 
     public void setCognitiveJournal(CognitiveJournal journal) {
-        this.journal = journal;
+        this.journal = journal != null ? journal : CognitiveJournal.NOOP;
     }
 
     @Override
