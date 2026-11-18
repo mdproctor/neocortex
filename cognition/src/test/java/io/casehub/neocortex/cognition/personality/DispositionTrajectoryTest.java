@@ -19,7 +19,6 @@ import io.casehub.neocortex.cognitive.index.EffectiveCognitiveDefaults;
 import io.casehub.neocortex.cognitive.index.LearningProfile;
 import io.casehub.neocortex.memory.cbr.CbrRecordStore;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
-import io.casehub.platform.api.preferences.PreferenceProvider;
 import jakarta.enterprise.inject.Instance;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,13 +30,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -71,6 +68,7 @@ class DispositionTrajectoryTest {
             new DispositionValue("Si", 0.075));
 
     private DispositionSignalStore signalStore;
+    private InMemoryMindMapStore mindMapStore;
     private PersonalityStateService stateService;
     private DispositionSignalWriter signalWriter;
     private AgentDescriptor descriptor;
@@ -78,7 +76,7 @@ class DispositionTrajectoryTest {
     @BeforeEach
     void setUp() {
         signalStore = new InMemoryDispositionSignalStore();
-        var mindMapStore = new InMemoryMindMapStore();
+        mindMapStore = new InMemoryMindMapStore();
         stateService = new PersonalityStateService(mindMapStore, FACET_NAMES);
 
         descriptor = AgentDescriptor.builder()
@@ -241,6 +239,77 @@ class DispositionTrajectoryTest {
         assertThat(journal.transitions).as("alternation produces multiple transitions")
                 .isGreaterThanOrEqualTo(2);
     }
+// ── Group 8: Store-of-record regression ──────────────────────────
+
+    @Test
+    void storeOfRecord_freshServiceSeesLivedProfile() {
+        var journal = new TrajectoryJournal();
+        var phase   = buildPhase(1.0, journal);
+
+        var now = START;
+        for (int day = 0; day < 60; day++) {
+            now = START.plus(DAY.multipliedBy(day));
+            updateClock(phase, now);
+            for (int i = 0; i < 5; i++) {
+                signalStore.recordActivation(AGENT, TENANT, "Ne");
+            }
+            phase.run(TENANT, List.of());
+        }
+        assertThat(journal.transitions).as("at least one transition").isGreaterThanOrEqualTo(1);
+
+        var stateBeforeRestart = stateService.read(TENANT, AGENT, now);
+        assertThat(stateBeforeRestart.livedProfile()).as("lived profile exists").isNotNull();
+
+        // Simulate restart: fresh PersonalityStateService over the SAME MindMapStore
+        var freshService = new PersonalityStateService(
+                mindMapStore, FACET_NAMES);
+        var stateAfterRestart = freshService.read(TENANT, AGENT, now);
+
+        assertThat(stateAfterRestart.livedProfile()).as("fresh service sees lived profile")
+                                                    .isNotNull();
+        assertThat(stateAfterRestart.livedProfile().profile())
+                .as("profile contents survive restart")
+                .isEqualTo(stateBeforeRestart.livedProfile().profile());
+    }
+
+    @Test
+    void minTransitionInterval_defersSecondTransition() {
+        var journal = new TrajectoryJournal();
+        var phase   = buildPhase(1.0, journal);
+
+        // Drive first transition
+        var now = START;
+        for (int day = 0; day < 60; day++) {
+            now = START.plus(DAY.multipliedBy(day));
+            updateClock(phase, now);
+            for (int i = 0; i < 5; i++) {
+                signalStore.recordActivation(AGENT, TENANT, "Ne");
+            }
+            phase.run(TENANT, List.of());
+            if (journal.transitions > 0) {break;}
+        }
+        assertThat(journal.transitions).isEqualTo(1);
+        var firstTransitionDay = now;
+
+        // Immediately switch signals — should be deferred by minTransitionInterval
+        signalStore.clear(AGENT, TENANT);
+        int deferredCount = 0;
+        for (int day = 0; day < 60; day++) {
+            now = firstTransitionDay.plus(DAY.multipliedBy(day + 1));
+            updateClock(phase, now);
+            for (int i = 0; i < 5; i++) {
+                signalStore.recordActivation(AGENT, TENANT, "Ti");
+            }
+            phase.run(TENANT, List.of());
+            if (journal.transitions == 1) {deferredCount++;}
+        }
+
+        assertThat(journal.transitions).as("second transition eventually happens")
+                                       .isEqualTo(2);
+        assertThat(deferredCount).as("some periods deferred due to minTransitionInterval")
+                                 .isGreaterThan(0);
+    }
+
 
     // ── Infrastructure ──────────────────────────────────────────────
 
