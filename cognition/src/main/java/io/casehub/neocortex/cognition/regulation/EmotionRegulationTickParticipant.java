@@ -536,13 +536,14 @@ public class EmotionRegulationTickParticipant implements CognitionTickParticipan
             for (var op : copingState.goalOperations()) {
                 switch (op.type()) {
                     case CREATE -> {
+                        var strategies = copingState.strategiesAttempted();
+                        var strategyName = strategies.isEmpty()
+                                ? "unknown"
+                                : strategies.get(strategies.size() - 1).strategy().name();
                         var proposal = new io.casehub.neocortex.cognition.goal.DriveGoalProposal(
                                 op.axis(), op.goalName(), op.goalDescription(),
                                 op.formationReason(), peakIntensity, null,
-                                Map.of("source", "coping", "copingStrategy",
-                                       copingState.strategiesAttempted().get(
-                                                          copingState.strategiesAttempted().size() - 1)
-                                                  .strategy().name()));
+                                Map.of("source", "coping", "copingStrategy", strategyName));
                         goalOrchestrator.appendGoals(context.agentId(), context.tenantId(), List.of(proposal));
                     }
                     case DROP -> goalOrchestrator.requestAbandonment(
