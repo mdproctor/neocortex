@@ -310,9 +310,10 @@ implemented (#595). The design adopts the full 16-strategy taxonomy (not a simpl
 3-mode version), organized by the mental representation each strategy targets
 (attention, belief, desire, intention). An intra-tick micro-loop provides the
 appraisal-coping-reappraisal cycle: the LLM reinterprets the situation narrative,
-keyword SEC checks re-evaluate, and the loop converges or iterates. Coping sits
-between Scherer appraisal and Gross regulation — coping selects the strategy,
-regulation executes it. See `specs/issue-595-coping-strategies/2026-11-15-coping-strategies-design.md`.
+LLM-based appraisal re-evaluates SEC dimensions, and the loop converges or iterates.
+(Keyword SEC checks were removed in #1113 — `CopingMicroLoop.reEvaluate()` now
+delegates to `AppraisalStrategy`.) Coping sits between Scherer appraisal and Gross
+regulation — coping selects the strategy, regulation executes it. See `specs/issue-595-coping-strategies/2026-11-15-coping-strategies-design.md`.
 
 **Key reference:**
 - Marsella, S. & Gratch, J. (2009). "EMA: A process model of appraisal dynamics."

@@ -48,12 +48,4 @@ class HabituationStateTest {
         assertThat(config.domainModulation()).isEmpty();
     }
 
-    @Test
-    void schererAppraisalConfigAllEnabled() {
-        var config = SchererAppraisalConfig.allEnabled();
-        assertThat(config.relevanceEnabled()).isTrue();
-        assertThat(config.implicationsEnabled()).isTrue();
-        assertThat(config.copingEnabled()).isTrue();
-        assertThat(config.normativeEnabled()).isTrue();
-    }
 }

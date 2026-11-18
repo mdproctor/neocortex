@@ -2,15 +2,12 @@ package io.casehub.neocortex.caps.llm.eval;
 
 import io.casehub.neocortex.cognition.appraisal.AppraisalContext;
 import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
-import io.casehub.neocortex.cognition.appraisal.CopingCheck;
+import io.casehub.neocortex.cognition.appraisal.AppraisalStrategy;
 import io.casehub.neocortex.cognition.appraisal.Drive;
 import io.casehub.neocortex.cognition.appraisal.DriveCategory;
 import io.casehub.neocortex.cognition.appraisal.HabituationState;
-import io.casehub.neocortex.cognition.appraisal.ImplicationCheck;
-import io.casehub.neocortex.cognition.appraisal.NormativeCheck;
+import io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy;
 import io.casehub.neocortex.cognition.appraisal.PerceivedSituation;
-import io.casehub.neocortex.cognition.appraisal.RelevanceCheck;
-import io.casehub.neocortex.cognition.appraisal.SecCheck;
 import io.casehub.neocortex.cognition.coping.CopingConfig;
 import io.casehub.neocortex.cognition.coping.CopingGenerationPhase;
 import io.casehub.neocortex.cognition.coping.CopingMicroLoop;
@@ -53,9 +50,7 @@ class CopingEmergenceEvalTest {
 
     private static final int JUDGE_THRESHOLD = 4;
 
-    private static final List<SecCheck> KEYWORD_CHECKS = List.of(
-            new RelevanceCheck(), new ImplicationCheck(),
-            new CopingCheck(), new NormativeCheck());
+    private AppraisalStrategy llmAppraisal;
 
     // High-conscientiousness: strong planful, low avoidance
     private static final CopingDefaults CONSCIENTIOUS =
@@ -96,6 +91,7 @@ class CopingEmergenceEvalTest {
     void setUp() {
         agentProvider = EvalTestSupport.agentProvider();
         sessionPipeline = EvalTestSupport.sessionPipeline();
+        llmAppraisal = new LlmAppraisalStrategy(sessionPipeline);
     }
 
     // --- Test 1: High-conscientiousness → PLANNING in controllable situations ---
@@ -378,7 +374,7 @@ class CopingEmergenceEvalTest {
                                        CopingConfig config) {
         var predictor = new CopingStrategyPredictor();
         var generationPhase = new CopingGenerationPhase(sessionPipeline);
-        var loop = new CopingMicroLoop(predictor, generationPhase, KEYWORD_CHECKS, config);
+        var loop = new CopingMicroLoop(predictor, generationPhase, llmAppraisal, config);
 
         var context = new AppraisalContext(
                 "eval-agent",

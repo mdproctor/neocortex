@@ -2,15 +2,12 @@ package io.casehub.neocortex.cognition.coping;
 
 import io.casehub.neocortex.cognition.appraisal.AppraisalContext;
 import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
-import io.casehub.neocortex.cognition.appraisal.CopingCheck;
+import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
+import io.casehub.neocortex.cognition.appraisal.AppraisalStrategy;
 import io.casehub.neocortex.cognition.appraisal.Drive;
 import io.casehub.neocortex.cognition.appraisal.DriveCategory;
 import io.casehub.neocortex.cognition.appraisal.HabituationState;
-import io.casehub.neocortex.cognition.appraisal.ImplicationCheck;
-import io.casehub.neocortex.cognition.appraisal.NormativeCheck;
 import io.casehub.neocortex.cognition.appraisal.PerceivedSituation;
-import io.casehub.neocortex.cognition.appraisal.RelevanceCheck;
-import io.casehub.neocortex.cognition.appraisal.SecCheck;
 import io.casehub.neocortex.cognition.drive.DriveAxis;
 import io.casehub.neocortex.cognitive.CognitiveEmotion;
 import io.casehub.neocortex.cognitive.EmotionSource;
@@ -49,7 +46,7 @@ class CopingMicroLoopTest {
                 Map.of(), 1, ConvergenceType.CONVERGED, 0,
                 List.of(new CapsAttractor("coping", "coping_acceptance", 0.9, false, 0))));
         var loop = new CopingMicroLoop(new CopingStrategyPredictor(), generation,
-                KEYWORD_CHECKS, CopingConfig.defaults(), engine, null);
+                SUSTAINING_APPRAISAL, CopingConfig.defaults(), engine, null);
 
         loop.execute(context("blocked and frustrated"),
                 result(List.of(emotion(EmotionType.ANGER, 0.7)), HIGH_CTRL_DIMS),
@@ -58,9 +55,12 @@ class CopingMicroLoopTest {
         verify(generation).generate(any(), any(), eq(CopingStrategy.ACCEPTANCE), eq(PLANFUL));
     }
 
-    private static final List<SecCheck> KEYWORD_CHECKS = List.of(
-            new RelevanceCheck(), new ImplicationCheck(),
-            new CopingCheck(), new NormativeCheck());
+    private static final AppraisalStrategy SUSTAINING_APPRAISAL = ctx ->
+            new AppraisalResult(
+                    List.of(new CognitiveEmotion(EmotionType.FEAR, 0.7, "test-agent",
+                            Instant.now(), EmotionSource.INTRINSIC, PadProjection.NEUTRAL)),
+                    List.of(), HabituationState.empty(), null,
+                    Map.of("controllability", 0.5, "relevance", 0.8));
 
     private static final CopingDefaults PLANFUL =
             new CopingDefaults(0.85, 0.4, 0.2, 0.4, 0.6, 0.7, 0.2, 0.3);
@@ -99,7 +99,7 @@ class CopingMicroLoopTest {
     @Test
     void lowIntensityEmotions_convergeImmediately() {
         var stubPhase = stubGenerationPhase("reinterpreted", CopingStrategy.PLANNING);
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL);
 
         var state = loop.execute(
                 context("mild annoyance"),
@@ -118,7 +118,7 @@ class CopingMicroLoopTest {
         var stubPhase = stubGenerationPhase(
                 "I can manage this. There are options I haven't tried.",
                 CopingStrategy.PLANNING);
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL);
 
         var state = loop.execute(
                 context("blocked and frustrated"),
@@ -147,7 +147,7 @@ class CopingMicroLoopTest {
             }
         };
         var config = new CopingConfig(0.3, 5);
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS, config);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL, config);
 
         var state = loop.execute(
                 contextWithDrives("safety threat has failed"),
@@ -179,7 +179,7 @@ class CopingMicroLoopTest {
             }
         };
         var config = new CopingConfig(0.3, 5);
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS, config);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL, config);
 
         var state = loop.execute(
                 contextWithDrives("safety threat has failed"),
@@ -214,7 +214,7 @@ class CopingMicroLoopTest {
             }
         };
         var config = new CopingConfig(0.3, 3);
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS, config);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL, config);
 
         var state = loop.execute(
                 contextWithDrives("safety threat has failed"),
@@ -238,7 +238,7 @@ class CopingMicroLoopTest {
                 return null;
             }
         };
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL);
 
         var state = loop.execute(
                 context("crisis"),
@@ -276,7 +276,7 @@ class CopingMicroLoopTest {
             }
         };
         var config = new CopingConfig(0.3, 3);
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, KEYWORD_CHECKS, config);
+        var loop = new CopingMicroLoop(new CopingStrategyPredictor(), stubPhase, SUSTAINING_APPRAISAL, config);
 
         var state = loop.execute(
                 context("blocked and frustrated"),
@@ -289,59 +289,26 @@ class CopingMicroLoopTest {
 
     // --- SEC re-evaluation updates dimensions ---
 
-    @Test
-    void reEvaluation_updatesDimensionsFromNarrative() {
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(),
-                stubGenerationPhase("test", CopingStrategy.PLANNING), KEYWORD_CHECKS);
-
-        var initialState = CopingState.initial("I feel trapped and helpless.",
-                Map.of("controllability", 0.5), List.of(emotion(EmotionType.FEAR, 0.7)));
-
-        var reEvaluated = loop.reEvaluate(context("trapped"), initialState);
-
-        assertThat(reEvaluated.secDimensions()).isNotEmpty();
-        assertThat(reEvaluated.secDimensions()).containsKey("controllability");
-    }
-
-    @Test
-    void reEvaluation_agencyNarrative_increasesControllability() {
-        var loop = new CopingMicroLoop(new CopingStrategyPredictor(),
-                stubGenerationPhase("test", CopingStrategy.PLANNING), KEYWORD_CHECKS);
-
-        var lowAgency = CopingState.initial("trapped and helpless, impossible stuck",
-                Map.of("controllability", 0.2), List.of(emotion(EmotionType.FEAR, 0.7)));
-        var highAgency = lowAgency.withInterpretation(
-                "I can choose to take control and decide on a possible option");
-
-        var reEvalLow = loop.reEvaluate(context("test"), lowAgency);
-        var reEvalHigh = loop.reEvaluate(context("test"), highAgency);
-
-        double lowCtrl = reEvalLow.secDimensions().getOrDefault("controllability", 0.5);
-        double highCtrl = reEvalHigh.secDimensions().getOrDefault("controllability", 0.5);
-
-        assertThat(highCtrl).isGreaterThan(lowCtrl);
-    }
-
     // --- Coping opportunity threshold ---
 
     @Test
     void hasCopingOpportunity_aboveThreshold() {
         var loop = new CopingMicroLoop(new CopingStrategyPredictor(),
-                stubGenerationPhase("test", CopingStrategy.PLANNING), KEYWORD_CHECKS);
+                stubGenerationPhase("test", CopingStrategy.PLANNING), SUSTAINING_APPRAISAL);
         assertThat(loop.hasCopingOpportunity(List.of(emotion(EmotionType.ANGER, 0.7)))).isTrue();
     }
 
     @Test
     void hasCopingOpportunity_belowThreshold() {
         var loop = new CopingMicroLoop(new CopingStrategyPredictor(),
-                stubGenerationPhase("test", CopingStrategy.PLANNING), KEYWORD_CHECKS);
+                stubGenerationPhase("test", CopingStrategy.PLANNING), SUSTAINING_APPRAISAL);
         assertThat(loop.hasCopingOpportunity(List.of(emotion(EmotionType.ANGER, 0.4)))).isFalse();
     }
 
     @Test
     void hasCopingOpportunity_emptyEmotions() {
         var loop = new CopingMicroLoop(new CopingStrategyPredictor(),
-                stubGenerationPhase("test", CopingStrategy.PLANNING), KEYWORD_CHECKS);
+                stubGenerationPhase("test", CopingStrategy.PLANNING), SUSTAINING_APPRAISAL);
         assertThat(loop.hasCopingOpportunity(List.of())).isFalse();
     }
 

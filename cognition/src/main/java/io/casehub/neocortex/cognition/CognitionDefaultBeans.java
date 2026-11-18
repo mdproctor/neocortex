@@ -1,9 +1,9 @@
 package io.casehub.neocortex.cognition;
 
 import io.casehub.neocortex.cognition.belief.BeliefRevisionConfig;
+import io.casehub.neocortex.cognition.core.CognitiveImpact;
 import io.casehub.neocortex.cognition.core.CognitiveResourcePool;
 import io.casehub.neocortex.cognition.core.DefaultCognitiveResourcePool;
-import io.casehub.neocortex.cognition.core.CognitiveImpact;
 import io.casehub.neocortex.cognition.core.InteractionMapper;
 import io.casehub.neocortex.cognition.core.SubjectResolver;
 import io.casehub.neocortex.cognition.drive.DriveConfig;
@@ -158,18 +158,12 @@ public class CognitionDefaultBeans {
     @DefaultBean
     @Singleton
     io.casehub.neocortex.cognition.appraisal.AppraisalStrategy appraisalStrategy() {
-        if (sessionPipelineInstance != null && sessionPipelineInstance.isResolvable()) {
-            return new io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy(sessionPipelineInstance.get());
+        if (sessionPipelineInstance == null || !sessionPipelineInstance.isResolvable()) {
+            throw new IllegalStateException(
+                    "SessionPipeline is required for cognitive appraisal — " +
+                    "you cannot run a cognitive neocortex without an LLM");
         }
-
-        // Scherer (2001) SEC model — multilevel sequential checking (relevance → implication → coping → norm)
-        // In Scherer, Schorr & Johnstone (Eds.), Appraisal Processes in Emotion
-        return new io.casehub.neocortex.cognition.appraisal.SchererAppraisalStrategy(
-                new io.casehub.neocortex.cognition.appraisal.RelevanceCheck(),
-                new io.casehub.neocortex.cognition.appraisal.ImplicationCheck(),
-                new io.casehub.neocortex.cognition.appraisal.CopingCheck(),
-                new io.casehub.neocortex.cognition.appraisal.NormativeCheck(),
-                io.casehub.neocortex.cognition.appraisal.SchererAppraisalConfig.allEnabled());
+        return new io.casehub.neocortex.cognition.appraisal.LlmAppraisalStrategy(sessionPipelineInstance.get());
     }
 
     @Produces

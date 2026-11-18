@@ -4,10 +4,8 @@ import io.casehub.neocortex.caps.CapsAttractor;
 import io.casehub.neocortex.caps.CapsEngine;
 import io.casehub.neocortex.cognition.appraisal.AppraisalContext;
 import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
-import io.casehub.neocortex.cognition.appraisal.EmotionMapper;
+import io.casehub.neocortex.cognition.appraisal.AppraisalStrategy;
 import io.casehub.neocortex.cognition.appraisal.PerceivedSituation;
-import io.casehub.neocortex.cognition.appraisal.SecCheck;
-import io.casehub.neocortex.cognition.appraisal.SecResult;
 import io.casehub.neocortex.cognition.regulation.CognitiveLoadLevel;
 import io.casehub.neocortex.cognition.regulation.RegulationCascadeConfig;
 import io.casehub.neocortex.cognitive.CognitiveEmotion;
@@ -15,7 +13,6 @@ import io.casehub.neocortex.cognitive.index.CopingDefaults;
 import io.casehub.neocortex.cognitive.index.DispositionAxes;
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,33 +24,33 @@ public class CopingMicroLoop {
 
     private final           CopingStrategyPredictor                                           predictor;
     private final           CopingGenerationPhase                                             generationPhase;
-    private final           List<SecCheck>                                                    keywordChecks;
+    private final           AppraisalStrategy                                                 appraisalStrategy;
     private final           CopingConfig                                                      config;
     private final @Nullable CapsEngine                              capsEngine;
     private final @Nullable RegulationCascadeConfig cascadeConfig;
 
     public CopingMicroLoop(CopingStrategyPredictor predictor,
                            CopingGenerationPhase generationPhase,
-                           List<SecCheck> keywordChecks) {
-        this(predictor, generationPhase, keywordChecks, CopingConfig.defaults(), null, null);
+                           AppraisalStrategy appraisalStrategy) {
+        this(predictor, generationPhase, appraisalStrategy, CopingConfig.defaults(), null, null);
     }
 
     public CopingMicroLoop(CopingStrategyPredictor predictor,
                            CopingGenerationPhase generationPhase,
-                           List<SecCheck> keywordChecks,
+                           AppraisalStrategy appraisalStrategy,
                            CopingConfig config) {
-        this(predictor, generationPhase, keywordChecks, config, null, null);
+        this(predictor, generationPhase, appraisalStrategy, config, null, null);
     }
 
     public CopingMicroLoop(CopingStrategyPredictor predictor,
                            CopingGenerationPhase generationPhase,
-                           List<SecCheck> keywordChecks,
+                           AppraisalStrategy appraisalStrategy,
                            CopingConfig config,
                            @Nullable CapsEngine capsEngine,
                            @Nullable RegulationCascadeConfig cascadeConfig) {
         this.predictor       = predictor;
         this.generationPhase = generationPhase;
-        this.keywordChecks   = List.copyOf(keywordChecks);
+        this.appraisalStrategy = appraisalStrategy;
         this.config          = config;
         this.capsEngine      = capsEngine;
         this.cascadeConfig   = capsEngine != null && cascadeConfig == null
@@ -186,14 +183,7 @@ public class CopingMicroLoop {
                 originalContext.currentMood(),
                 originalContext.dispositionAxes());
 
-        var secResults = new ArrayList<SecResult>();
-        for (var check : keywordChecks) {
-            secResults.add(check.evaluate(syntheticContext));
-        }
-
-        var newDimensions = EmotionMapper.mergeDimensions(secResults);
-        var newEmotions   = EmotionMapper.mapEmotions(secResults, originalContext.agentId());
-
-        return state.withDimensions(newDimensions).withEmotions(newEmotions);
+        var result = appraisalStrategy.appraise(syntheticContext);
+        return state.withDimensions(result.secDimensions()).withEmotions(result.emotions());
     }
 }

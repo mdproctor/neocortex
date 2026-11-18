@@ -317,11 +317,9 @@ Stimulus → Relevance → Implications → Coping → Normative → Emotion
 
 | Type | Description |
 |------|-------------|
-| `SecCheck` | `@FunctionalInterface` — composable evaluation for one SEC stage |
-| `SecResult` | Dimensions map produced by a check |
+| `SecResult` | Dimensions map produced by an appraisal |
 | `AppraisalStrategy` | `@FunctionalInterface` — full appraisal producing SEC dimensions + optional narrative |
 | `LlmAppraisalStrategy` | Single sub-LLM Haiku call — SEC dimensions + evocative narrative in one pass |
-| `SchererAppraisalStrategy` | Composes keyword-based `SecCheck` implementations (fallback when no LLM) |
 | `SalienceStrategy` | `@FunctionalInterface` — perception filtering gate before appraisal |
 
 ### 5.4 SEC → Emotion Mapping
@@ -338,15 +336,6 @@ Stimulus → Relevance → Implications → Coping → Normative → Emotion
 | High relevance + low external standards | `REPROACH` |
 
 ### 5.5 Appraisal Configuration
-
-**Type:** `SchererAppraisalConfig`
-
-| Toggle | What it controls |
-|--------|-----------------|
-| `relevanceEnabled` | Relevance + novelty + urgency checks |
-| `implicationsEnabled` | Goal conduciveness evaluation |
-| `copingEnabled` | Controllability + adjustability evaluation |
-| `normativeEnabled` | Internal/external standards evaluation |
 
 **Type:** `AppraisalWeights` — personality-modulated sensitivity thresholds
 
