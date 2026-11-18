@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <style>
+    .box { rx: 6; ry: 6; }
+    .label { font-weight: 600; font-size: 12; }
+    .detail { font-size: 11; fill: #555; }
+    .arrow { stroke: #666; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .highlight { fill: #e8f5e9; stroke: #4caf50; stroke-width: 1.5; }
+    .standard { fill: #f5f5f5; stroke: #bbb; stroke-width: 1; }
+    .new { fill: #fff3e0; stroke: #ff9800; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#666"/>
+    </marker>
+  </defs>
+
+  <text x="360" y="24" text-anchor="middle" font-weight="700" font-size="15">Drive Composition Pipeline — Before and After</text>
+
+  <!-- Before row -->
+  <text x="20" y="62" font-weight="700" fill="#999" font-size="11">BEFORE</text>
+
+  <rect x="80" y="48" width="120" height="44" class="box standard"/>
+  <text x="140" y="66" text-anchor="middle" class="label">DriveSource</text>
+  <text x="140" y="80" text-anchor="middle" class="detail">raw intensity</text>
+
+  <line x1="200" y1="70" x2="240" y2="70" class="arrow"/>
+
+  <rect x="240" y="48" width="140" height="44" class="box standard"/>
+  <text x="310" y="66" text-anchor="middle" class="label">DriveComposer</text>
+  <text x="310" y="80" text-anchor="middle" class="detail">mood + personality + mods</text>
+
+  <line x1="380" y1="70" x2="420" y2="70" class="arrow"/>
+
+  <rect x="420" y="48" width="120" height="44" class="box standard"/>
+  <text x="480" y="66" text-anchor="middle" class="label">DriveProfile</text>
+  <text x="480" y="80" text-anchor="middle" class="detail">final float only</text>
+
+  <line x1="540" y1="70" x2="580" y2="70" class="arrow"/>
+
+  <rect x="580" y="48" width="120" height="44" class="box standard"/>
+  <text x="640" y="66" text-anchor="middle" class="label">PipelineTrace</text>
+  <text x="640" y="80" text-anchor="middle" class="detail">"elevated by ?"</text>
+
+  <!-- After row -->
+  <text x="20" y="162" font-weight="700" fill="#4caf50" font-size="11">AFTER</text>
+
+  <rect x="80" y="140" width="120" height="44" class="box standard"/>
+  <text x="140" y="158" text-anchor="middle" class="label">DriveSource</text>
+  <text x="140" y="172" text-anchor="middle" class="detail">raw intensity</text>
+
+  <line x1="200" y1="162" x2="240" y2="162" class="arrow"/>
+
+  <rect x="240" y="130" width="140" height="62" class="box new"/>
+  <text x="310" y="150" text-anchor="middle" class="label">DriveComposer</text>
+  <text x="310" y="164" text-anchor="middle" class="detail">per-axis breakdown</text>
+  <text x="310" y="178" text-anchor="middle" class="detail">+ emotion provenance</text>
+
+  <line x1="380" y1="162" x2="420" y2="162" class="arrow"/>
+
+  <rect x="420" y="130" width="120" height="62" class="box new"/>
+  <text x="480" y="148" text-anchor="middle" class="label">Orchestrator</text>
+  <text x="480" y="162" text-anchor="middle" class="detail">EMA smoothing</text>
+  <text x="480" y="176" text-anchor="middle" class="detail">↑instant ↓gradual</text>
+
+  <line x1="540" y1="162" x2="580" y2="162" class="arrow"/>
+
+  <rect x="580" y="130" width="120" height="62" class="box highlight"/>
+  <text x="640" y="148" text-anchor="middle" class="label">PipelineTrace</text>
+  <text x="640" y="162" text-anchor="middle" class="detail">DriveEvaluation[]</text>
+  <text x="640" y="176" text-anchor="middle" class="detail">"elevated by SHAME"</text>
+
+  <!-- DriveEvaluation detail box -->
+  <rect x="140" y="230" width="440" height="96" class="box highlight"/>
+  <text x="360" y="250" text-anchor="middle" font-weight="700" font-size="13">DriveEvaluation</text>
+  <text x="160" y="270" class="detail">axis: AUTONOMY</text>
+  <text x="160" y="286" class="detail">rawIntensity: 0.30</text>
+  <text x="160" y="302" class="detail">moodDelta: 0.12</text>
+  <text x="160" y="318" class="detail">personalityDelta: 0.08</text>
+  <text x="380" y="270" class="detail">appraisalDelta: 0.35</text>
+  <text x="380" y="286" class="detail">otherModDelta: 0.05</text>
+  <text x="380" y="302" class="detail">composedIntensity: 0.72</text>
+  <text x="380" y="318" class="detail">trigger: "elevated by SHAME"</text>
+
+  <line x1="360" y1="192" x2="360" y2="228" class="arrow" stroke-dasharray="4,3"/>
+</svg>

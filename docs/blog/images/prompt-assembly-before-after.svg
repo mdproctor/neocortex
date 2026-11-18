@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <style>
+    .box { rx: 6; ry: 6; stroke-width: 1.5; }
+    .label { font-weight: 600; font-size: 14px; }
+    .sublabel { font-size: 11px; fill: #666; }
+    .arrow { stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .dead { opacity: 0.4; }
+    .new { stroke-dasharray: 6 3; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- BEFORE -->
+  <text x="190" y="24" text-anchor="middle" class="label" font-size="16" fill="#333">Before</text>
+
+  <!-- eidos-api -->
+  <rect x="20" y="40" width="150" height="80" class="box" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="95" y="62" text-anchor="middle" class="label" fill="#1a56db">eidos-api</text>
+  <text x="95" y="80" text-anchor="middle" class="sublabel">PromptBlock</text>
+  <text x="95" y="94" text-anchor="middle" class="sublabel">PromptContributor</text>
+  <text x="95" y="108" text-anchor="middle" class="sublabel">PromptTier (4)</text>
+
+  <!-- cognition-api -->
+  <rect x="200" y="40" width="170" height="80" class="box" fill="#fef3e0" stroke="#f59e0b"/>
+  <text x="285" y="62" text-anchor="middle" class="label" fill="#b45309">cognition-api</text>
+  <text x="285" y="80" text-anchor="middle" class="sublabel">CognitionPromptRenderer → String</text>
+  <text x="285" y="94" text-anchor="middle" class="sublabel">BlockTag (24 entries)</text>
+  <text x="285" y="108" text-anchor="middle" class="sublabel">CognitionRenderContext</text>
+
+  <!-- speech-api -->
+  <rect x="200" y="140" width="170" height="70" class="box dead" fill="#fce4ec" stroke="#e53e3e"/>
+  <text x="285" y="162" text-anchor="middle" class="label" fill="#c53030">speech-api</text>
+  <text x="285" y="180" text-anchor="middle" class="sublabel">PromptSection → String</text>
+  <text x="285" y="194" text-anchor="middle" class="sublabel">PromptContext (dead)</text>
+
+  <!-- CognitionAvatarAdapter -->
+  <rect x="80" y="230" width="230" height="50" class="box" fill="#fff3e0" stroke="#e65100"/>
+  <text x="195" y="252" text-anchor="middle" class="label" fill="#bf360c" font-size="12">CognitionAvatarAdapter</text>
+  <text x="195" y="268" text-anchor="middle" class="sublabel">bridges all three — fragile coupling</text>
+
+  <!-- arrows before -->
+  <path d="M 95 120 L 95 230" class="arrow" stroke="#4285f4"/>
+  <path d="M 285 120 L 230 230" class="arrow" stroke="#f59e0b"/>
+  <path d="M 285 210 L 250 230" class="arrow dead" stroke="#e53e3e"/>
+
+  <!-- AFTER -->
+  <text x="570" y="24" text-anchor="middle" class="label" font-size="16" fill="#333">After</text>
+
+  <!-- eidos-api -->
+  <rect x="410" y="40" width="150" height="80" class="box" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="485" y="62" text-anchor="middle" class="label" fill="#1a56db">eidos-api</text>
+  <text x="485" y="80" text-anchor="middle" class="sublabel">PromptBlock</text>
+  <text x="485" y="94" text-anchor="middle" class="sublabel">PromptContributor</text>
+  <text x="485" y="108" text-anchor="middle" class="sublabel">PromptTier (4)</text>
+
+  <!-- cognition-api -->
+  <rect x="580" y="40" width="170" height="100" class="box" fill="#fef3e0" stroke="#f59e0b"/>
+  <text x="665" y="62" text-anchor="middle" class="label" fill="#b45309">cognition-api</text>
+  <text x="665" y="80" text-anchor="middle" class="sublabel">CognitionPromptRenderer → String</text>
+  <text x="665" y="94" text-anchor="middle" class="sublabel">BlockTag (24 entries)</text>
+  <text x="665" y="108" text-anchor="middle" class="sublabel">CognitionRenderContext</text>
+  <text x="665" y="126" text-anchor="middle" class="sublabel" fill="#16a34a" font-weight="600">+ CognitiveLifecycle</text>
+
+  <!-- CognitiveLifecycle detail -->
+  <rect x="560" y="160" width="190" height="80" class="box new" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="655" y="180" text-anchor="middle" class="label" fill="#15803d" font-size="12">CognitiveLifecycle</text>
+  <text x="655" y="196" text-anchor="middle" class="sublabel">tick · recordInteraction</text>
+  <text x="655" y="210" text-anchor="middle" class="sublabel">promptSections() → renderers</text>
+  <text x="655" y="226" text-anchor="middle" class="sublabel" fill="#16a34a">contributeBlocks() → PromptBlock</text>
+
+  <!-- CognitionCore -->
+  <rect x="560" y="260" width="190" height="40" class="box" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="655" y="278" text-anchor="middle" class="label" fill="#854d0e" font-size="12">CognitionCore</text>
+  <text x="655" y="292" text-anchor="middle" class="sublabel">implements CognitiveLifecycle</text>
+
+  <!-- Agency consumer -->
+  <rect x="430" y="330" width="170" height="50" class="box" fill="#f3e8ff" stroke="#7c3aed"/>
+  <text x="515" y="352" text-anchor="middle" class="label" fill="#6b21a8" font-size="12">agency (consumer)</text>
+  <text x="515" y="368" text-anchor="middle" class="sublabel">calls contributeBlocks()</text>
+
+  <!-- arrows after -->
+  <path d="M 560 70 L 485 70" class="arrow" stroke="#16a34a" stroke-dasharray="4 3"/>
+  <text x="522" y="64" text-anchor="middle" class="sublabel" fill="#16a34a">uses</text>
+  <path d="M 655 240 L 655 260" class="arrow" stroke="#ca8a04"/>
+  <path d="M 560 350 L 515 300" class="arrow" stroke="#7c3aed"/>
+  <path d="M 485 120 L 485 330" class="arrow" stroke="#4285f4" stroke-dasharray="4 3"/>
+
+  <!-- divider -->
+  <line x1="390" y1="10" x2="390" y2="400" stroke="#ddd" stroke-width="1" stroke-dasharray="8 4"/>
+</svg>
