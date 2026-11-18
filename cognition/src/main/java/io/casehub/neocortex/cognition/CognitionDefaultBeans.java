@@ -388,4 +388,20 @@ public class CognitionDefaultBeans {
         return new io.casehub.neocortex.cognition.memory.DefaultIntegrityChecker(
                 cbrStore.get(), semanticChecker, java.util.List.of());
     }
+
+    @Produces
+    @DefaultBean
+    @Singleton
+    io.casehub.neocortex.cognition.situational.DynamicsConfig dynamicsConfig() {
+        return io.casehub.neocortex.cognition.situational.DynamicsConfig.defaults();
+    }
+
+    @Produces
+    @DefaultBean
+    @Singleton
+    io.casehub.neocortex.cognition.situational.PersonalityStateIntegrator personalityStateIntegrator(
+            io.casehub.neocortex.cognition.situational.DynamicsConfig dynamicsConfig) {
+        return new io.casehub.neocortex.cognition.situational.PersonalityStateIntegrator(dynamicsConfig);
+    }
+
 }
