@@ -10,10 +10,6 @@ import io.casehub.neocortex.cognition.drive.DriveIntensity;
 import io.casehub.neocortex.cognition.drive.DriveOrchestrator;
 import io.casehub.neocortex.cognition.drive.DriveProfile;
 import io.casehub.neocortex.cognition.mood.MoodOrchestrator;
-import io.casehub.neocortex.cognitive.CognitiveEmotion;
-import io.casehub.neocortex.cognitive.EmotionSource;
-import io.casehub.neocortex.cognitive.EmotionType;
-import io.casehub.neocortex.cognitive.PadProjection;
 import io.casehub.neocortex.cognitive.index.RelationalSchema;
 import io.casehub.neocortex.mindmap.NodeInput;
 import io.casehub.neocortex.mindmap.OverlayRef;
@@ -471,6 +467,28 @@ class AppraisalTickParticipantTest {
 
         verify(moodOrchestrator, never()).record(any(), any(), any());
     }
+
+    @Test
+    void evictIdleRemovesStaleEntries() {
+        var config = CognitionConfig.none().with("appraisal", true);
+        var participant = new AppraisalTickParticipant(
+                salienceStrategy, appraisalStrategy, driveOrchestrator,
+                moodOrchestrator, null, config);
+
+        participant.tick(contextWithObservation("Something to appraise"));
+
+        assertThat(participant.currentResult("a1", "t1")).isPresent();
+        assertThat(participant.currentContext("a1", "t1")).isPresent();
+        assertThat(participant.currentHabituation("a1", "t1")).isNull();
+
+        participant.evictIdle(java.time.Duration.ZERO);
+
+        assertThat(participant.currentResult("a1", "t1")).isEmpty();
+        assertThat(participant.currentContext("a1", "t1")).isEmpty();
+        assertThat(participant.currentConcernSalience("a1", "t1")).isEmpty();
+        assertThat(participant.currentInputActivations("a1", "t1")).isEmpty();
+    }
+
 
     private CognitionTickContext contextWithObservation(String observation) {
         return new CognitionTickContext("a1", "t1", null, (a, t) -> java.util.Set.of(), observation);

@@ -1242,6 +1242,9 @@ public @Nullable String lastTargetAgentId() {
         if (effectiveDefaults != null) {
             scheduler.register(effectiveDefaults::evictIdle);
         }
+        if (appraisalParticipant != null) {
+            scheduler.register(appraisalParticipant::evictIdle);
+        }
     }
 
 

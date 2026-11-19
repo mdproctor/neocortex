@@ -50,6 +50,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
     private final ConcurrentHashMap<String, AppraisalContext> contexts  = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, io.casehub.neocortex.cognition.journal.EventRef> resultEventRefs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<String, Double>>                             inputActivations = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.time.Instant>                               lastTickTimes    = new ConcurrentHashMap<>();
 
 
     public Map<String, Double> currentConcernSalience(String agentId, String tenantId) {
@@ -187,6 +188,7 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
         results.put(agentKey, result);
         contexts.put(agentKey, appraisalContext);
         habituationStates.put(agentKey, result.updatedHabituation());
+        lastTickTimes.put(agentKey, java.time.Instant.now());
         if (context.tickEventRef() != null) {
             resultEventRefs.put(agentKey, context.tickEventRef());
         }
@@ -258,6 +260,25 @@ public class AppraisalTickParticipant implements CognitionTickParticipant {
 
     public void setSituationalModeAccessor(java.util.function.BiFunction<String, String, @Nullable SituationalModeContext> accessor) {
         this.situationalModeAccessor = accessor;
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                results.remove(key);
+                contexts.remove(key);
+                habituationStates.remove(key);
+                concernSaliences.remove(key);
+                channelWeights.remove(key);
+                regulatedNarratives.remove(key);
+                resultEventRefs.remove(key);
+                inputActivations.remove(key);
+                return true;
+            }
+            return false;
+        });
     }
 
 
