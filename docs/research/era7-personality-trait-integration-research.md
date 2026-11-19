@@ -123,6 +123,8 @@ All design goals achieved. Implementation complete across three repos (eidos, ne
 ### Test coverage
 - 23 PID-5 facet modulation tests (direction assertions per facet per method)
 - 7 derivation trace tests (journal capture, query, filtering, cross-stage flow)
+- 5 personality differentiation tests (coping defaults, search budgets, prompt rendering, curiosity channels, behavioral attractor divergence via CAPS settling)
+- 11 EffectiveCognitiveDefaults tests (all passing after #1163 assertion fix)
 - 512 eidos API tests, 447 cognitive-index tests, 7 bridge tests, 712 wacky-manor fast tests — all pass with 0 regressions.
 
 ### Completed (observability)
@@ -147,6 +149,9 @@ All design goals achieved. Implementation complete across three repos (eidos, ne
 - ~~neocortex#1155: ConsolidationScheduler tick counter for EventRef provenance~~ ✅ Landed 2026-11-19 (monotonic tickCount under ReentrantLock, EventRef.tick(N) replaces EventRef.init())
 - ~~neocortex#1156: ConsolidationPhase input/output node counts~~ ✅ Landed 2026-11-19 (default methods, scheduler uses phase.inputNodeCount()/outputNodeCount())
 - ~~neocortex#1159: CognitionTestHarness per-agent curiosity wiring~~ ✅ Landed 2026-11-19 (CuriosityDrive accepts ToDoubleFunction for per-agent deprivation bias; PersonalityDifferentiationTest verifies hedonic divergence)
+- ~~neocortex#1160: CognitionTestHarness — expose CAPS settling and behavioral attractor divergence~~ ✅ Landed 2026-11-19 (withBehavioralSynthesis(boolean) on Builder creates InMemoryCapsEngine + RuleBasedSituationClassifier + BehavioralSynthesisPhase; capsSettlingResult(agentId, tenantId) exposes settling results; lazy CAPS initialization per tenant in consolidate() solves tenant ID mismatch; PersonalityDifferentiationTest.behavioralAttractorsDivergeAfterConsolidation proves open/bold vs cautious/avoidant divergence through CAPS engine)
+- neocortex#1162: MutationContext → ScopedValue migration — **BLOCKED** (maven.compiler.release=21, ScopedValue requires JDK 25+; code written and reverted; deferred until platform minimum JDK raised)
+- ~~neocortex#1163: EffectiveCognitiveDefaultsTest assertion mismatch~~ ✅ Landed 2026-11-19 (LivedComposition.compose() annotates situational origins with usual-state baseline "situational [usual 0.50]"; test updated to match)
 
 ### Epic #1050 — CAPS pipeline wiring completeness (resolved 2026-11-17)
 84 issues across the full CAPS pipeline — topology structure, coping→regulation connections, orphaned output nodes, personality-aware classification (PID-5 + AppraisalWeights), search budget, drive composition, CAPS settling, and observability. All verified end-to-end. Pre-existing test failures filed as #1077 (AttentionSignalTest) and #1078 (CopingStrategyPredictorTest).
