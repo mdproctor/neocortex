@@ -81,12 +81,16 @@ public class ShadowArchetypePromptSection implements CognitionPromptRenderer {
             sb.append("\n");
         }
 
+        boolean archetypeResolved = false;
         if (store != null) {
-            resolveArchetypeFamily(context.agentId(), context.tenantId()).ifPresent(family ->
-                                                                                            sb.append("\nYou are a ").append(capitalise(family)).append(". These shifts are your current felt reality.\n"));
+            var family = resolveArchetypeFamily(context.agentId(), context.tenantId());
+            if (family.isPresent()) {
+                archetypeResolved = true;
+                sb.append("\nYou are a ").append(capitalise(family.get())).append(". These shifts are your current felt reality.\n");
+            }
         }
 
-        if (scored.isEmpty() && store == null) {
+        if (scored.isEmpty() && !archetypeResolved) {
             if (s.publishedCount() > 0) {
                 sb.append(s.publishedCount())
                   .append(s.publishedCount() == 1 ? " personality trait has" : " personality traits have")

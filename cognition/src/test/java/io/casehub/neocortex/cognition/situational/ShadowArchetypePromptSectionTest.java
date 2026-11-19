@@ -125,4 +125,25 @@ class ShadowArchetypePromptSectionTest {
 
         assertThat(result).contains("characteristic of this state");
     }
+
+    @Test
+    void rendersClosingWhenStorePresentsButScoredEmptyAndNoArchetype() {
+        var snapshot = new PipelineTrace.SituationalPersonalitySnapshot(
+                Map.of("STRESS", 0.72),
+                "STRESS", null,
+                Map.of("anxiousness", 0.01),
+                1);
+        var store = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+
+        var section = new ShadowArchetypePromptSection(
+                (a, t) -> Optional.of(snapshot),
+                store, ShadowFrameConfig.defaults(), null);
+        var ctx    = new CognitionRenderContext("agent1", "t1", null, List.of());
+        var result = section.render(ctx);
+
+        assertThat(result).isNotNull();
+        assertThat(result).contains("stress");
+        assertThat(result).contains("current reality");
+    }
+
 }
