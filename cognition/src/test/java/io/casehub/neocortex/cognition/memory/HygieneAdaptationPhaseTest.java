@@ -34,7 +34,7 @@ class HygieneAdaptationPhaseTest {
         orchestrator.setTenantSummary("t1",
                 new KnowledgeGapSummary(30, 2, 100));
         phase.run("t1", List.of());
-        assertThat(adaptiveConfig.current()).isEqualTo(RetentionConfig.DEFAULT);
+        assertThat(adaptiveConfig.current("t1")).isEqualTo(RetentionConfig.DEFAULT);
         assertThat(firedEvents).isEmpty();
     }
 
@@ -48,7 +48,7 @@ class HygieneAdaptationPhaseTest {
                 new KnowledgeGapSummary(40, 2, 100));
         phase.run("t1", List.of());
 
-        assertThat(adaptiveConfig.current().retentionThreshold())
+        assertThat(adaptiveConfig.current("t1").retentionThreshold())
                 .isLessThan(RetentionConfig.DEFAULT.retentionThreshold());
         assertThat(firedEvents).hasSize(1);
         assertThat(firedEvents.getFirst().direction())
@@ -65,7 +65,7 @@ class HygieneAdaptationPhaseTest {
                 new KnowledgeGapSummary(2, 1, 100));
         phase.run("t1", List.of());
 
-        assertThat(adaptiveConfig.current().retentionThreshold())
+        assertThat(adaptiveConfig.current("t1").retentionThreshold())
                 .isGreaterThan(RetentionConfig.DEFAULT.retentionThreshold());
         assertThat(firedEvents).hasSize(1);
         assertThat(firedEvents.getFirst().direction())
@@ -82,7 +82,7 @@ class HygieneAdaptationPhaseTest {
                 new KnowledgeGapSummary(15, 1, 100));
         phase.run("t1", List.of());
 
-        assertThat(adaptiveConfig.current()).isEqualTo(RetentionConfig.DEFAULT);
+        assertThat(adaptiveConfig.current("t1")).isEqualTo(RetentionConfig.DEFAULT);
         assertThat(firedEvents).isEmpty();
     }
 
@@ -97,7 +97,7 @@ class HygieneAdaptationPhaseTest {
                 new KnowledgeGapSummary(50, 2, 100));
         phase.run("t1", List.of());
 
-        assertThat(adaptiveConfig.current().retentionThreshold())
+        assertThat(adaptiveConfig.current("t1").retentionThreshold())
                 .isGreaterThanOrEqualTo(0.01);
     }
 
@@ -110,13 +110,13 @@ class HygieneAdaptationPhaseTest {
         orchestrator.setTenantSummary("t1",
                 new KnowledgeGapSummary(40, 2, 100));
         phase.run("t1", List.of());
-        double afterFirstAdaptation = adaptiveConfig.current().retentionThreshold();
+        double afterFirstAdaptation = adaptiveConfig.current("t1").retentionThreshold();
 
         orchestrator.setTenantSummary("t1",
                 new KnowledgeGapSummary(20, 2, 100));
         phase.run("t1", List.of());
 
-        assertThat(adaptiveConfig.current().retentionThreshold())
+        assertThat(adaptiveConfig.current("t1").retentionThreshold())
                 .isEqualTo(afterFirstAdaptation);
     }
 
@@ -125,7 +125,7 @@ class HygieneAdaptationPhaseTest {
         orchestrator.setTenantSummary("t1", KnowledgeGapSummary.empty());
         phase.run("t1", List.of());
         phase.run("t1", List.of());
-        assertThat(adaptiveConfig.current()).isEqualTo(RetentionConfig.DEFAULT);
+        assertThat(adaptiveConfig.current("t1")).isEqualTo(RetentionConfig.DEFAULT);
     }
 
     @Test
@@ -146,11 +146,48 @@ class HygieneAdaptationPhaseTest {
         assertThat(firedEvents).hasSize(1);
         var event = firedEvents.getFirst();
         assertThat(event.previousConfig()).isEqualTo(RetentionConfig.DEFAULT);
-        assertThat(event.newConfig().retentionThreshold())
-                .isEqualTo(RetentionConfig.DEFAULT.retentionThreshold() - 0.02);
+        assertThat(event.newConfig()).isEqualTo(adaptiveConfig.current("t1"));
         assertThat(event.tenantId()).isEqualTo("t1");
         assertThat(event.evictionPressure()).isEqualTo(0.4);
     }
+
+    @Test
+    void differentTenantsGetIndependentThresholds() {
+        orchestrator.setTenantSummary("t1",
+                                      new KnowledgeGapSummary(40, 2, 100));
+        orchestrator.setTenantSummary("t2",
+                                      new KnowledgeGapSummary(2, 1, 100));
+
+        phase.run("t1", List.of());
+        phase.run("t2", List.of());
+
+        phase.run("t1", List.of());
+        phase.run("t2", List.of());
+
+        assertThat(adaptiveConfig.current("t1").retentionThreshold())
+                .isLessThan(RetentionConfig.DEFAULT.retentionThreshold());
+        assertThat(adaptiveConfig.current("t2").retentionThreshold())
+                .isGreaterThan(RetentionConfig.DEFAULT.retentionThreshold());
+    }
+
+    @Test
+    void tenantAdaptationDoesNotAffectGlobalConfig() {
+        orchestrator.setTenantSummary("t1",
+                                      new KnowledgeGapSummary(40, 2, 100));
+        phase.run("t1", List.of());
+        phase.run("t1", List.of());
+
+        assertThat(adaptiveConfig.current("t1").retentionThreshold())
+                .isLessThan(RetentionConfig.DEFAULT.retentionThreshold());
+        assertThat(adaptiveConfig.current()).isEqualTo(RetentionConfig.DEFAULT);
+    }
+
+    @Test
+    void unknownTenantFallsBackToGlobalDefault() {
+        assertThat(adaptiveConfig.current("never-seen"))
+                .isEqualTo(RetentionConfig.DEFAULT);
+    }
+
 
     // --- Test doubles ---
 

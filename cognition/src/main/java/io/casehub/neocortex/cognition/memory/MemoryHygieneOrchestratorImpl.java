@@ -118,7 +118,7 @@ public class MemoryHygieneOrchestratorImpl implements MemoryHygieneOrchestrator 
     }
 
     private HygieneTick doTickInternal(String agentId, String tenantId) {
-        var retentionConfig = configSupplier.current();
+        var retentionConfig = configSupplier.current(tenantId);
         var now = Instant.now();
         var allScores = new ArrayList<RetentionScore>();
         int totalEvicted = 0;

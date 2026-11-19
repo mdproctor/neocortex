@@ -56,10 +56,10 @@ public class HygieneAdaptationPhase implements ConsolidationPhase {
     @Override
     public void run(String tenantId, List<String> subgraphPriority) {
         var currentSummary = hygieneOrchestrator.tenantGapSummary(tenantId);
-        if (currentSummary.totalScored() == 0) return;
+        if (currentSummary.totalScored() == 0) {return;}
 
-        var previous = previousSummaries.get(tenantId);
-        var currentConfig = adaptiveConfig.current();
+        var previous      = previousSummaries.get(tenantId);
+        var currentConfig = adaptiveConfig.current(tenantId);
 
         if (previous == null) {
             previousSummaries.put(tenantId, currentSummary);
@@ -69,8 +69,8 @@ public class HygieneAdaptationPhase implements ConsolidationPhase {
 
         double pressure = (double) currentSummary.lowRetentionCount() / currentSummary.totalScored();
         double previousPressure = previous.totalScored() > 0
-                ? (double) previous.lowRetentionCount() / previous.totalScored()
-                : 0.0;
+                                  ? (double) previous.lowRetentionCount() / previous.totalScored()
+                                  : 0.0;
 
         var prevConfig = previousConfigs.getOrDefault(tenantId, currentConfig);
         boolean previouslyAdjusted =
@@ -86,7 +86,7 @@ public class HygieneAdaptationPhase implements ConsolidationPhase {
             }
         }
 
-        double newThreshold = currentConfig.retentionThreshold();
+        double                                     newThreshold = currentConfig.retentionThreshold();
         HygieneAdaptationEvent.AdaptationDirection direction;
 
         if (pressure > config.evictionPressureUpperThreshold()) {
@@ -102,7 +102,7 @@ public class HygieneAdaptationPhase implements ConsolidationPhase {
         }
 
         newThreshold = Math.max(config.minRetentionThreshold(),
-                       Math.min(config.maxRetentionThreshold(), newThreshold));
+                                Math.min(config.maxRetentionThreshold(), newThreshold));
 
         if (newThreshold == currentConfig.retentionThreshold()) {
             previousSummaries.put(tenantId, currentSummary);
@@ -111,10 +111,10 @@ public class HygieneAdaptationPhase implements ConsolidationPhase {
         }
 
         var newConfig = new RetentionConfig(newThreshold,
-                currentConfig.confidenceWeight(), currentConfig.recencyWeight(),
-                currentConfig.scopeWeight(), currentConfig.trustWeight());
+                                            currentConfig.confidenceWeight(), currentConfig.recencyWeight(),
+                                            currentConfig.scopeWeight(), currentConfig.trustWeight());
 
-        adaptiveConfig.update(newConfig);
+        adaptiveConfig.update(tenantId, newConfig);
 
         eventSink.accept(new HygieneAdaptationEvent(
                 tenantId, currentConfig, newConfig, pressure, direction, Instant.now()));
