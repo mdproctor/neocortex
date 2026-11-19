@@ -246,6 +246,14 @@ public class CognitionTestHarness {
         return behavioralSynthesisPhase.lastSettlingResult(tenantId, agentId);
     }
 
+    public record CapsTrajectory(int iterations, io.casehub.neocortex.caps.ConvergenceType convergence,
+                                 double saturationRatio) {}
+
+    public Optional<CapsTrajectory> capsTrajectory(String agentId, String tenantId) {
+        return capsSettlingResult(agentId, tenantId)
+                       .map(r -> new CapsTrajectory(r.iterations(), r.convergence(), r.saturationRatio()));
+    }
+
 
     // --- Prompt rendering ---
 
