@@ -44,7 +44,13 @@ class InnerLifeOrchestratorTest {
         when(disposition.dispositionProfile()).thenReturn(List.of());
         when(descriptor.disposition()).thenReturn(disposition);
         when(driveOrchestrator.currentDrives("agent-1", "tenant-1"))
-                .thenReturn(java.util.Optional.of(mock(DriveProfile.class)));
+                .thenReturn(java.util.Optional.of(new DriveProfile(
+                        "agent-1", "tenant-1",
+                        java.util.Map.of(io.casehub.neocortex.cognition.drive.DriveAxis.CURIOSITY,
+                                new io.casehub.neocortex.cognition.drive.DriveIntensity(
+                                        io.casehub.neocortex.cognition.drive.DriveAxis.CURIOSITY, 0.5, "test")),
+                        0.5, io.casehub.neocortex.cognition.drive.DriveAxis.CURIOSITY,
+                        java.time.Instant.now())));
     }
 
     private InnerLifeOrchestrator makeOrchestrator(CivilityConstraint... constraints) {
