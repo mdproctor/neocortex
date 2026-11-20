@@ -70,4 +70,40 @@ class DevelopmentalPhaseResolverTest {
         assertThat(DevelopmentalPhaseResolver.resolvePhase(born, now))
             .isEqualTo(DevelopmentalPhaseResolver.ADOLESCENCE);
     }
+
+    @Test
+    void nodeWithValidBornProperty() {
+        var node = new TestNode(java.util.Map.of(LifecycleEvents.key("born"), "2010-03-20"));
+        var now  = LocalDate.of(2025, 6, 1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        assertThat(DevelopmentalPhaseResolver.resolvePhase(node, now))
+                .isEqualTo(DevelopmentalPhaseResolver.ADOLESCENCE);
+    }
+
+    @Test
+    void nodeWithMissingBornProperty() {
+        var node = new TestNode(java.util.Map.of());
+        assertThat(DevelopmentalPhaseResolver.resolvePhase(node, java.time.Instant.now()))
+                .isEqualTo(DevelopmentalPhaseResolver.ADULTHOOD);
+    }
+
+    @Test
+    void nodeWithBlankBornValue() {
+        var node = new TestNode(java.util.Map.of(LifecycleEvents.key("born"), "  "));
+        assertThat(DevelopmentalPhaseResolver.resolvePhase(node, java.time.Instant.now()))
+                .isEqualTo(DevelopmentalPhaseResolver.ADULTHOOD);
+    }
+
+    @Test
+    void nodeWithMalformedDateString() {
+        var node = new TestNode(java.util.Map.of(LifecycleEvents.key("born"), "not-a-date"));
+        assertThat(DevelopmentalPhaseResolver.resolvePhase(node, java.time.Instant.now()))
+                .isEqualTo(DevelopmentalPhaseResolver.ADULTHOOD);
+    }
+
+    @Test
+    void nullNodeDefaultsToAdulthood() {
+        assertThat(DevelopmentalPhaseResolver.resolvePhase((MindMapNode) null, java.time.Instant.now()))
+                .isEqualTo(DevelopmentalPhaseResolver.ADULTHOOD);
+    }
+
 }
