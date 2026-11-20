@@ -51,6 +51,7 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
     private final @Nullable CuriosityDrive curiosityDrive;
     private final @Nullable CognitiveResourcePool cognitiveResourcePool;
     private final           ConcurrentHashMap<String, SearchBudget> results = new ConcurrentHashMap<>();
+    private final           ConcurrentHashMap<String, java.time.Instant> lastTickTimes = new ConcurrentHashMap<>();
 
 
 
@@ -77,6 +78,7 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
     public void tick(CognitionTickContext context) {
         String agentId  = context.agentId();
         String tenantId = context.tenantId();
+        lastTickTimes.put(agentId + ":" + tenantId, java.time.Instant.now());
         String key      = agentId + ":" + tenantId;
         results.remove(key);
 
@@ -343,6 +345,17 @@ public class SearchBudgetTickParticipant implements CognitionTickParticipant {
     private static double modulationScale(double amplificationRate, double intensity, double peak) {
         double scale = 1.0 + amplificationRate * Math.max(0.0, intensity - peak);
         return Math.max(-1.0, scale);
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                results.remove(e.getKey());
+                return true;
+            }
+            return false;
+        });
     }
 
     private static double clamp01(double value) {

@@ -25,6 +25,7 @@ public class MoodOrchestrator {
 
     private final ConcurrentHashMap<String, AgentMoodState> states = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     @Inject
     public MoodOrchestrator(MoodConfig config) {
@@ -44,12 +45,14 @@ public class MoodOrchestrator {
     }
 
     public MoodTick tick(String agentId, String tenantId) {
-        var state = states.get(stateKey(agentId, tenantId));
+        var key = stateKey(agentId, tenantId);
+        lastTickTimes.put(key, Instant.now());
+        var state = states.get(key);
         if (state == null) {
             return new MoodTick.NoChange("no mood state");
         }
 
-        return withLock(stateKey(agentId, tenantId), () -> doTick(state));
+        return withLock(key, () -> doTick(state));
     }
 
     public Optional<MoodState> currentMood(String agentId, String tenantId) {
@@ -132,6 +135,19 @@ public class MoodOrchestrator {
         double lower = Math.max(-1.0, baseline - maxDisplacement);
         double upper = Math.min(1.0, baseline + maxDisplacement);
         return Math.max(lower, Math.min(upper, value));
+    }
+
+    public void evictIdle(Duration maxIdle) {
+        var cutoff = Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                states.remove(key);
+                tickLocks.remove(key);
+                return true;
+            }
+            return false;
+        });
     }
 
     private static String stateKey(String agentId, String tenantId) {

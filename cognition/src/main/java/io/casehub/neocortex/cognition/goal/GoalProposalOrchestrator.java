@@ -45,6 +45,7 @@ public class GoalProposalOrchestrator {
 
     private final ConcurrentHashMap<String, GoalProposalState> states = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.time.Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     public GoalProposalOrchestrator(
             DriveOrchestrator driveOrchestrator,
@@ -110,6 +111,7 @@ public class GoalProposalOrchestrator {
 
     public GoalProposalTick tick(String agentId, String tenantId, AgentDescriptor descriptor) {
         String key = agentId + "|" + tenantId;
+        lastTickTimes.put(key, java.time.Instant.now());
         return withLock(key, () -> doTick(agentId, tenantId, descriptor, key));
     }
 
@@ -609,6 +611,19 @@ public class GoalProposalOrchestrator {
     static final class EscalationTracker {
         Instant firstAlignedSynthesisAt;
         int alignedCycleCount;
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                states.remove(key);
+                tickLocks.remove(key);
+                return true;
+            }
+            return false;
+        });
     }
 
     private <T> T withLock(String key, Supplier<T> action) {

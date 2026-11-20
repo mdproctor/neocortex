@@ -10,6 +10,7 @@ public class NarrativeOrchestrator {
     private final NarrativeMemory store;
     private final ConcurrentHashMap<String, NarrativeState> cache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.time.Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     public NarrativeOrchestrator(NarrativeMemory store) {
         this.store = store;
@@ -17,6 +18,7 @@ public class NarrativeOrchestrator {
 
     public NarrativeTick tick(String agentId, String tenantId) {
         var key = agentId + ":" + tenantId;
+        lastTickTimes.put(key, java.time.Instant.now());
         return withLock(key, () -> {
             var loaded = store.load(agentId, tenantId);
             var previous = cache.get(key);
@@ -55,6 +57,19 @@ public class NarrativeOrchestrator {
 
     public Optional<NarrativeState> currentNarrative(String agentId, String tenantId) {
         return Optional.ofNullable(cache.get(agentId + ":" + tenantId));
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                cache.remove(key);
+                tickLocks.remove(key);
+                return true;
+            }
+            return false;
+        });
     }
 
     private <T> T withLock(String key, Supplier<T> action) {

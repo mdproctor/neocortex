@@ -85,6 +85,7 @@ public class StrategyLearningOrchestrator {
 
     private final ConcurrentHashMap<String, AgentLearningState> states = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.time.Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     public StrategyLearningOrchestrator(StrategyMemory strategyMemory,
                                  ReflectionOrchestrator reflectionOrchestrator,
@@ -136,6 +137,7 @@ public class StrategyLearningOrchestrator {
     }
 
     public StrategyLearningTick tick(String agentId, String tenantId) {
+        lastTickTimes.put(stateKey(agentId, tenantId), java.time.Instant.now());
         var state = states.get(stateKey(agentId, tenantId));
         if (state == null || (state.pendingTurns.isEmpty() && state.pendingConversations.isEmpty())) {
             return new StrategyLearningTick.NoChange("no pending signals");
@@ -719,6 +721,19 @@ public class StrategyLearningOrchestrator {
         } finally {
             lock.unlock();
         }
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                states.remove(key);
+                tickLocks.remove(key);
+                return true;
+            }
+            return false;
+        });
     }
 
     private static String stateKey(String agentId, String tenantId) {

@@ -36,6 +36,7 @@ public class DriveOrchestrator {
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<DriveAxis, Double>> pendingAppraisalModulations = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<DriveAxis, String>> pendingAppraisalDescriptions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     public DriveOrchestrator(DriveSource curiosity, DriveSource competence,
                              DriveSource affiliation, DriveSource autonomy,
@@ -71,6 +72,7 @@ public class DriveOrchestrator {
 
     public DriveTick tick(String agentId, String tenantId, AgentDescriptor descriptor) {
         var key = agentId + ":" + tenantId;
+        lastTickTimes.put(key, Instant.now());
         return withLock(key, () -> {
             var raw = new EnumMap<DriveAxis, DriveIntensity>(DriveAxis.class);
             raw.put(DriveAxis.CURIOSITY, curiosity.evaluate(agentId, tenantId));
@@ -186,6 +188,22 @@ public class DriveOrchestrator {
                                 Math.clamp(composite, 0.0, 1.0), dominant, current.evaluatedAt());
     }
 
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                profiles.remove(key);
+                lastEvaluations.remove(key);
+                tickLocks.remove(key);
+                pendingAppraisalModulations.remove(key);
+                pendingAppraisalDescriptions.remove(key);
+                return true;
+            }
+            return false;
+        });
+    }
 
     private <T> T withLock(String key, Supplier<T> action) {
         var lock = tickLocks.computeIfAbsent(key, k -> new ReentrantLock());

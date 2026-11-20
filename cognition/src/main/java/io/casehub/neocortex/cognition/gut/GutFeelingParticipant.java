@@ -22,6 +22,7 @@ public class GutFeelingParticipant implements CognitionTickParticipant {
     private final @Nullable MoodOrchestrator moodOrchestrator;
     private final @Nullable CognitionConfig config;
     private final ConcurrentHashMap<String, GutFeeling> results = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.time.Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     public GutFeelingParticipant(
             io.casehub.neocortex.cognitive.index.@Nullable CognitiveMemoryRetriever memoryRetriever,
@@ -51,6 +52,7 @@ public class GutFeelingParticipant implements CognitionTickParticipant {
     public void tick(CognitionTickContext context) {
         if (config != null && !config.behavioralEnabled()) return;
         var agentKey = context.agentId() + ":" + context.tenantId();
+        lastTickTimes.put(agentKey, java.time.Instant.now());
         results.remove(agentKey);
 
         if (memoryRetriever == null && memoryStore == null) return;
@@ -130,6 +132,17 @@ public class GutFeelingParticipant implements CognitionTickParticipant {
 
     public Optional<GutFeeling> currentResult(String agentId, String tenantId) {
         return Optional.ofNullable(results.get(agentId + ":" + tenantId));
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                results.remove(e.getKey());
+                return true;
+            }
+            return false;
+        });
     }
 
     private static String describePadQuadrant(double pleasure, double arousal) {

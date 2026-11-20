@@ -1245,6 +1245,30 @@ public @Nullable String lastTargetAgentId() {
         if (appraisalParticipant != null) {
             scheduler.register(appraisalParticipant::evictIdle);
         }
+        scheduler.register(mood::evictIdle);
+        scheduler.register(drives::evictIdle);
+        if (goals != null) {
+            scheduler.register(goals::evictIdle);
+        }
+        if (gutFeelingParticipant != null) {
+            scheduler.register(gutFeelingParticipant::evictIdle);
+        }
+        if (innerLife != null) {
+            scheduler.register(innerLife::evictIdle);
+        }
+        if (narrative != null) {
+            scheduler.register(narrative::evictIdle);
+        }
+        if (strategy != null) {
+            scheduler.register(strategy::evictIdle);
+        }
+        for (var participants : customParticipants.values()) {
+            for (var participant : participants) {
+                if (participant instanceof io.casehub.neocortex.cognition.search.SearchBudgetTickParticipant sbp) {
+                    scheduler.register(sbp::evictIdle);
+                }
+            }
+        }
     }
 
 

@@ -53,6 +53,7 @@ public class InnerLifeOrchestrator {
 
     private final ConcurrentHashMap<String, AgentState> agentStates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> tickLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, java.time.Instant> lastTickTimes = new ConcurrentHashMap<>();
 
     public InnerLifeOrchestrator(
             final ReflectionOrchestrator reflectionOrchestrator,
@@ -114,6 +115,7 @@ public class InnerLifeOrchestrator {
     public InnerLifeTick tick(final AgentDescriptor descriptor, final String channelContext,
                               final List<CognitionPromptRenderer> additionalSections) {
         var agentKey = agentKey(descriptor);
+        lastTickTimes.put(agentKey, java.time.Instant.now());
         var lock     = tickLocks.computeIfAbsent(agentKey, k -> new ReentrantLock());
         lock.lock();
         try {
@@ -380,6 +382,19 @@ public class InnerLifeOrchestrator {
             LOG.warning("Failed to parse motivation assessment: " + e.getMessage());
             return null;
         }
+    }
+
+    public void evictIdle(java.time.Duration maxIdle) {
+        var cutoff = java.time.Instant.now().minus(maxIdle);
+        lastTickTimes.entrySet().removeIf(e -> {
+            if (e.getValue().isBefore(cutoff)) {
+                var key = e.getKey();
+                agentStates.remove(key);
+                tickLocks.remove(key);
+                return true;
+            }
+            return false;
+        });
     }
 
     private static String agentKey(AgentDescriptor descriptor) {
