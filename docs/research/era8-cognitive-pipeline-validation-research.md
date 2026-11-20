@@ -135,6 +135,11 @@ Planned short-run scenarios:
 | #1180 | TheoryOfMindDivergenceTest — 4 tests | 2026-11-20 |
 | #1181 | EmotionRegulationDivergenceTest — 4 tests | 2026-11-20 |
 | #1182 | Delete PersonalityDifferentiationTest — migrated to divergence suite | 2026-11-20 |
+| #1171 | CAPS trajectory assertions — accessor mapping + both-agents-converge | 2026-11-20 |
+| #1165 | DevelopmentalPhaseResolver MindMapNode overload tests (5 paths) | 2026-11-20 |
+| #1164 | SituationalSnapshotAccessorProducer unit tests (6 tests) | 2026-11-20 |
+| #1153 | SituationalPersonalityParticipant coverage — evictIdle, TrustAccessor, facet clamping | 2026-11-20 |
+| #1079 | EffectiveCognitiveDefaults field classification test — resting vs effective | 2026-11-20 |
 
 ### Blocked
 
@@ -152,7 +157,6 @@ Planned short-run scenarios:
 
 | Issue | Description | Status |
 |-------|------------|--------|
-| #1171 | CAPS settling trajectory assertions | queued |
 | #1187 | Standalone TheoryOfMindBridge divergence tests | queued |
 | #1188 | Extend harness with lightweight appraisal for tick-level divergence | queued |
 
@@ -163,3 +167,29 @@ During #1160 implementation, CAPS initialization in the harness Builder used har
 **Fix:** Lazy initialization in `consolidate()` — checks each agent's CAPS state on first call and initializes with their descriptor's disposition axes using the caller's actual tenant ID.
 
 **Lesson:** Cross-component integration tests catch wiring bugs that unit tests cannot. The CAPS engine, the derivation engine, and the consolidation phase each worked correctly in isolation. The failure was in how they were connected — a tenant ID mismatch invisible to any single component's tests.
+
+## Key Finding: CAPS Trajectory Non-Divergence
+
+Issue #1171 tested whether contrasting personalities produce different settling trajectories (iterations, convergence type, saturation ratio). Both the open and cautious agents receive radically different CAPS input activations via `DriveCompetitionDetector.DRIVE_CAPS_MAPPINGS`:
+
+- **Open:** explore, BAS_activation, approach (adventure + curiosity drives)
+- **Cautious:** threat_sensitivity, distrust, BIS_activation, escape_assessment, FFFS_activation (suspicion + self-preservation drives)
+
+Despite different inputs and personality-dependent connection weights via `DispositionWeightMapper`, both agents converge in exactly 10 iterations with identical convergence type (CONVERGED) and zero saturation. The existing `behavioralAttractorsDiverge` test confirms the settling *destinations* differ — but the *paths* are identical.
+
+**Implication:** The current topology converges too quickly for trajectory to serve as a personality differentiation signal. The damping factor (0.4) and network structure produce rapid convergence regardless of input pattern. If trajectory divergence is desired as a test signal, the topology would need deeper feedback loops or tests would need to seed more extreme activation patterns that push some nodes toward saturation.
+
+**Status:** #1171 landed with accessor correctness tests (mapping from `SettlingResult` to `CapsTrajectory`) and both-agents-present assertions. Trajectory divergence assertion deferred — not achievable without topology changes.
+
+## Key Finding: Nearly All Derivation Paths Are Facet-Modulated
+
+Issue #1079's field classification test revealed that the resting-vs-effective partition in `EffectiveCognitiveDefaults` is much narrower than expected. Almost every derivation path in `CognitiveDerivationEngine` accepts PID-5 facets as input and modulates its output accordingly:
+
+| Classification | Fields |
+|---------------|--------|
+| **Displacement-independent** (3) | personality, personalityDominance, temporalFocus |
+| **Displacement-sensitive** (8+) | appraisalWeights, habituationConfig, recurringThoughtConfig, cbrStrategy, moodBaseline, curiosity, socialCognition, graphStructure, extractionBias, capacityConfig |
+
+The displacement-independent fields are only those derived from disposition profile terms (weighted Jungian functions) or goals alone. Everything else — including fields assumed to be "axes-only" like `cbrStrategy` — uses facets. For example, `deriveCbrStrategy` modulates `minSimilarity` via IMPULSIVITY and `decayDays` via RISK_TAKING.
+
+**Implication:** Situational personality displacement (transient facet shifts from stress/flow/social mode engagement) ripples through CBR retrieval parameters, graph inference style, extraction bias, mood baseline, and curiosity weights — not just the emotion-adjacent fields like appraisalWeights. The `restingFor()` / `forAgent()` split in `EffectiveCognitiveDefaults` is load-bearing for CBR similarity scoring: without it, the CBR engine would use situationally-distorted parameters for case matching.
