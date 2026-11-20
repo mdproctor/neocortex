@@ -174,6 +174,91 @@ class EdgeInferencePhaseTest {
     }
 
     @Test
+    void parseRelationships_standardJsonOrder() {
+        String json = """
+            {"relationships": [{"source": "Alice", "target": "Bob", "type": "collaborated-with", "confidence": "INFERRED"}]}""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().source()).isEqualTo("Alice");
+        assertThat(result.getFirst().target()).isEqualTo("Bob");
+        assertThat(result.getFirst().type()).isEqualTo("collaborated-with");
+        assertThat(result.getFirst().origin()).isEqualTo(ConfidenceOrigin.INFERRED);
+    }
+
+    @Test
+    void parseRelationships_differentKeyOrder_noMatch() {
+        String json = """
+            {"relationships": [{"type": "knows", "source": "Alice", "target": "Bob"}]}""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void parseRelationships_escapedQuotesInEntityName_noMatch() {
+        String json = """
+            {"relationships": [{"source": "O\\"Brien", "target": "Bob", "type": "knows"}]}""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void parseRelationships_emptyRelationshipsArray() {
+        String json = """
+            {"relationships": []}""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void parseRelationships_truncatedJson() {
+        String json = """
+            {"relationships": [{"source": "Alice", "targ""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void parseRelationships_multipleRelationships() {
+        String json = """
+            {"relationships": [
+                {"source": "Alice", "target": "Bob", "type": "collaborated-with", "confidence": "INFERRED"},
+                {"source": "Carol", "target": "Dave", "type": "taught-by", "confidence": "INFERRED"}
+            ]}""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).source()).isEqualTo("Alice");
+        assertThat(result.get(0).type()).isEqualTo("collaborated-with");
+        assertThat(result.get(1).source()).isEqualTo("Carol");
+        assertThat(result.get(1).type()).isEqualTo("taught-by");
+    }
+
+    @Test
+    void parseRelationships_mixedValidAndReordered_extractsOnlyValid() {
+        String json = """
+            {"relationships": [
+                {"source": "Alice", "target": "Bob", "type": "knows"},
+                {"type": "taught-by", "source": "Carol", "target": "Dave"}
+            ]}""";
+
+        List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().source()).isEqualTo("Alice");
+    }
+
+    @Test
     void skipsDuplicateEdgeOnPersist() {
         String sgId = mindMapStore.createSubgraph(
             new SubgraphInput(SubgraphTypes.PERSON, SubgraphTypes.PERSON, null), TENANT);
