@@ -4,15 +4,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -202,6 +197,57 @@ class EffectiveCognitiveDefaultsTest {
                 .filter(f -> f.facet().equals("Anxiousness")).findFirst().orElseThrow();
         assertThat(anxFacet.origin()).isEqualTo("situational [usual 0.50]");
     }
+
+    @Test
+    void fieldClassificationRestingVsEffective() {
+        var facets = List.of(
+                new PersonalityFacet(PersonalityFacet.ANXIOUSNESS, 0.3, "eidos"),
+                new PersonalityFacet(PersonalityFacet.EMOTIONAL_LABILITY, 0.3, "eidos"),
+                new PersonalityFacet(PersonalityFacet.RISK_TAKING, 0.7, "eidos"),
+                new PersonalityFacet(PersonalityFacet.SUSPICIOUSNESS, 0.3, "eidos"),
+                new PersonalityFacet(PersonalityFacet.IMPULSIVITY, 0.4, "eidos"),
+                new PersonalityFacet(PersonalityFacet.WITHDRAWAL, 0.2, "eidos"),
+                new PersonalityFacet(PersonalityFacet.INTIMACY_AVOIDANCE, 0.2, "eidos"));
+        var view = new DescriptorView("agent-1",
+                                      new DispositionAxes("cooperative", "moderate", "calculated", "moderate", "cooperative"),
+                                      List.of(new WeightedTerm("fe", 0.8), new WeightedTerm("si", 0.5)),
+                                      List.of("goal-a"), null, facets);
+        viewSource.add("t1", view);
+
+        var displacementMap = Map.of(
+                PersonalityFacet.ANXIOUSNESS, new PersonalityStateSnapshot.FacetDisplacement(0.0, 0.4),
+                PersonalityFacet.EMOTIONAL_LABILITY, new PersonalityStateSnapshot.FacetDisplacement(0.0, 0.3),
+                PersonalityFacet.RISK_TAKING, new PersonalityStateSnapshot.FacetDisplacement(0.0, -0.3));
+        var state = new PersonalityStateSnapshot(displacementMap, 1);
+        stateSource.set("t1", "agent-1", state);
+
+        var resting = effective.restingFor("t1", "agent-1");
+        var eff     = effective.forAgent("t1", "agent-1");
+
+        assertThat(resting.personality()).as("personality: profile-derived, displacement-independent")
+                                         .isEqualTo(eff.personality());
+        assertThat(resting.personalityDominance()).as("personalityDominance: profile-derived, displacement-independent")
+                                                  .isEqualTo(eff.personalityDominance());
+        assertThat(resting.temporalFocus()).as("temporalFocus: goals-derived, displacement-independent")
+                                           .isEqualTo(eff.temporalFocus());
+
+        assertThat(resting.appraisalWeights()).as("appraisalWeights: facet-derived, displacement-sensitive")
+                                              .isNotEqualTo(eff.appraisalWeights());
+        assertThat(resting.habituationConfig()).as("habituationConfig: facet-derived, displacement-sensitive")
+                                               .isNotEqualTo(eff.habituationConfig());
+        assertThat(resting.recurringThoughtConfig()).as("recurringThoughtConfig: facet-derived, displacement-sensitive")
+                                                    .isNotEqualTo(eff.recurringThoughtConfig());
+        assertThat(resting.cbrStrategy()).as("cbrStrategy: facet-modulated via IMPULSIVITY/RISK_TAKING, displacement-sensitive")
+                                         .isNotEqualTo(eff.cbrStrategy());
+
+        var restingFacets = resting.facets();
+        var effFacets = eff.descriptor().personalityFacets();
+        var restingAnx = restingFacets.stream().filter(f -> f.facet().equals(PersonalityFacet.ANXIOUSNESS)).findFirst().orElseThrow();
+        var effAnx = effFacets.stream().filter(f -> f.facet().equals(PersonalityFacet.ANXIOUSNESS)).findFirst().orElseThrow();
+        assertThat(effAnx.score()).as("effective facet score includes displacement")
+                                  .isGreaterThan(restingAnx.score());
+    }
+
 
     // --- Stubs ---
 
