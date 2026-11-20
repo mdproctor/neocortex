@@ -1,5 +1,6 @@
 package io.casehub.neocortex.cognition.eval.divergence;
 
+import io.casehub.neocortex.cognition.eval.CognitionTestHarness.CapsTrajectory;
 import org.junit.jupiter.api.Test;
 
 import static io.casehub.neocortex.cognition.eval.divergence.DivergenceFixtures.TENANT;
@@ -14,6 +15,46 @@ class ConsolidationDivergenceTest {
         harness.consolidate("open", TENANT);
         DivergenceFixtures.assertAttractorsDiverge(harness);
     }
+
+    @Test
+    void capsTrajectoryAccessorMapsFromSettlingResult() {
+        var store   = DivergenceFixtures.seededCognitiveStore();
+        var harness = DivergenceFixtures.fullBuilder(store).build();
+        harness.consolidate("open", TENANT);
+
+        var trajectory = harness.capsTrajectory("open", TENANT);
+        var settling   = harness.capsSettlingResult("open", TENANT);
+
+        assertThat(trajectory).as("capsTrajectory should be present when settling result exists").isPresent();
+        assertThat(settling).isPresent();
+
+        CapsTrajectory t = trajectory.get();
+        var s = settling.get();
+        assertThat(t.iterations()).isEqualTo(s.iterations());
+        assertThat(t.convergence()).isEqualTo(s.convergence());
+        assertThat(t.saturationRatio()).isEqualTo(s.saturationRatio());
+    }
+
+    @Test
+    void capsTrajectoryBothAgentsConverge() {
+        var store   = DivergenceFixtures.seededCognitiveStore();
+        var harness = DivergenceFixtures.fullBuilder(store).build();
+        harness.consolidate("open", TENANT);
+
+        var openTrajectory     = harness.capsTrajectory("open", TENANT);
+        var cautiousTrajectory = harness.capsTrajectory("cautious", TENANT);
+
+        assertThat(openTrajectory).as("open agent should have CAPS trajectory").isPresent();
+        assertThat(cautiousTrajectory).as("cautious agent should have CAPS trajectory").isPresent();
+
+        assertThat(openTrajectory.get().iterations()).as("open iterations").isGreaterThan(0);
+        assertThat(cautiousTrajectory.get().iterations()).as("cautious iterations").isGreaterThan(0);
+        assertThat(openTrajectory.get().convergence()).as("open convergence").isNotNull();
+        assertThat(cautiousTrajectory.get().convergence()).as("cautious convergence").isNotNull();
+        assertThat(openTrajectory.get().saturationRatio()).as("open saturation").isBetween(0.0, 1.0);
+        assertThat(cautiousTrajectory.get().saturationRatio()).as("cautious saturation").isBetween(0.0, 1.0);
+    }
+
 
     @Test
     void driveClassificationDiverges() {
