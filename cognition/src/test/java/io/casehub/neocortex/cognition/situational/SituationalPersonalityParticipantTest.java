@@ -198,6 +198,84 @@ class SituationalPersonalityParticipantTest {
     }
 
     @Test
+    void evictIdleRemovesStaleEntries() {
+        var mockClock = org.mockito.Mockito.mock(Clock.class);
+        org.mockito.Mockito.when(mockClock.instant()).thenReturn(NOW);
+        org.mockito.Mockito.when(mockClock.getZone()).thenReturn(ZoneId.of("UTC"));
+
+        var config = SituationalPersonalityConfig.withDefaults(buildModeConfigs());
+        var evictParticipant = new SituationalPersonalityParticipant(
+                stateService,
+                new SituationalDetector(config),
+                new PersonalityStateIntegrator(config.dynamics()),
+                config, effectiveDefaults, appraisalAccessor, moodAccessor,
+                new ArrayList<CognitiveEntry>()::add, mockClock);
+
+        appraisalAccessor.situationInputs = Map.of("threat-physical", 0.9);
+        appraisalAccessor.secDimensions = Map.of("relevance", 0.9, "conduciveness", 0.1);
+        moodAccessor.pleasure = -0.5;
+        moodAccessor.arousal = 0.6;
+        moodAccessor.dominance = -0.4;
+
+        evictParticipant.tick(new CognitionTickContext(AGENT, TENANT,
+                descriptorWithStressProfile(), (a, t) -> Set.of(),
+                "test observation", null, null, null, EventRef.tick(1)));
+        assertThat(evictParticipant.currentSnapshot(AGENT, TENANT)).isPresent();
+
+        org.mockito.Mockito.when(mockClock.instant()).thenReturn(NOW.plus(Duration.ofHours(2)));
+        int evicted = evictParticipant.evictIdle(Duration.ofHours(1));
+        assertThat(evicted).isEqualTo(1);
+        assertThat(evictParticipant.currentSnapshot(AGENT, TENANT)).isEmpty();
+    }
+
+    @Test
+    void evictIdleKeepsRecentEntries() {
+        appraisalAccessor.situationInputs = Map.of("threat-physical", 0.9);
+        appraisalAccessor.secDimensions = Map.of("relevance", 0.9, "conduciveness", 0.1);
+        moodAccessor.pleasure = -0.5;
+        moodAccessor.arousal = 0.6;
+        moodAccessor.dominance = -0.4;
+
+        var context = contextWith(descriptorWithStressProfile());
+        participant.tick(context);
+
+        int evicted = participant.evictIdle(Duration.ofHours(1));
+        assertThat(evicted).isZero();
+        assertThat(participant.currentSnapshot(AGENT, TENANT)).isPresent();
+    }
+
+    @Test
+    void trustAccessorSignalIncludedWhenTargetAgentPresent() {
+        appraisalAccessor.situationInputs = Map.of("threat-physical", 0.9, "threat-social", 0.8);
+        appraisalAccessor.secDimensions   = Map.of("relevance", 0.9, "conduciveness", 0.1);
+        moodAccessor.pleasure             = -0.5;
+        moodAccessor.arousal              = 0.6;
+        moodAccessor.dominance            = -0.4;
+
+        SituationalPersonalityParticipant.TrustAccessor trustAccessor =
+                (observer, target, tenant) -> 0.8;
+
+        var config = SituationalPersonalityConfig.withDefaults(buildModeConfigs());
+        var participantWithTrust = new SituationalPersonalityParticipant(
+                stateService,
+                new SituationalDetector(config),
+                new PersonalityStateIntegrator(config.dynamics()),
+                config, effectiveDefaults,
+                appraisalAccessor, moodAccessor, trustAccessor,
+                journalEntries::add, clock);
+
+        var descriptor = descriptorWithStressProfile();
+        var context = new CognitionTickContext(AGENT, TENANT, descriptor, (a, t) -> Set.of(),
+                                               "test observation", null, "other-agent", null, EventRef.tick(1));
+        participantWithTrust.tick(context);
+
+        var state = stateService.currentState(TENANT, AGENT);
+        assertThat(state).isNotNull();
+        assertThat(state.intensity(SituationalMode.STRESS)).isGreaterThan(0);
+    }
+
+
+    @Test
     void compositeDeltaScaledByPhaseSalience() {
         var personSgId = mindMapStore.createSubgraph(
                 new io.casehub.neocortex.mindmap.SubgraphInput(

@@ -150,4 +150,55 @@ class EidosCognitiveProfileBridgeTest {
         assertNotNull(derived.moodBaseline());
         assertNull(derived.graphStructure(), "empty disposition profile should produce null graph structure");
     }
+
+    @Test
+    void composeFacetsClampsNegativeToZero() {
+        var disposition = AgentDisposition.builder()
+                                          .socialOrient("cooperative")
+                                          .ruleFollowing("moderate")
+                                          .riskAppetite("moderate")
+                                          .autonomy("moderate")
+                                          .conflictMode("cooperative")
+                                          .ampdFacets(List.of(
+                                                  new io.casehub.eidos.api.AmpdFacet("Anxiousness", 20)))
+                                          .build();
+
+        var snapshot = new io.casehub.neocortex.cognitive.index.PersonalityStateSnapshot(
+                java.util.Map.of("Anxiousness",
+                                 new io.casehub.neocortex.cognitive.index.PersonalityStateSnapshot.FacetDisplacement(
+                                         -0.5, 0.0, 0.0)),
+                1L);
+
+        var composed = EidosCognitiveProfileBridge.composeFacets(disposition, snapshot);
+        var anxFacet = composed.ampdFacets().stream()
+                               .filter(f -> "Anxiousness".equals(f.facet()))
+                               .findFirst().orElseThrow();
+        assertEquals(0, anxFacet.score(), "score pushed below zero by homeOffset should clamp to 0");
+    }
+
+    @Test
+    void composeFacetsClampsAboveHundredToHundred() {
+        var disposition = AgentDisposition.builder()
+                                          .socialOrient("cooperative")
+                                          .ruleFollowing("moderate")
+                                          .riskAppetite("moderate")
+                                          .autonomy("moderate")
+                                          .conflictMode("cooperative")
+                                          .ampdFacets(List.of(
+                                                  new io.casehub.eidos.api.AmpdFacet("Anxiousness", 80)))
+                                          .build();
+
+        var snapshot = new io.casehub.neocortex.cognitive.index.PersonalityStateSnapshot(
+                java.util.Map.of("Anxiousness",
+                                 new io.casehub.neocortex.cognitive.index.PersonalityStateSnapshot.FacetDisplacement(
+                                         0.5, 0.0, 0.0)),
+                1L);
+
+        var composed = EidosCognitiveProfileBridge.composeFacets(disposition, snapshot);
+        var anxFacet = composed.ampdFacets().stream()
+                               .filter(f -> "Anxiousness".equals(f.facet()))
+                               .findFirst().orElseThrow();
+        assertEquals(100, anxFacet.score(), "score pushed above 100 by homeOffset should clamp to 100");
+    }
+
 }
