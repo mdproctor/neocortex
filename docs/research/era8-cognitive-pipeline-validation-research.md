@@ -79,7 +79,7 @@ cognition/src/test/java/.../eval/divergence/
   EmotionRegulationDivergenceTest.java — 4 tests (multi-tick)
 ```
 
-7 test classes. 36 new tests + 5 migrated = 41 total. Covers all 48 capabilities.
+6 test classes (after deleting PersonalityDifferentiationTest). 36 tests total (31 new + 5 migrated). All pass in <500ms, deterministic, no LLM.
 
 ### Epic and issues
 
@@ -126,33 +126,35 @@ Planned short-run scenarios:
 |-------|------------|------|
 | #1160 | CognitionTestHarness CAPS settling + behavioral attractor divergence | 2026-11-19 |
 | #1163 | EffectiveCognitiveDefaultsTest assertion fix (situational origin format) | 2026-11-19 |
+| #1172 | CognitionTestHarness trajectory accessor (CapsTrajectory record) | 2026-11-20 |
+| #1174 | InnerLifeOrchestratorTest NPE fix (unstubbed DriveProfile mock) | 2026-11-20 |
+| #1176 | DivergenceFixtures + DerivationDivergenceTest — 9 tests | 2026-11-20 |
+| #1177 | AppraisalDivergenceTest — 6 tests | 2026-11-20 |
+| #1178 | ConsolidationDivergenceTest — 5 tests | 2026-11-20 |
+| #1179 | PromptSectionDivergenceTest — 8 tests | 2026-11-20 |
+| #1180 | TheoryOfMindDivergenceTest — 4 tests | 2026-11-20 |
+| #1181 | EmotionRegulationDivergenceTest — 4 tests | 2026-11-20 |
+| #1182 | Delete PersonalityDifferentiationTest — migrated to divergence suite | 2026-11-20 |
 
 ### Blocked
 
 | Issue | Description | Blocker |
 |-------|------------|---------|
-| #1162 | MutationContext → ScopedValue migration | maven.compiler.release=21, needs 25+ (#1173) |
+| #1162 | MutationContext → ScopedValue migration | maven.compiler.release=21 (platform constraint, #1173 closed as not-planned) |
 
-### Open — divergence test suite
+### Closed (not planned)
 
-| Issue | Description | Priority | Status |
-|-------|------------|----------|--------|
-| #1176 | DivergenceFixtures + DerivationDivergenceTest | impl-first | queued |
-| #1177 | AppraisalDivergenceTest | P2 | queued |
-| #1178 | ConsolidationDivergenceTest | P2 | queued |
-| #1179 | PromptSectionDivergenceTest | P3 | queued |
-| #1180 | TheoryOfMindDivergenceTest | P1 (highest risk) | queued |
-| #1181 | EmotionRegulationDivergenceTest | P1 (highest risk) | queued |
-| #1182 | Delete PersonalityDifferentiationTest | cleanup | queued |
+| Issue | Description | Reason |
+|-------|------------|--------|
+| #1173 | Raise maven.compiler.release to 25+ | Must stay at 21 for Maven 4.0 alignment |
 
-### Open — supporting
+### Open — follow-up
 
 | Issue | Description | Status |
 |-------|------------|--------|
 | #1171 | CAPS settling trajectory assertions | queued |
-| #1172 | CognitionTestHarness trajectory accessor | queued |
-| #1173 | Raise maven.compiler.release to 25+ | queued |
-| #1174 | InnerLifeOrchestratorTest NPE | queued |
+| #1187 | Standalone TheoryOfMindBridge divergence tests | queued |
+| #1188 | Extend harness with lightweight appraisal for tick-level divergence | queued |
 
 ## Key Finding: The Tenant ID Trap
 
