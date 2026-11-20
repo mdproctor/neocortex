@@ -14,6 +14,9 @@ import io.casehub.platform.agent.AgentEvent;
 import io.casehub.platform.agent.AgentSession;
 import io.casehub.platform.agent.session.ParallelLlmExecutor;
 import io.casehub.platform.agent.session.SessionPipeline;
+import io.quarkus.arc.properties.IfBuildProperty;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
@@ -31,6 +34,10 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@ApplicationScoped
+@IfBuildProperty(name = "casehub.mindmap.consolidation.edge-inference.enabled",
+                 stringValue = "true", enableIfMissing = false)
+@Priority(22)
 public class EdgeInferencePhase implements ConsolidationPhase {
 
     private static final Logger LOG = Logger.getLogger(EdgeInferencePhase.class.getName());
