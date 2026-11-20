@@ -34,8 +34,8 @@ class InnerLifeOrchestratorTest {
     @BeforeEach
     void setUp() {
         reflectionOrchestrator = mock(ReflectionOrchestrator.class);
-        driveOrchestrator = mock(DriveOrchestrator.class);
-        descriptor = mock(AgentDescriptor.class);
+        driveOrchestrator      = mock(DriveOrchestrator.class);
+        descriptor             = mock(AgentDescriptor.class);
         when(descriptor.agentId()).thenReturn("agent-1");
         when(descriptor.tenancyId()).thenReturn("tenant-1");
         when(descriptor.name()).thenReturn("TestAgent");
@@ -43,8 +43,12 @@ class InnerLifeOrchestratorTest {
         var disposition = mock(AgentDisposition.class);
         when(disposition.dispositionProfile()).thenReturn(List.of());
         when(descriptor.disposition()).thenReturn(disposition);
+        var driveProfile = mock(DriveProfile.class);
+        when(driveProfile.agentId()).thenReturn("agent-1");
+        when(driveProfile.tenantId()).thenReturn("tenant-1");
+        when(driveProfile.drives()).thenReturn(java.util.Map.of());
         when(driveOrchestrator.currentDrives("agent-1", "tenant-1"))
-                .thenReturn(java.util.Optional.of(mock(DriveProfile.class)));
+                .thenReturn(java.util.Optional.of(driveProfile));
     }
 
     private InnerLifeOrchestrator makeOrchestrator(CivilityConstraint... constraints) {
