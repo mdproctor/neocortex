@@ -88,16 +88,34 @@ public final class DivergenceFixtures {
                 new io.casehub.neocortex.mindmap.SubgraphInput("Cognitive",
                                                                io.casehub.neocortex.mindmap.SubgraphTypes.COGNITIVE, null), TENANT);
 
-        for (String agentId : List.of("open", "cautious")) {
-            for (int i = 0; i < 5; i++) {
-                store.addNode(
-                        io.casehub.neocortex.mindmap.NodeInput.of("experience-" + agentId + "-" + i, cogSgId)
-                                                              .withProperties(java.util.Map.of(
-                                                                      "source-memory-id", "mem-" + agentId + "-" + i,
-                                                                      "agent-id", agentId,
-                                                                      "event-type", "observation")),
-                        TENANT);
-            }
+        var openNames = List.of(
+                "rewarded for mastery and achievement",
+                "praised for exploring new territory",
+                "triumph after independent success",
+                "earned recognition through competence",
+                "autonomous choice led to victory");
+        var cautiousNames = List.of(
+                "rejected and punished harshly",
+                "attacked without warning by stranger",
+                "betrayed by someone once trusted",
+                "controlled and powerless in situation",
+                "abandoned and left helpless alone");
+
+        for (int i = 0; i < 5; i++) {
+            store.addNode(
+                    io.casehub.neocortex.mindmap.NodeInput.of(openNames.get(i), cogSgId)
+                                                          .withProperties(java.util.Map.of(
+                                                                  "source-memory-id", "mem-open-" + i,
+                                                                  "agent-id", "open",
+                                                                  "event-type", "observation")),
+                    TENANT);
+            store.addNode(
+                    io.casehub.neocortex.mindmap.NodeInput.of(cautiousNames.get(i), cogSgId)
+                                                          .withProperties(java.util.Map.of(
+                                                                  "source-memory-id", "mem-cautious-" + i,
+                                                                  "agent-id", "cautious",
+                                                                  "event-type", "observation")),
+                    TENANT);
         }
 
         store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("drive-adventure-open", cogSgId)

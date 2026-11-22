@@ -254,6 +254,9 @@ public class CognitionTestHarness {
                        .map(r -> new CapsTrajectory(r.iterations(), r.convergence(), r.saturationRatio()));
     }
 
+    public io.casehub.neocortex.caps.CapsEngine capsEngine() {
+        return capsEngine;
+    }
 
     // --- Prompt rendering ---
 

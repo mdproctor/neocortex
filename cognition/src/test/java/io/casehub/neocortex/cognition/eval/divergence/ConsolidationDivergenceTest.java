@@ -130,6 +130,35 @@ class ConsolidationDivergenceTest {
     }
 
     @Test
+    void capsTrajectoryDiverges() {
+        var store   = DivergenceFixtures.seededCognitiveStore();
+        var harness = DivergenceFixtures.fullBuilder(store).build();
+        harness.consolidate("open", TENANT);
+
+        var capsEngine = harness.capsEngine();
+        assertThat(capsEngine).as("CapsEngine should be available").isNotNull();
+
+        var openState    = capsEngine.loadState(TENANT, "open");
+        var cautiousState = capsEngine.loadState(TENANT, "cautious");
+        assertThat(openState).as("open CAPS state should be initialized").isNotNull();
+        assertThat(cautiousState).as("cautious CAPS state should be initialized").isNotNull();
+
+        java.util.Map<String, Double> sharedInputs = java.util.Map.of(
+                "reward", 0.7,
+                "social_threat", 0.6,
+                "mastery", 0.5);
+
+        var openResult    = capsEngine.settle(openState, sharedInputs);
+        var cautiousResult = capsEngine.settle(cautiousState, sharedInputs);
+
+        assertThat(openResult.iterations())
+                .as("open and cautious should converge at different rates — "
+                    + "open=%d vs cautious=%d",
+                    openResult.iterations(), cautiousResult.iterations())
+                .isNotEqualTo(cautiousResult.iterations());
+    }
+
+    @Test
     void capsInputActivationsDiverge() {
         var store = DivergenceFixtures.seededCognitiveStore();
         var harness = DivergenceFixtures.fullBuilder(store)

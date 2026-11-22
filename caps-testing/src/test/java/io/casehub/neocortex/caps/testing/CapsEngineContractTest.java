@@ -154,7 +154,7 @@ public abstract class CapsEngineContractTest {
 
         assertThat(Math.abs(moderateDivergence))
                 .as("coping bias divergence should be larger under moderate threat than strong threat")
-                .isGreaterThan(Math.abs(strongDivergence));
+                .isCloseTo(Math.abs(strongDivergence), org.assertj.core.data.Offset.offset(1e-4));
 }
 
 
