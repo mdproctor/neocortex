@@ -274,6 +274,63 @@ class SituationalPersonalityParticipantTest {
         assertThat(state.intensity(SituationalMode.STRESS)).isGreaterThan(0);
     }
 
+    @Test
+    void trustAccessorProducesNumericEffectOnDetection() {
+        appraisalAccessor.situationInputs = Map.of("threat-physical", 0.9, "threat-social", 0.8);
+        appraisalAccessor.secDimensions   = Map.of("relevance", 0.9, "conduciveness", 0.1);
+        moodAccessor.pleasure             = -0.5;
+        moodAccessor.arousal              = 0.6;
+        moodAccessor.dominance            = -0.4;
+
+        var modesWithRelational = buildModeConfigsWithRelational();
+        var config = SituationalPersonalityConfig.withDefaults(modesWithRelational);
+
+        // --- without trust ---
+        var noTrustParticipant = new SituationalPersonalityParticipant(
+                stateService,
+                new SituationalDetector(config),
+                new PersonalityStateIntegrator(config.dynamics()),
+                config, effectiveDefaults, appraisalAccessor, moodAccessor,
+                journalEntries::add, clock);
+
+        noTrustParticipant.tick(new CognitionTickContext(
+                "agent-no-trust", TENANT, descriptorWithStressProfileForAgent("agent-no-trust"),
+                (a, t) -> Set.of(), "observation", null, null, null, EventRef.tick(1)));
+
+        double intensityWithout = stateService.currentState(TENANT, "agent-no-trust")
+                .intensity(SituationalMode.STRESS);
+        double displacementWithout = stateService.currentState(TENANT, "agent-no-trust")
+                .facet("Anxiousness").displacement();
+
+        // --- with trust ---
+        SituationalPersonalityParticipant.TrustAccessor trustAccessor =
+                (observer, target, tenant) -> 0.8;
+
+        var trustParticipant = new SituationalPersonalityParticipant(
+                stateService,
+                new SituationalDetector(config),
+                new PersonalityStateIntegrator(config.dynamics()),
+                config, effectiveDefaults,
+                appraisalAccessor, moodAccessor, trustAccessor,
+                journalEntries::add, clock);
+
+        trustParticipant.tick(new CognitionTickContext(
+                "agent-with-trust", TENANT, descriptorWithStressProfileForAgent("agent-with-trust"),
+                (a, t) -> Set.of(), "observation", null, "other-agent", null, EventRef.tick(1)));
+
+        double intensityWith = stateService.currentState(TENANT, "agent-with-trust")
+                .intensity(SituationalMode.STRESS);
+        double displacementWith = stateService.currentState(TENANT, "agent-with-trust")
+                .facet("Anxiousness").displacement();
+
+        assertThat(intensityWith)
+                .as("trust signal (R=0.8, betaR=0.25) amplifies detection: E *= 1.2")
+                .isGreaterThan(intensityWithout);
+        assertThat(displacementWith)
+                .as("higher intensity drives larger facet displacement")
+                .isGreaterThan(displacementWithout);
+    }
+
 
     @Test
     void compositeDeltaScaledByPhaseSalience() {
@@ -398,6 +455,27 @@ class SituationalPersonalityParticipantTest {
                                               );
         var stressMode = new ModeDetectionConfig(SituationalMode.Group.AFFECTIVE,
                                                  stressExo, stressEndo, null, 0.3, 0.1, Duration.ofMinutes(5));
+
+        return Map.of(SituationalMode.STRESS, stressMode);
+    }
+
+    private Map<SituationalMode, ModeDetectionConfig> buildModeConfigsWithRelational() {
+        var stressExo = List.<SignalConfig>of(
+                new SignalConfig.SituationInputSignal(
+                        List.of("threat-physical", "threat-social"),
+                        SignalConfig.Aggregation.MAX, 0.5),
+                new SignalConfig.MoodSignal("pleasure", SignalTransform.NEGATIVE_PART, 0.3),
+                new SignalConfig.MoodSignal("dominance", SignalTransform.NEGATIVE_PART, 0.2)
+        );
+        var stressEndo = List.<SignalConfig>of(
+                new SignalConfig.SecSignal(List.of(
+                        new SignalConfig.SecFactor("relevance", SignalTransform.IDENTITY),
+                        new SignalConfig.SecFactor("conduciveness", SignalTransform.COMPLEMENT)
+                ), 1.0)
+        );
+        var relational = new SignalConfig.RelationalConfig("trust", SignalTransform.IDENTITY);
+        var stressMode = new ModeDetectionConfig(SituationalMode.Group.AFFECTIVE,
+                stressExo, stressEndo, relational, 0.3, 0.1, Duration.ofMinutes(5));
 
         return Map.of(SituationalMode.STRESS, stressMode);
     }
