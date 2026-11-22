@@ -1,6 +1,7 @@
 package io.casehub.neocortex.mindmap.intelligence.consolidation;
 
 import io.casehub.neocortex.cognitive.ConfidenceOrigin;
+import io.casehub.neocortex.inference.DenseEmbedder;
 import io.casehub.neocortex.memory.CaseMemoryStore;
 import io.casehub.neocortex.memory.Memory;
 import io.casehub.neocortex.memory.MemoryScanRequest;
@@ -61,27 +62,44 @@ public class EdgeInferencePhase implements ConsolidationPhase {
 
     final MindMapStore mindMapStore;
     final CaseMemoryStore memoryStore;
+    final DenseEmbedder denseEmbedder;
     final int degreeThreshold;
     final int maxCandidates;
+    final boolean embeddingEnabled;
+    final double embeddingSimilarityThreshold;
     private volatile SessionPipeline sessionPipeline;
 
     @Inject
     public EdgeInferencePhase(MindMapStore mindMapStore,
                               Instance<CaseMemoryStore> memoryStoreInstance,
+                              Instance<DenseEmbedder> denseEmbedderInstance,
                               Instance<EdgeInferenceConfig> configInstance) {
         this.mindMapStore = mindMapStore;
         this.memoryStore = memoryStoreInstance.isResolvable() ? memoryStoreInstance.get() : null;
+        this.denseEmbedder = denseEmbedderInstance.isResolvable() ? denseEmbedderInstance.get() : null;
         EdgeInferenceConfig c = configInstance.isResolvable() ? configInstance.get() : null;
         this.degreeThreshold = c != null ? c.degreeThreshold() : 1;
         this.maxCandidates = c != null ? c.maxCandidates() : 30;
+        this.embeddingEnabled = c != null && c.embeddingCandidatesEnabled();
+        this.embeddingSimilarityThreshold = c != null ? c.embeddingSimilarityThreshold() : 0.7;
     }
 
     EdgeInferencePhase(MindMapStore mindMapStore, CaseMemoryStore memoryStore,
                        int degreeThreshold, int maxCandidates) {
+        this(mindMapStore, memoryStore, degreeThreshold, maxCandidates, null, false, 0.7);
+    }
+
+    EdgeInferencePhase(MindMapStore mindMapStore, CaseMemoryStore memoryStore,
+                       int degreeThreshold, int maxCandidates,
+                       DenseEmbedder denseEmbedder, boolean embeddingEnabled,
+                       double embeddingSimilarityThreshold) {
         this.mindMapStore = mindMapStore;
         this.memoryStore = memoryStore;
+        this.denseEmbedder = denseEmbedder;
         this.degreeThreshold = degreeThreshold;
         this.maxCandidates = maxCandidates;
+        this.embeddingEnabled = embeddingEnabled;
+        this.embeddingSimilarityThreshold = embeddingSimilarityThreshold;
     }
 
     @Override
@@ -104,10 +122,28 @@ public class EdgeInferencePhase implements ConsolidationPhase {
         List<MindMapNode> underConnected = findUnderConnectedNodes(tenantId);
         if (underConnected.isEmpty()) return;
 
-        List<CandidatePair> candidates = buildCandidates(underConnected, tenantId);
+        List<CandidatePair> coOccurrenceCandidates = buildCandidates(underConnected, tenantId);
+
+        Set<String> existingPairKeys = new HashSet<>();
+        for (CandidatePair cp : coOccurrenceCandidates) {
+            existingPairKeys.add(pairKey(cp.nodeIdA(), cp.nodeIdB()));
+        }
+
+        int remaining = maxCandidates - coOccurrenceCandidates.size();
+        List<CandidatePair> embeddingCandidates = remaining > 0
+            ? buildEmbeddingCandidates(underConnected, existingPairKeys, tenantId)
+            : List.of();
+
+        List<CandidatePair> candidates = new ArrayList<>(coOccurrenceCandidates);
+        if (!embeddingCandidates.isEmpty()) {
+            candidates.addAll(embeddingCandidates.subList(0, Math.min(remaining, embeddingCandidates.size())));
+        }
+
         if (candidates.isEmpty()) return;
 
-        LOG.info("Edge inference: " + candidates.size() + " candidate pairs from "
+        LOG.info("Edge inference: " + candidates.size() + " candidate pairs ("
+                 + coOccurrenceCandidates.size() + " co-occurrence, "
+                 + (candidates.size() - coOccurrenceCandidates.size()) + " embedding) from "
                  + underConnected.size() + " under-connected nodes");
 
         List<ParsedRelationship> inferred = invokeEdgeInference(candidates);
@@ -198,6 +234,66 @@ public class EdgeInferencePhase implements ConsolidationPhase {
 
         candidates.sort(Comparator.comparingInt(CandidatePair::coOccurrenceCount).reversed());
         return candidates.subList(0, Math.min(maxCandidates, candidates.size()));
+    }
+
+    List<CandidatePair> buildEmbeddingCandidates(List<MindMapNode> underConnected,
+                                                   Set<String> existingPairKeys,
+                                                   String tenantId) {
+        if (denseEmbedder == null || !embeddingEnabled || underConnected.size() < 2) {
+            return List.of();
+        }
+
+        List<String> texts = new ArrayList<>(underConnected.size());
+        for (MindMapNode node : underConnected) {
+            texts.add(buildNodeText(node));
+        }
+        List<float[]> embeddings = denseEmbedder.embedBatch(texts);
+
+        record Scored(String idA, String nameA, String idB, String nameB, double similarity) {}
+        List<Scored> scored = new ArrayList<>();
+
+        for (int i = 0; i < underConnected.size(); i++) {
+            for (int j = i + 1; j < underConnected.size(); j++) {
+                MindMapNode a = underConnected.get(i);
+                MindMapNode b = underConnected.get(j);
+
+                if (existingPairKeys.contains(pairKey(a.id(), b.id()))) continue;
+
+                boolean hasEdge = mindMapStore.neighbors(a.id(), tenantId).stream()
+                    .anyMatch(e -> e.targetNodeId().equals(b.id()) || e.sourceNodeId().equals(b.id()));
+                if (hasEdge) continue;
+
+                double similarity = TextSimilarityCorroborator.cosineSimilarity(
+                    embeddings.get(i), embeddings.get(j));
+                if (similarity >= embeddingSimilarityThreshold) {
+                    scored.add(new Scored(a.id(), a.name(), b.id(), b.name(), similarity));
+                }
+            }
+        }
+
+        scored.sort((x, y) -> Double.compare(y.similarity(), x.similarity()));
+
+        return scored.stream()
+            .map(s -> new CandidatePair(s.idA(), s.nameA(), s.idB(), s.nameB(), 0,
+                List.of(String.format("Semantic similarity: %.2f", s.similarity()))))
+            .toList();
+    }
+
+    static String buildNodeText(MindMapNode node) {
+        var sb = new StringBuilder(node.name());
+        for (String trait : node.traits()) {
+            sb.append(' ').append(trait);
+        }
+        for (var entry : node.properties().entrySet()) {
+            if (entry.getValue() != null) {
+                sb.append(' ').append(entry.getValue());
+            }
+        }
+        return sb.toString();
+    }
+
+    static String pairKey(String idA, String idB) {
+        return idA.compareTo(idB) < 0 ? idA + "|" + idB : idB + "|" + idA;
     }
 
     List<ParsedRelationship> invokeEdgeInference(List<CandidatePair> candidates) {

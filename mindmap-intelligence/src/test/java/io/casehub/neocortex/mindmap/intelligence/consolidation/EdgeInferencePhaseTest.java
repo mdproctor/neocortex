@@ -1,6 +1,7 @@
 package io.casehub.neocortex.mindmap.intelligence.consolidation;
 
 import io.casehub.neocortex.cognitive.ConfidenceOrigin;
+import io.casehub.neocortex.inference.DenseEmbedder;
 import io.casehub.neocortex.memory.CaseMemoryStore;
 import io.casehub.neocortex.memory.MemoryDomain;
 import io.casehub.neocortex.memory.MemoryInput;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -258,6 +260,145 @@ class EdgeInferencePhaseTest {
         assertThat(result.getFirst().source()).isEqualTo("Alice");
     }
 
+    private EdgeInferencePhase embeddingPhase(int degreeThreshold, int maxCandidates,
+                                               DenseEmbedder embedder, double threshold) {
+        return new EdgeInferencePhase(mindMapStore, memoryStore,
+            degreeThreshold, maxCandidates, embedder, true, threshold);
+    }
+
+    @Test
+    void buildEmbeddingCandidates_findsSimilarNodes() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Cubism", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Surrealism", new float[]{0.95f, 0.1f, 0.0f, 0.0f}));
+        var phase = embeddingPhase(1, 30, embedder, 0.7);
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Cubism", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Surrealism", sgId), TENANT);
+
+        List<MindMapNode> underConnected = phase.findUnderConnectedNodes(TENANT);
+        List<EdgeInferencePhase.CandidatePair> candidates =
+            phase.buildEmbeddingCandidates(underConnected, Set.of(), TENANT);
+
+        assertThat(candidates).hasSize(1);
+        assertThat(candidates.getFirst().coOccurrenceCount()).isZero();
+        assertThat(candidates.getFirst().sharedContexts().getFirst()).startsWith("Semantic similarity:");
+    }
+
+    @Test
+    void buildEmbeddingCandidates_excludesExistingEdges() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Cubism", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Surrealism", new float[]{0.95f, 0.1f, 0.0f, 0.0f}));
+        var phase = embeddingPhase(1, 30, embedder, 0.7);
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        String cubismId = mindMapStore.addNode(NodeInput.of("Cubism", sgId), TENANT);
+        String surrealismId = mindMapStore.addNode(NodeInput.of("Surrealism", sgId), TENANT);
+        mindMapStore.addEdge(EdgeInput.of(cubismId, surrealismId, "influenced-by"), TENANT);
+
+        List<MindMapNode> underConnected = phase.findUnderConnectedNodes(TENANT);
+        List<EdgeInferencePhase.CandidatePair> candidates =
+            phase.buildEmbeddingCandidates(underConnected, Set.of(), TENANT);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void buildEmbeddingCandidates_excludesCoOccurrencePairs() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Cubism", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Surrealism", new float[]{0.95f, 0.1f, 0.0f, 0.0f}));
+        var phase = embeddingPhase(1, 30, embedder, 0.7);
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        String cubismId = mindMapStore.addNode(NodeInput.of("Cubism", sgId), TENANT);
+        String surrealismId = mindMapStore.addNode(NodeInput.of("Surrealism", sgId), TENANT);
+
+        Set<String> existingPairs = Set.of(EdgeInferencePhase.pairKey(cubismId, surrealismId));
+        List<MindMapNode> underConnected = phase.findUnderConnectedNodes(TENANT);
+        List<EdgeInferencePhase.CandidatePair> candidates =
+            phase.buildEmbeddingCandidates(underConnected, existingPairs, TENANT);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void buildEmbeddingCandidates_belowThreshold_excluded() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Cubism", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Astronomy", new float[]{0.0f, 1.0f, 0.0f, 0.0f}));
+        var phase = embeddingPhase(1, 30, embedder, 0.7);
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Cubism", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Astronomy", sgId), TENANT);
+
+        List<MindMapNode> underConnected = phase.findUnderConnectedNodes(TENANT);
+        List<EdgeInferencePhase.CandidatePair> candidates =
+            phase.buildEmbeddingCandidates(underConnected, Set.of(), TENANT);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void buildEmbeddingCandidates_noEmbedder_returnsEmpty() {
+        var phase = embeddingPhase(1, 30, null, 0.7);
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Cubism", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Surrealism", sgId), TENANT);
+
+        List<MindMapNode> underConnected = phase.findUnderConnectedNodes(TENANT);
+        List<EdgeInferencePhase.CandidatePair> candidates =
+            phase.buildEmbeddingCandidates(underConnected, Set.of(), TENANT);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void buildEmbeddingCandidates_disabled_returnsEmpty() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Cubism", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Surrealism", new float[]{0.95f, 0.1f, 0.0f, 0.0f}));
+        var phase = new EdgeInferencePhase(mindMapStore, memoryStore,
+            1, 30, embedder, false, 0.7);
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Cubism", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Surrealism", sgId), TENANT);
+
+        List<MindMapNode> underConnected = phase.findUnderConnectedNodes(TENANT);
+        List<EdgeInferencePhase.CandidatePair> candidates =
+            phase.buildEmbeddingCandidates(underConnected, Set.of(), TENANT);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void buildNodeText_includesNameTraitsAndProperties() {
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        mindMapStore.addNode(
+            new NodeInput("Cubism", sgId, null, null,
+                Set.of("ArtMovement"), Set.of(), null, null, null, null, null,
+                Map.of("era", "20th century")), TENANT);
+
+        MindMapNode node = mindMapStore.resolveNode("Cubism", null, TENANT);
+        String text = EdgeInferencePhase.buildNodeText(node);
+
+        assertThat(text).contains("Cubism");
+        assertThat(text).contains("ArtMovement");
+        assertThat(text).contains("20th century");
+    }
+
     @Test
     void skipsDuplicateEdgeOnPersist() {
         String sgId = mindMapStore.createSubgraph(
@@ -304,5 +445,26 @@ class EdgeInferencePhaseTest {
                 persistEdges(inferred, tenantId);
             }
         }
+    }
+
+    static class StubDenseEmbedder implements DenseEmbedder {
+        private final Map<String, float[]> vectors;
+
+        StubDenseEmbedder(Map<String, float[]> vectors) {
+            this.vectors = new HashMap<>(vectors);
+        }
+
+        @Override
+        public float[] embed(String text) {
+            for (var entry : vectors.entrySet()) {
+                if (text.startsWith(entry.getKey())) {
+                    return entry.getValue();
+                }
+            }
+            return new float[]{0, 0, 0, 0};
+        }
+
+        @Override
+        public int dimension() { return 4; }
     }
 }

@@ -10,4 +10,10 @@ public interface EdgeInferenceConfig {
 
     @WithDefault("30")
     int maxCandidates();
+
+    @WithDefault("false")
+    boolean embeddingCandidatesEnabled();
+
+    @WithDefault("0.7")
+    double embeddingSimilarityThreshold();
 }

@@ -236,3 +236,36 @@ The evictIdle work (#1183) exposed that the 8 orchestrators don't agree on Concu
 | `tenancyId:agentId` | InnerLifeOrchestrator |
 
 No functional bug — each class's evictIdle uses the same key format as its tick method. But a generic eviction helper would need per-class key translation.
+
+## Key Finding: EdgeInferencePhase Regex Fragility
+
+Issue #1190 added edge-case tests for `EdgeInferencePhase.parseRelationships()`, exposing known limitations of the regex-based JSON parsing approach.
+
+The `RELATIONSHIP_PATTERN` regex assumes fixed key ordering (`source → target → type`). Seven edge-case tests now document this:
+
+| Scenario | Result |
+|----------|--------|
+| Standard key order | ✅ Matches |
+| Reordered keys (type before source) | ❌ No match — silent data loss |
+| Escaped quotes in entity names | ❌ No match — `[^"]+` can't handle `\"` |
+| Empty relationships array | ✅ Returns empty list |
+| Truncated JSON | ✅ Returns empty list |
+| Multiple relationships | ✅ Extracts all |
+| Mixed valid/reordered | ✅ Extracts only valid entries |
+
+**Risk:** The system prompt instructs the LLM to produce `source, target, type` order, so the regex works in practice. But LLM output is non-deterministic — a reordered response would silently produce zero edges with no error or warning. The regex approach is a known fragility point; a JSON parser would eliminate all three failure modes (key order, escaped quotes, structural robustness).
+
+## Finding: Embedding-Based Candidate Identification
+
+Issue #1191 extended `EdgeInferencePhase` with an optional second candidate identification layer using `DenseEmbedder` cosine similarity.
+
+**Problem addressed:** The co-occurrence approach only discovers entity pairs that appear together in the same experience memory. Conceptually related entities from separate contexts (e.g., two art movements discussed in different passages) are invisible to co-occurrence.
+
+**Approach:** After co-occurrence candidates are built, remaining `maxCandidates` slots are filled by embedding-based candidates: each under-connected node's text representation (name + traits + property values) is embedded via `DenseEmbedder.embedBatch()`, pairwise cosine similarity is computed, and pairs above the configurable threshold (default 0.7) are added.
+
+**Design decisions:**
+- Co-occurrence takes priority (stronger signal from shared context)
+- Embedding fills remaining capacity, not a separate allocation
+- Config-gated: `embeddingCandidatesEnabled=false` by default (requires DenseEmbedder on classpath)
+- Node text uses in-graph data only (name + traits + properties) — no additional store queries
+- Follows ExperienceConsolidationPhase's `Instance<DenseEmbedder>` graceful degradation pattern
