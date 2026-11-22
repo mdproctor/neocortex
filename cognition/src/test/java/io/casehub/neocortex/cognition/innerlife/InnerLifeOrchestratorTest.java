@@ -345,5 +345,21 @@ class InnerLifeOrchestratorTest {
         // Should not throw
     }
 
+    @Test
+    void evictIdleRemovesStaleEntries() {
+        var orch = makeOrchestrator();
+
+        orch.observe(event("test observation"), descriptor);
+        orch.tick(descriptor, "context");
+
+        orch.evictIdle(java.time.Duration.ZERO);
+
+        // After eviction, reportDropped sees no state and does not throw
+        orch.reportDropped("agent-1", "tenant-1", java.time.Instant.now());
+
+        // After eviction, a fresh tick produces Silent (empty event buffer)
+        var result = orch.tick(descriptor, "context");
+        assertThat(result).isInstanceOf(InnerLifeTick.Silent.class);
+    }
 
 }

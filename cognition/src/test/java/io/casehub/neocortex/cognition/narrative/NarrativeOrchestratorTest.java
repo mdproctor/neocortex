@@ -159,4 +159,17 @@ class NarrativeOrchestratorTest {
         }
         assertThat(errors.get()).isZero();
     }
+
+    @Test
+    void evictIdleRemovesStaleEntries() {
+        var state = stateWith("agent-1", T1, List.of(episode("e1")));
+        when(store.load("agent-1", "tenant-1")).thenReturn(state);
+
+        orchestrator.tick("agent-1", "tenant-1");
+        assertThat(orchestrator.currentNarrative("agent-1", "tenant-1")).isPresent();
+
+        orchestrator.evictIdle(java.time.Duration.ZERO);
+
+        assertThat(orchestrator.currentNarrative("agent-1", "tenant-1")).isEmpty();
+    }
 }

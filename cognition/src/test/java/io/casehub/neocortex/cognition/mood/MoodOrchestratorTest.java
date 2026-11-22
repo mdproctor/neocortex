@@ -206,4 +206,16 @@ class MoodOrchestratorTest {
                 new MoodBaseline(0, 0, 0), Duration.ofHours(4), 1.0, -0.1, Duration.ofHours(24)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test void evictIdleRemovesStaleEntries() {
+        orchestrator.record(
+                new MoodSignal.InteractionAppraisal(0.3, 0.1, 0.0, "test"),
+                "agent-1", "tenant-1");
+        orchestrator.tick("agent-1", "tenant-1");
+        assertThat(orchestrator.currentMood("agent-1", "tenant-1")).isPresent();
+
+        orchestrator.evictIdle(Duration.ZERO);
+
+        assertThat(orchestrator.currentMood("agent-1", "tenant-1")).isEmpty();
+    }
 }

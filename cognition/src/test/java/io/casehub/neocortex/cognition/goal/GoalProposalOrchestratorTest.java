@@ -600,4 +600,18 @@ class GoalProposalOrchestratorTest {
         assertThat(changes.priorityAdjustments().get(0).newPriority()).isEqualTo(GoalPriority.SECONDARY);
         assertThat(changes.priorityAdjustments().get(0).reason()).contains("procrastination");
     }
+
+    @Test
+    void evictIdleRemovesStaleEntries() {
+        var goal = new DriveGoalProposal(DriveAxis.CURIOSITY, "test-goal", "desc", "reason", 0.5);
+        orchestrator.registerGoals("a1", "t1", List.of(goal));
+        setupDrives("a1", "t1", DriveAxis.CURIOSITY, 0.5);
+        orchestrator.tick("a1", "t1", descriptorWithGoals());
+
+        assertThat(orchestrator.registeredGoals("a1", "t1")).isNotEmpty();
+
+        orchestrator.evictIdle(Duration.ZERO);
+
+        assertThat(orchestrator.registeredGoals("a1", "t1")).isEmpty();
+    }
 }

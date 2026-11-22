@@ -235,4 +235,21 @@ class GutFeelingParticipantTest {
         assertThat(result).isPresent();
         assertThat(result.get().valence()).isEqualTo(GutValence.APPROACH);
     }
+
+    @Test
+    void evictIdleRemovesStaleEntries() {
+        var store = createStore();
+        store.store(MemoryInput.of(Subject.of("agent", "a1"), ExperienceEvents.DOMAIN, "t1",
+                "Authority figure criticized harshly").withPad(-0.7, 0.6, -0.3));
+
+        var participant = new GutFeelingParticipant(store, null);
+        var ctx = new CognitionTickContext("a1", "t1", null, (a, t) -> Set.of(), "authority");
+        participant.tick(ctx);
+
+        assertThat(participant.currentResult("a1", "t1")).isPresent();
+
+        participant.evictIdle(java.time.Duration.ZERO);
+
+        assertThat(participant.currentResult("a1", "t1")).isEmpty();
+    }
 }

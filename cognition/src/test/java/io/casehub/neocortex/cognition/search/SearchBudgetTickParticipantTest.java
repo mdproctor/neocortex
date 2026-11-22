@@ -584,6 +584,17 @@ class SearchBudgetTickParticipantTest {
     }
 
     @Test
+    void evictIdleRemovesStaleEntries() {
+        var participant = withDrive(DriveAxis.CURIOSITY, 0.8);
+        participant.tick(context());
+        assertTrue(participant.currentBudget(AGENT, TENANT).isPresent());
+
+        participant.evictIdle(java.time.Duration.ZERO);
+
+        assertTrue(participant.currentBudget(AGENT, TENANT).isEmpty());
+    }
+
+    @Test
     void convergence_never_capped_by_capacity() {
         var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.1, 0.1, 0.1);
         var participant = withDriveAndCapacity(DriveAxis.COMPETENCE, 0.8, capacity);
