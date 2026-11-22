@@ -110,21 +110,21 @@ public class GoalProposalOrchestrator {
     }
 
     public GoalProposalTick tick(String agentId, String tenantId, AgentDescriptor descriptor) {
-        String key = agentId + "|" + tenantId;
+        String key = agentId + ":" + tenantId;
         lastTickTimes.put(key, java.time.Instant.now());
         return withLock(key, () -> doTick(agentId, tenantId, descriptor, key));
     }
 
     public void registerGoals(String agentId, String tenantId,
                                List<DriveGoalProposal> goals) {
-        String key = agentId + "|" + tenantId;
+        String key = agentId + ":" + tenantId;
         GoalProposalState state = states.computeIfAbsent(key, k -> new GoalProposalState());
         state.registeredGoals = List.copyOf(goals);
     }
 
     public void appendGoals(String agentId, String tenantId,
                             List<DriveGoalProposal> goals) {
-        String            key    = agentId + "|" + tenantId;
+        String            key    = agentId + ":" + tenantId;
         GoalProposalState state  = states.computeIfAbsent(key, k -> new GoalProposalState());
         var               merged = new java.util.ArrayList<>(state.registeredGoals);
         merged.addAll(goals);
@@ -132,14 +132,14 @@ public class GoalProposalOrchestrator {
     }
 
     public void requestAbandonment(String agentId, String tenantId, String goalName, String reason) {
-        String            key   = agentId + "|" + tenantId;
+        String            key   = agentId + ":" + tenantId;
         GoalProposalState state = states.computeIfAbsent(key, k -> new GoalProposalState());
         state.requestedAbandonments.add(new RequestedAbandonment(goalName, reason));
     }
 
     public void requestDemotion(String agentId, String tenantId, String goalName,
                                 GoalPriority priority, String reason) {
-        String            key   = agentId + "|" + tenantId;
+        String            key   = agentId + ":" + tenantId;
         GoalProposalState state = states.computeIfAbsent(key, k -> new GoalProposalState());
         state.requestedDemotions.add(new PriorityAdjustment(goalName, priority, reason));
     }
@@ -147,19 +147,19 @@ public class GoalProposalOrchestrator {
 
     public void registerParticipantGoals(String participantId, String agentId,
                                          String tenantId, List<DriveGoalProposal> goals) {
-        String            key   = agentId + "|" + tenantId;
+        String            key   = agentId + ":" + tenantId;
         GoalProposalState state = states.computeIfAbsent(key, k -> new GoalProposalState());
         state.namespacedGoals.put(participantId, List.copyOf(goals));
     }
 
 
     public List<DriveGoalProposal> registeredGoals(String agentId, String tenantId) {
-        GoalProposalState state = states.get(agentId + "|" + tenantId);
+        GoalProposalState state = states.get(agentId + ":" + tenantId);
         return state == null ? List.of() : List.copyOf(state.registeredGoals);
     }
 
     public Optional<List<DriveGoalProposal>> currentProposals(String agentId, String tenantId) {
-        GoalProposalState state = states.get(agentId + "|" + tenantId);
+        GoalProposalState state = states.get(agentId + ":" + tenantId);
         if (state == null) {return Optional.empty();}
         var merged = new ArrayList<DriveGoalProposal>();
         merged.addAll(state.registeredGoals);

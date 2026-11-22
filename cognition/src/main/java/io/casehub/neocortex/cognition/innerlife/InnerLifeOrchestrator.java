@@ -88,7 +88,7 @@ public class InnerLifeOrchestrator {
     }
 
     public void reportDropped(String agentId, String tenantId, Instant userActivityAt) {
-        var key   = tenantId + ":" + agentId;
+        var key   = agentId + ":" + tenantId;
         var state = agentStates.get(key);
         if (state == null) {
             LOG.log(Level.FINE, "reportDropped: no state for {0}", key);
@@ -398,7 +398,7 @@ public class InnerLifeOrchestrator {
     }
 
     private static String agentKey(AgentDescriptor descriptor) {
-        return descriptor.tenancyId() + ":" + descriptor.agentId();
+        return descriptor.agentId() + ":" + descriptor.tenancyId();
     }
 
     private static final class AgentState {
