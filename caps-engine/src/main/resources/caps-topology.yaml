@@ -1690,6 +1690,46 @@ connections:
     source: "Gross 1998: suppression IS response modulation"
     tags: []
 
+  # Feedback loops — output→mediating recurrence for personality-dependent
+  # convergence dynamics (#1192)
+  # Source: Mischel & Shoda 1995, Gray 1982, Bandura 1997, Bowlby 1988, Beck 1976
+  - from: approach
+    to: self_efficacy
+    weight: 0.15
+    provenance: consensus
+    source: "Bandura 1997: approach behavior reinforces perceived capability"
+    tags: [BAS_connections]
+  - from: withdraw
+    to: self_worth
+    weight: -0.15
+    provenance: consensus
+    source: "Beck 1976: avoidance erodes self-evaluation"
+    tags: [BIS_connections]
+  - from: trust
+    to: other_reliability
+    weight: 0.10
+    provenance: consensus
+    source: "Bowlby 1988: trusting action reinforces internal working model"
+    tags: [social_input]
+  - from: distrust
+    to: other_reliability
+    weight: -0.10
+    provenance: consensus
+    source: "Bowlby 1988: distrust degrades perceived reliability"
+    tags: [social_input]
+  - from: BAS_activation
+    to: reinforcement_expectation
+    weight: 0.15
+    provenance: consensus
+    source: "Gray 1982: BAS amplification loop"
+    tags: [BAS_connections]
+  - from: persist
+    to: self_efficacy
+    weight: 0.15
+    provenance: consensus
+    source: "Bandura 1997: persistence reinforces self-efficacy"
+    tags: [BAS_connections]
+
 # Disposition modulation — how DispositionAxes scale connection weights
 disposition_modifiers:
   socialOrient:
