@@ -190,23 +190,28 @@ class EdgeInferencePhaseTest {
     }
 
     @Test
-    void parseRelationships_differentKeyOrder_noMatch() {
+    void parseRelationships_differentKeyOrder_matches() {
         String json = """
             {"relationships": [{"type": "knows", "source": "Alice", "target": "Bob"}]}""";
 
         List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
 
-        assertThat(result).isEmpty();
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().source()).isEqualTo("Alice");
+        assertThat(result.getFirst().target()).isEqualTo("Bob");
+        assertThat(result.getFirst().type()).isEqualTo("knows");
     }
 
     @Test
-    void parseRelationships_escapedQuotesInEntityName_noMatch() {
+    void parseRelationships_escapedQuotesInEntityName_handled() {
         String json = """
             {"relationships": [{"source": "O\\"Brien", "target": "Bob", "type": "knows"}]}""";
 
         List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
 
-        assertThat(result).isEmpty();
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().source()).isEqualTo("O\"Brien");
+        assertThat(result.getFirst().target()).isEqualTo("Bob");
     }
 
     @Test
@@ -247,7 +252,7 @@ class EdgeInferencePhaseTest {
     }
 
     @Test
-    void parseRelationships_mixedValidAndReordered_extractsOnlyValid() {
+    void parseRelationships_mixedKeyOrders_extractsBoth() {
         String json = """
             {"relationships": [
                 {"source": "Alice", "target": "Bob", "type": "knows"},
@@ -256,8 +261,11 @@ class EdgeInferencePhaseTest {
 
         List<ParsedRelationship> result = EdgeInferencePhase.parseRelationships(json);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().source()).isEqualTo("Alice");
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).source()).isEqualTo("Alice");
+        assertThat(result.get(0).type()).isEqualTo("knows");
+        assertThat(result.get(1).source()).isEqualTo("Carol");
+        assertThat(result.get(1).type()).isEqualTo("taught-by");
     }
 
     @Test

@@ -32,8 +32,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ApplicationScoped
 @IfBuildProperty(name = "casehub.mindmap.consolidation.edge-inference.enabled",
@@ -42,8 +42,7 @@ import java.util.regex.Pattern;
 public class EdgeInferencePhase implements ConsolidationPhase {
 
     private static final Logger LOG = Logger.getLogger(EdgeInferencePhase.class.getName());
-    private static final Pattern RELATIONSHIP_PATTERN = Pattern.compile(
-        "\"source\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"target\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"type\"\\s*:\\s*\"([^\"]+)\"");
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     static final String SYSTEM_PROMPT = """
         You are a knowledge graph edge inference agent. Given pairs of entities \
@@ -328,13 +327,25 @@ public class EdgeInferencePhase implements ConsolidationPhase {
     }
 
     static List<ParsedRelationship> parseRelationships(String json) {
-        List<ParsedRelationship> result = new ArrayList<>();
-        Matcher matcher = RELATIONSHIP_PATTERN.matcher(json);
-        while (matcher.find()) {
-            result.add(new ParsedRelationship(
-                matcher.group(1), matcher.group(2), matcher.group(3), ConfidenceOrigin.INFERRED));
+        try {
+            JsonNode tree = JSON.readTree(json);
+            JsonNode relationships = tree.get("relationships");
+            if (relationships == null || !relationships.isArray()) return List.of();
+
+            List<ParsedRelationship> result = new ArrayList<>();
+            for (JsonNode node : relationships) {
+                JsonNode srcNode = node.get("source");
+                JsonNode tgtNode = node.get("target");
+                JsonNode typeNode = node.get("type");
+                if (srcNode == null || tgtNode == null || typeNode == null) continue;
+                result.add(new ParsedRelationship(
+                    srcNode.asText(), tgtNode.asText(), typeNode.asText(), ConfidenceOrigin.INFERRED));
+            }
+            return result;
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Failed to parse edge inference response as JSON", e);
+            return List.of();
         }
-        return result;
     }
 
     private String buildUserPrompt(List<CandidatePair> candidates) {
