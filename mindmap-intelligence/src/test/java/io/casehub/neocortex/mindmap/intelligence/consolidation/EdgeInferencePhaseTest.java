@@ -260,6 +260,82 @@ class EdgeInferencePhaseTest {
         assertThat(result.getFirst().source()).isEqualTo("Alice");
     }
 
+    @Test
+    void runMergesCoOccurrenceAndEmbeddingCandidates() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Alice", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Bob", new float[]{0.5f, 0.5f, 0.0f, 0.0f},
+            "Cubism", new float[]{0.0f, 0.0f, 1.0f, 0.0f},
+            "Surrealism", new float[]{0.0f, 0.0f, 0.95f, 0.1f}));
+
+        var phase = new TestableEdgeInferencePhase(mindMapStore, memoryStore,
+            1, 30, embedder, 0.7,
+            List.of(
+                new ParsedRelationship("Alice", "Bob", "collaborated-with", ConfidenceOrigin.INFERRED),
+                new ParsedRelationship("Cubism", "Surrealism", "influenced-by", ConfidenceOrigin.INFERRED)));
+
+        String personSg = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.PERSON, SubgraphTypes.PERSON, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Alice", personSg), TENANT);
+        mindMapStore.addNode(NodeInput.of("Bob", personSg), TENANT);
+
+        String conceptSg = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.CONCEPT, SubgraphTypes.CONCEPT, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Cubism", conceptSg), TENANT);
+        mindMapStore.addNode(NodeInput.of("Surrealism", conceptSg), TENANT);
+
+        storeExperienceMemory("Alice", "Bob", "Alice and Bob collaborated on research");
+
+        phase.run(TENANT, List.of());
+
+        var alice = mindMapStore.resolveNode("Alice", null, TENANT);
+        var aliceEdges = mindMapStore.neighbors(alice.id(), TENANT);
+        assertThat(aliceEdges).hasSize(1);
+        assertThat(aliceEdges.getFirst().edgeType()).isEqualTo("collaborated-with");
+
+        var cubism = mindMapStore.resolveNode("Cubism", null, TENANT);
+        var cubismEdges = mindMapStore.neighbors(cubism.id(), TENANT);
+        assertThat(cubismEdges).hasSize(1);
+        assertThat(cubismEdges.getFirst().edgeType()).isEqualTo("influenced-by");
+    }
+
+    @Test
+    void runRespectsMaxCandidatesCapOnMergedList() {
+        var embedder = new StubDenseEmbedder(Map.of(
+            "Alice", new float[]{1.0f, 0.0f, 0.0f, 0.0f},
+            "Bob", new float[]{0.5f, 0.5f, 0.0f, 0.0f},
+            "Carol", new float[]{0.0f, 0.0f, 1.0f, 0.0f},
+            "Dave", new float[]{0.0f, 0.0f, 0.95f, 0.1f}));
+
+        var phase = new TestableEdgeInferencePhase(mindMapStore, memoryStore,
+            1, 2, embedder, 0.7,
+            List.of(
+                new ParsedRelationship("Alice", "Bob", "collaborated-with", ConfidenceOrigin.INFERRED)));
+
+        String sgId = mindMapStore.createSubgraph(
+            new SubgraphInput(SubgraphTypes.PERSON, SubgraphTypes.PERSON, null), TENANT);
+        mindMapStore.addNode(NodeInput.of("Alice", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Bob", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Carol", sgId), TENANT);
+        mindMapStore.addNode(NodeInput.of("Dave", sgId), TENANT);
+
+        storeExperienceMemory("Alice", "Bob", "Alice and Bob collaborated on research");
+        storeExperienceMemory("Alice", "Carol", "Alice and Carol shared notes");
+
+        phase.run(TENANT, List.of());
+
+        var alice = mindMapStore.resolveNode("Alice", null, TENANT);
+        var aliceEdges = mindMapStore.neighbors(alice.id(), TENANT);
+        assertThat(aliceEdges).hasSize(1);
+        assertThat(aliceEdges.getFirst().edgeType()).isEqualTo("collaborated-with");
+
+        var carol = mindMapStore.resolveNode("Carol", null, TENANT);
+        var carolEdges = mindMapStore.neighbors(carol.id(), TENANT);
+        assertThat(carolEdges)
+            .as("embedding candidates should be excluded when co-occurrence fills maxCandidates")
+            .hasSizeLessThanOrEqualTo(1);
+    }
+
     private EdgeInferencePhase embeddingPhase(int degreeThreshold, int maxCandidates,
                                                DenseEmbedder embedder, double threshold) {
         return new EdgeInferencePhase(mindMapStore, memoryStore,
@@ -425,6 +501,15 @@ class EdgeInferencePhaseTest {
             this.fixedResponse = fixedResponse;
         }
 
+        TestableEdgeInferencePhase(MindMapStore mindMapStore, CaseMemoryStore memoryStore,
+                                   int degreeThreshold, int maxCandidates,
+                                   DenseEmbedder denseEmbedder, double embeddingSimilarityThreshold,
+                                   List<ParsedRelationship> fixedResponse) {
+            super(mindMapStore, memoryStore, degreeThreshold, maxCandidates,
+                  denseEmbedder, true, embeddingSimilarityThreshold);
+            this.fixedResponse = fixedResponse;
+        }
+
         @Override
         List<ParsedRelationship> invokeEdgeInference(List<CandidatePair> candidates) {
             return fixedResponse;
@@ -437,7 +522,23 @@ class EdgeInferencePhaseTest {
             List<MindMapNode> underConnected = findUnderConnectedNodes(tenantId);
             if (underConnected.isEmpty()) return;
 
-            List<CandidatePair> candidates = buildCandidates(underConnected, tenantId);
+            List<CandidatePair> coOccurrenceCandidates = buildCandidates(underConnected, tenantId);
+
+            java.util.Set<String> existingPairKeys = new java.util.HashSet<>();
+            for (CandidatePair cp : coOccurrenceCandidates) {
+                existingPairKeys.add(pairKey(cp.nodeIdA(), cp.nodeIdB()));
+            }
+
+            int remaining = maxCandidates - coOccurrenceCandidates.size();
+            List<CandidatePair> embeddingCandidates = remaining > 0
+                ? buildEmbeddingCandidates(underConnected, existingPairKeys, tenantId)
+                : List.of();
+
+            var candidates = new java.util.ArrayList<>(coOccurrenceCandidates);
+            if (!embeddingCandidates.isEmpty()) {
+                candidates.addAll(embeddingCandidates.subList(0, Math.min(remaining, embeddingCandidates.size())));
+            }
+
             if (candidates.isEmpty()) return;
 
             List<ParsedRelationship> inferred = invokeEdgeInference(candidates);
