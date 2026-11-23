@@ -390,7 +390,7 @@ class SituationalPersonalityParticipantTest {
                                                            new AmpdFacet("Hostility", 30)))
                                                    .situationalProfiles(stressProfile)
                                                    .build(),
-                                   null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of());
+                                   null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of(), null);
     }
 
     private AgentDescriptor descriptorWithNoProfile() {
@@ -403,7 +403,7 @@ class SituationalPersonalityParticipantTest {
                                                            new AmpdFacet("Emotional Lability", 55),
                                                            new AmpdFacet("Hostility", 30)))
                                                    .build(),
-                                   null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of());
+                                   null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of(), null);
     }
 
     private AgentDescriptor descriptorWithStressProfileForAgent(String agentId) {
@@ -423,7 +423,7 @@ class SituationalPersonalityParticipantTest {
                                                            new AmpdFacet("Hostility", 30)))
                                                    .situationalProfiles(stressProfile)
                                                    .build(),
-                                   null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of());
+                                   null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of(), null);
     }
 
 

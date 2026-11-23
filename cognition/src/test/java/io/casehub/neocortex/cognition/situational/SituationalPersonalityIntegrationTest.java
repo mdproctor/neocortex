@@ -218,7 +218,7 @@ class SituationalPersonalityIntegrationTest {
                                 new AmpdFacet("Hostility", 30)))
                         .situationalProfiles(stressProfile)
                         .build(),
-                null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of());
+                null, null, TENANT, null, null, null, List.of(), List.of(), List.of(), Map.of(), null);
     }
 
     private Map<SituationalMode, ModeDetectionConfig> buildModeConfigs() {
