@@ -160,8 +160,7 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
             AgentCapsState state = capsEngine.loadState(tenantId, agentId);
             if (state == null) {
                 state = capsEngine.initializeAgent(tenantId, agentId,
-                    new io.casehub.neocortex.cognitive.index.DispositionAxes(
-                        "cooperative", "moderate", "calculated", "moderate", "cooperative"));
+                    resolveDispositionForAgent(agentId, tenantId));
                 LOG.info("Auto-initialized CAPS state for agent " + agentId);
             }
 
@@ -552,6 +551,20 @@ public class BehavioralSynthesisPhase implements ConsolidationPhase {
     /**
      * Cattell (1971): associativeReach (Mednick 1962) modulates CAPS base alpha.
      */
+    private static final io.casehub.neocortex.cognitive.index.DispositionAxes DEFAULT_DISPOSITION =
+        new io.casehub.neocortex.cognitive.index.DispositionAxes(
+            "cooperative", "moderate", "calculated", "moderate", "cooperative");
+
+    private io.casehub.neocortex.cognitive.index.DispositionAxes resolveDispositionForAgent(
+            String agentId, String tenantId) {
+        if (effectiveDefaults == null) return DEFAULT_DISPOSITION;
+        var defaults = effectiveDefaults.forAgentOrDefaults(tenantId, agentId);
+        if (defaults.descriptor() != null && defaults.descriptor().disposition() != null) {
+            return defaults.descriptor().disposition();
+        }
+        return DEFAULT_DISPOSITION;
+    }
+
     private double resolveAssociativeReach(String tenantId, String agentId) {
         if (effectiveDefaults == null) {return 1.0;}
         var cap = effectiveDefaults.restingFor(tenantId, agentId).capacityConfig();

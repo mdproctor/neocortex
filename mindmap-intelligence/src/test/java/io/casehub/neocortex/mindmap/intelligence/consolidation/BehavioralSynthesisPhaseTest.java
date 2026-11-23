@@ -325,6 +325,36 @@ class BehavioralSynthesisPhaseTest {
     }
 
     @Test
+    void autoInit_usesRegisteredDispositionFromEffectiveDefaults() {
+        var capturingEngine = new CapturingDispositionEngine();
+        SituationClassifier classifier = (desc, meta, ctx) ->
+            new ClassificationResult(List.of(new SituationActivation("reward", 0.8)));
+
+        var agentDisposition = new DispositionAxes(
+            "competitive", "flexible", "impulsive", "high", "confrontational");
+        var view = DescriptorView.of(AGENT, agentDisposition, List.of(), List.of());
+        var defaults = EffectiveCognitiveDefaults.forTesting();
+        defaults.updateBase(TENANT, view, "test-init");
+
+        var phase = new BehavioralSynthesisPhase(
+            store, capturingEngine, classifier, 20, null, defaults);
+
+        store.addNode(NodeInput.of("Test experience", cognitiveSubgraphId)
+            .withProperties(Map.of(
+                "source-memory-id", "mem-disp",
+                "agent-id", AGENT,
+                "event-type", "observation",
+                "graduation-score", "0.7")),
+            TENANT);
+
+        phase.run(TENANT, List.of());
+
+        assertThat(capturingEngine.capturedDisposition).isNotNull();
+        assertThat(capturingEngine.capturedDisposition.socialOrient()).isEqualTo("competitive");
+        assertThat(capturingEngine.capturedDisposition.riskAppetite()).isEqualTo("impulsive");
+    }
+
+    @Test
     void findUnprocessedGraduated_notMissedBySearchLimit() {
         for (int sg = 0; sg < 20; sg++) {
             String sgId = store.createSubgraph(
@@ -559,6 +589,17 @@ class BehavioralSynthesisPhaseTest {
         @Override
         public void recordOutcome(String caseId, CbrOutcome outcome, String tenantId, Double learningRateOverride) {
             recordedOutcomes.add(new RecordedOutcome(caseId, outcome, tenantId));
+        }
+    }
+
+    static class CapturingDispositionEngine extends StubCapsEngine {
+        DispositionAxes capturedDisposition;
+
+        @Override
+        public AgentCapsState initializeAgent(String tenantId, String agentId,
+                                               DispositionAxes disposition) {
+            this.capturedDisposition = disposition;
+            return super.initializeAgent(tenantId, agentId, disposition);
         }
     }
 
