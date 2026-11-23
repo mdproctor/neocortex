@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
+import java.util.Set;
 
 class CuriosityPromptSectionTest {
 
@@ -29,7 +31,7 @@ class CuriosityPromptSectionTest {
     void setUp() {
         store = new InMemoryMindMapStore();
         var detector = new InformationGapDetector(store);
-        drive = new CuriosityDrive(detector, new io.casehub.neocortex.mindmap.intelligence.CuriosityChannelComputer(), 0.5);
+        drive = new CuriosityDrive(detector, new CuriosityChannelComputer(), 0.5);
         var channelComputer = new CuriosityChannelComputer();
         section = new CuriosityPromptSection(drive, channelComputer, null, store, 0.5);
     }
@@ -162,8 +164,8 @@ class CuriosityPromptSectionTest {
         String cogSgId = store.createSubgraph(
                 new SubgraphInput("cognitive", SubgraphTypes.COGNITIVE, null), TENANT);
         store.addNode(NodeInput.of("curiosity-" + AGENT, cogSgId)
-                               .withTraits(java.util.Set.of(CuriosityPromptSection.GENERATED_TRAIT))
-                               .withProperties(java.util.Map.of(
+                               .withTraits(Set.of(CuriosityPromptSection.GENERATED_TRAIT))
+                               .withProperties(Map.of(
                                        "agent-id", AGENT,
                                        "description", "A crystallised curiosity description.")), TENANT);
 

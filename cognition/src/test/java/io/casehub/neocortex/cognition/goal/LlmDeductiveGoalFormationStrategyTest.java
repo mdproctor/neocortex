@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.smallrye.mutiny.Uni;
+import java.time.Duration;
 
 class LlmDeductiveGoalFormationStrategyTest {
 
@@ -55,8 +57,8 @@ class LlmDeductiveGoalFormationStrategyTest {
                 capturedPrompt[0] = prompt;
                 return Multi.createFrom().item(new AgentEvent.TextDelta("[]"));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         var disposition = new DispositionAxes(
                 "competitive", "flexible", "bold", "high", "competitive");
@@ -86,8 +88,8 @@ class LlmDeductiveGoalFormationStrategyTest {
                 capturedPrompt[0] = prompt;
                 return Multi.createFrom().item(new AgentEvent.TextDelta("[]"));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         var mood = new MoodState("a1", "t1", Instant.now(), -0.5, 0.8, 0.3,
                 "anxious", null, null, Map.of());
@@ -151,8 +153,8 @@ class LlmDeductiveGoalFormationStrategyTest {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().item(new AgentEvent.TextDelta(response));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         return s;
     }
@@ -162,8 +164,8 @@ class LlmDeductiveGoalFormationStrategyTest {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().failure(new RuntimeException("LLM unavailable"));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         return s;
     }

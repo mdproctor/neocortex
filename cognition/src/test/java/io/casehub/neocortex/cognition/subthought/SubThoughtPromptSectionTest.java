@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import io.casehub.neocortex.mindmap.intelligence.SubThoughtExtractor;
+import io.casehub.neocortex.mindmap.intelligence.SubThoughtsEnriched;
+import java.util.ArrayList;
 
 class SubThoughtPromptSectionTest {
 
@@ -65,7 +68,7 @@ class SubThoughtPromptSectionTest {
         SubjectResolver resolver    = (a, t) -> Set.of();
         var             participant = new SubThoughtTickParticipant(extractor, null, resolver);
 
-        var enriched = new io.casehub.neocortex.mindmap.intelligence.SubThoughtsEnriched(
+        var enriched = new SubThoughtsEnriched(
                 "mem-1", "a1", "t1",
                 buildManySubThoughts(15)
         );
@@ -83,11 +86,11 @@ class SubThoughtPromptSectionTest {
         assertTrue(rendered.contains("high-conf-0"), "Highest-confidence items should survive truncation");
     }
 
-    private static List<io.casehub.neocortex.mindmap.intelligence.SubThoughtExtractor.ParsedSubThought> buildManySubThoughts(int count) {
-        var result = new java.util.ArrayList<io.casehub.neocortex.mindmap.intelligence.SubThoughtExtractor.ParsedSubThought>();
+    private static List<SubThoughtExtractor.ParsedSubThought> buildManySubThoughts(int count) {
+        var result = new ArrayList<SubThoughtExtractor.ParsedSubThought>();
         for (int i = 0; i < count; i++) {
             double conf = (count - i) / (double) count;
-            result.add(new io.casehub.neocortex.mindmap.intelligence.SubThoughtExtractor.ParsedSubThought(
+            result.add(new SubThoughtExtractor.ParsedSubThought(
                     "evaluative", "high-conf-" + i, null, conf));
         }
         return List.copyOf(result);

@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.smallrye.mutiny.Uni;
+import java.time.Duration;
 
 class LlmAppraisalStrategyTest {
 
@@ -145,8 +147,8 @@ class LlmAppraisalStrategyTest {
                            }""";
                 return Multi.createFrom().item(new AgentEvent.TextDelta(json));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         var disposition = new DispositionAxes(
                 "assertive", "low", "high", "high", "confrontational");
@@ -176,8 +178,8 @@ class LlmAppraisalStrategyTest {
                            }""";
                 return Multi.createFrom().item(new AgentEvent.TextDelta(json));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         var ctx      = context("a quiet morning", List.of(new Drive("curiosity", DriveCategory.BASELINE, 0.5, "")));
 
@@ -202,10 +204,10 @@ class LlmAppraisalStrategyTest {
             }
 
             @Override
-            public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+            public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
             @Override
-            public void close(java.time.Duration timeout)   {}
+            public void close(Duration timeout)   {}
         }));
         var schema = new RelationalSchema("penelope", "prey", 0.1, 0.0, 0.9,
                                           "She inherited everything you built.");
@@ -239,10 +241,10 @@ class LlmAppraisalStrategyTest {
             }
 
             @Override
-            public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+            public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
             @Override
-            public void close(java.time.Duration timeout)   {}
+            public void close(Duration timeout)   {}
         }));
         var facets = List.of(
                 new PersonalityFacet("Callousness", 0.9, "numbness where sympathy should be"),
@@ -278,10 +280,10 @@ class LlmAppraisalStrategyTest {
             }
 
             @Override
-            public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+            public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
             @Override
-            public void close(java.time.Duration timeout)   {}
+            public void close(Duration timeout)   {}
         }));
         var ctx = context("a quiet moment", List.of(new Drive("curiosity", DriveCategory.BASELINE, 0.5, "")));
 
@@ -310,10 +312,10 @@ class LlmAppraisalStrategyTest {
                 }
 
                 @Override
-                public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+                public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
                 @Override
-                public void close(java.time.Duration timeout) {}
+                public void close(Duration timeout) {}
             };
         }));
         var facets = List.of(
@@ -346,10 +348,10 @@ class LlmAppraisalStrategyTest {
             }
 
             @Override
-            public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+            public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
             @Override
-            public void close(java.time.Duration timeout) {}
+            public void close(Duration timeout) {}
         }));
         var sitMode = new SituationalModeContext("STRESS", 0.72, null, 0.0);
         var ctx = new AppraisalContext("test-agent",
@@ -436,8 +438,8 @@ private static LlmAppraisalStrategy stubStrategy(String response) {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().item(new AgentEvent.TextDelta(response));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         return strategy;
     }
@@ -447,8 +449,8 @@ private static LlmAppraisalStrategy stubStrategy(String response) {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().failure(new RuntimeException("LLM unavailable"));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         return strategy;
     }

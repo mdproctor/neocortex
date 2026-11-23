@@ -51,6 +51,53 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import io.casehub.neocortex.caps.CapsEngine;
+import io.casehub.neocortex.caps.ConvergenceType;
+import io.casehub.neocortex.caps.SettlingResult;
+import io.casehub.neocortex.caps.engine.RuleBasedSituationClassifier;
+import io.casehub.neocortex.caps.testing.InMemoryCapsEngine;
+import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
+import io.casehub.neocortex.cognition.appraisal.AppraisalThresholds;
+import io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant;
+import io.casehub.neocortex.cognition.appraisal.HabituationState;
+import io.casehub.neocortex.cognition.appraisal.NoOpSalienceStrategy;
+import io.casehub.neocortex.cognition.core.CognitivePipelineBuilder;
+import io.casehub.neocortex.cognition.drive.AffiliationDrive;
+import io.casehub.neocortex.cognition.drive.AutonomyDrive;
+import io.casehub.neocortex.cognition.drive.CompetenceDrive;
+import io.casehub.neocortex.cognition.goal.GoalEscalationConfig;
+import io.casehub.neocortex.cognition.goal.GoalProposalConfig;
+import io.casehub.neocortex.cognition.goal.GoalProposalOrchestrator;
+import io.casehub.neocortex.cognition.innerlife.InnerLifeConfig;
+import io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator;
+import io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator;
+import io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig;
+import io.casehub.neocortex.cognition.mentalmodel.MentalModelMemory;
+import io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator;
+import io.casehub.neocortex.cognition.narrative.NarrativeConfig;
+import io.casehub.neocortex.cognition.narrative.NarrativeMemory;
+import io.casehub.neocortex.cognition.narrative.NarrativeOrchestrator;
+import io.casehub.neocortex.cognition.strategy.StrategyLearningConfig;
+import io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator;
+import io.casehub.neocortex.cognition.strategy.StrategyMemory;
+import io.casehub.neocortex.cognition.trace.PipelineTrace;
+import io.casehub.neocortex.cognition.usermodel.UserModelConfig;
+import io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator;
+import io.casehub.neocortex.cognition.usermodel.UserProfile;
+import io.casehub.neocortex.cognition.usermodel.UserProfileMemory;
+import io.casehub.neocortex.cognitive.index.PersonalityFacet;
+import io.casehub.neocortex.memory.KnowledgeGapSummary;
+import io.casehub.neocortex.memory.MemoryInput;
+import io.casehub.neocortex.memory.Subject;
+import io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrRecordStore;
+import io.casehub.neocortex.memory.reflection.ReflectionOrchestrator;
+import io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase;
+import io.casehub.platform.agent.session.SessionPipeline;
+import io.casehub.platform.api.identity.CurrentPrincipal;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.function.ToDoubleFunction;
+import org.mockito.Mockito;
 
 public class CognitionTestHarness {
 
@@ -67,9 +114,9 @@ public class CognitionTestHarness {
     private final List<ConsolidationPhase> consolidationPhases;
     private final Map<String, AgentDescriptor> descriptors;
     private final Map<String, String> lastObservations = new ConcurrentHashMap<>();
-    private final io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase behavioralSynthesisPhase;
-    private final io.casehub.neocortex.caps.CapsEngine                                             capsEngine;
-    private final Map<String, io.casehub.neocortex.cognitive.index.CognitiveDefaults>              agentDefaults;
+    private final BehavioralSynthesisPhase behavioralSynthesisPhase;
+    private final CapsEngine                                             capsEngine;
+    private final Map<String, CognitiveDefaults>              agentDefaults;
 
 
     CognitionTestHarness(CognitionCore core,
@@ -82,9 +129,9 @@ public class CognitionTestHarness {
                          ConsolidationMediator mediator,
                          List<ConsolidationPhase> consolidationPhases,
                          Map<String, AgentDescriptor> descriptors,
-                         io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase behavioralSynthesisPhase,
-                         io.casehub.neocortex.caps.CapsEngine capsEngine,
-                         Map<String, io.casehub.neocortex.cognitive.index.CognitiveDefaults> agentDefaults) {
+                         BehavioralSynthesisPhase behavioralSynthesisPhase,
+                         CapsEngine capsEngine,
+                         Map<String, CognitiveDefaults> agentDefaults) {
         this.core                     = core;
         this.mindMapStore             = mindMapStore;
         this.memoryStore              = memoryStore;
@@ -111,7 +158,7 @@ public class CognitionTestHarness {
 
     public CognitionCore core()          {return core;}
 
-    public java.util.Optional<io.casehub.neocortex.cognition.trace.PipelineTrace> currentTrace(String agentId, String tenantId) {
+    public Optional<PipelineTrace> currentTrace(String agentId, String tenantId) {
         return core.currentTrace(agentId, tenantId);
     }
 
@@ -130,15 +177,15 @@ public class CognitionTestHarness {
 
     public void addExperienceMemories(String agentId, String tenantId, String topicName, int count) {
         var domain = ExperienceEvents.DOMAIN;
-        var subject = io.casehub.neocortex.memory.Subject.of("agent", agentId);
+        var subject = Subject.of("agent", agentId);
         for (int i = 0; i < count; i++) {
-            memoryStore.store(io.casehub.neocortex.memory.MemoryInput.of(subject, domain, tenantId,
+            memoryStore.store(MemoryInput.of(subject, domain, tenantId,
                 "Observation about " + topicName + " iteration " + i)
                 .withAttributes(Map.of("event-type", "observation", "subject", topicName)));
         }
     }
 
-    public void seedUserProfile(io.casehub.neocortex.cognition.usermodel.UserProfile profile) {
+    public void seedUserProfile(UserProfile profile) {
         var userModel = core.userModel();
         if (userModel != null) {
             userModel.seedProfile(profile);
@@ -161,7 +208,7 @@ public class CognitionTestHarness {
                     var descriptor = entry.getValue().descriptor();
                     var axes       = descriptor != null ? descriptor.disposition() : null;
                     if (axes == null) {
-                        axes = new io.casehub.neocortex.cognitive.index.DispositionAxes(
+                        axes = new DispositionAxes(
                                 "cooperative", "moderate", "calculated", "moderate", "cooperative");
                     }
                     var copingDefaults = entry.getValue().copingDefaults();
@@ -239,14 +286,14 @@ public class CognitionTestHarness {
         return moodOrchestrator.currentMood(agentId, tenantId);
     }
 
-    public Optional<io.casehub.neocortex.caps.SettlingResult> capsSettlingResult(String agentId, String tenantId) {
+    public Optional<SettlingResult> capsSettlingResult(String agentId, String tenantId) {
         if (behavioralSynthesisPhase == null) {
             return Optional.empty();
         }
         return behavioralSynthesisPhase.lastSettlingResult(tenantId, agentId);
     }
 
-    public record CapsTrajectory(int iterations, io.casehub.neocortex.caps.ConvergenceType convergence,
+    public record CapsTrajectory(int iterations, ConvergenceType convergence,
                                  double saturationRatio) {}
 
     public Optional<CapsTrajectory> capsTrajectory(String agentId, String tenantId) {
@@ -280,10 +327,10 @@ public class CognitionTestHarness {
         private boolean behavioralSynthesisEnabled;
         private boolean appraisalEnabled;
 
-        private io.casehub.platform.agent.session.SessionPipeline sessionPipeline;
+        private SessionPipeline sessionPipeline;
 
-        private final Map<String, io.casehub.neocortex.cognition.appraisal.HabituationState> habituationStates = new HashMap<>();
-        private final Map<String, io.casehub.neocortex.cognition.appraisal.AppraisalResult>  appraisalResults  = new HashMap<>();
+        private final Map<String, HabituationState> habituationStates = new HashMap<>();
+        private final Map<String, AppraisalResult>  appraisalResults  = new HashMap<>();
 
 
         public Builder withMindMapStore(MindMapStore store) {
@@ -331,20 +378,20 @@ public class CognitionTestHarness {
             return this;
         }
 
-        public Builder withSessionPipeline(io.casehub.platform.agent.session.SessionPipeline pipeline) {
+        public Builder withSessionPipeline(SessionPipeline pipeline) {
             this.sessionPipeline = pipeline;
             return this;
         }
 
 
         public Builder withHabituationState(String agentId,
-                io.casehub.neocortex.cognition.appraisal.HabituationState state) {
+                HabituationState state) {
             this.habituationStates.put(agentId, state);
             return this;
         }
 
         public Builder withAppraisalResult(String agentId,
-                                           io.casehub.neocortex.cognition.appraisal.AppraisalResult result) {
+                                           AppraisalResult result) {
             this.appraisalResults.put(agentId, result);
             return this;
         }
@@ -367,50 +414,50 @@ public class CognitionTestHarness {
             var allDefaults = agentDefaults.values().toArray(new CognitiveDefaults[0]);
             var registry    = EffectiveCognitiveDefaults.forTesting(allDefaults);
 
-            var cbrStore = new io.casehub.neocortex.memory.cbr.inmem.InMemoryCbrRecordStore();
+            var cbrStore = new InMemoryCbrRecordStore();
 
             var moodOrchestrator = new MoodOrchestrator(MoodConfig.defaults());
 
-            io.casehub.neocortex.memory.reflection.ReflectionOrchestrator reflectionOrch =
+            ReflectionOrchestrator reflectionOrch =
                     (agentId, tenantId, since, maxEntries) -> List.of();
 
-            var narrativeOrch = new io.casehub.neocortex.cognition.narrative.NarrativeOrchestrator(
-                    new io.casehub.neocortex.cognition.narrative.NarrativeMemory(
-                            cbrStore, io.casehub.neocortex.cognition.narrative.NarrativeConfig.defaults()));
+            var narrativeOrch = new NarrativeOrchestrator(
+                    new NarrativeMemory(
+                            cbrStore, NarrativeConfig.defaults()));
 
-            var userModel = new io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator(
-                    new io.casehub.neocortex.cognition.usermodel.UserProfileMemory(
-                            cbrStore, io.casehub.neocortex.cognition.usermodel.UserModelConfig.defaults()),
-                    io.casehub.neocortex.cognition.usermodel.UserModelConfig.defaults(), sessionPipeline);
+            var userModel = new UserModelOrchestrator(
+                    new UserProfileMemory(
+                            cbrStore, UserModelConfig.defaults()),
+                    UserModelConfig.defaults(), sessionPipeline);
 
-            var mentalModel = new io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator(
-                    new io.casehub.neocortex.cognition.mentalmodel.MentalModelMemory(
-                            cbrStore, io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig.defaults()),
-                    io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig.defaults(),
-                    java.time.Clock.systemUTC(), sessionPipeline);
+            var mentalModel = new MentalModelOrchestrator(
+                    new MentalModelMemory(
+                            cbrStore, MentalModelConfig.defaults()),
+                    MentalModelConfig.defaults(),
+                    Clock.systemUTC(), sessionPipeline);
 
-            var strategy = new io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator(
-                    new io.casehub.neocortex.cognition.strategy.StrategyMemory(
-                            cbrStore, io.casehub.neocortex.cognition.strategy.StrategyLearningConfig.defaults()),
+            var strategy = new StrategyLearningOrchestrator(
+                    new StrategyMemory(
+                            cbrStore, StrategyLearningConfig.defaults()),
                     reflectionOrch,
-                    io.casehub.neocortex.cognition.strategy.StrategyLearningConfig.defaults(),
-                    java.time.Clock.systemUTC(), sessionPipeline);
+                    StrategyLearningConfig.defaults(),
+                    Clock.systemUTC(), sessionPipeline);
 
-            io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator hygiene =
-                    new io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator() {
+            MemoryHygieneOrchestrator hygiene =
+                    new MemoryHygieneOrchestrator() {
                         @Override
                         public void tick(String agentId, String tenantId) {}
 
                         @Override
-                        public io.casehub.neocortex.memory.KnowledgeGapSummary knowledgeGaps(
+                        public KnowledgeGapSummary knowledgeGaps(
                                 String agentId, String tenantId) {
-                            return io.casehub.neocortex.memory.KnowledgeGapSummary.empty();
+                            return KnowledgeGapSummary.empty();
                         }
                     };
 
             var gapDetector     = new InformationGapDetector(store);
             var channelComputer = new CuriosityChannelComputer();
-            java.util.function.ToDoubleFunction<String> biasLookup = agentId -> {
+            ToDoubleFunction<String> biasLookup = agentId -> {
                 var defaults = agentDefaults.get(agentId);
                 if (defaults != null && defaults.personalityProfile() != null) {
                     var facets = defaults.personalityProfile().facets();
@@ -418,7 +465,7 @@ public class CognitionTestHarness {
                         return facets.stream()
                                      .filter(f -> "Anxiousness".equals(f.facet()))
                                      .findFirst()
-                                     .map(io.casehub.neocortex.cognitive.index.PersonalityFacet::score)
+                                     .map(PersonalityFacet::score)
                                      .orElse(0.5);
                     }
                 }
@@ -428,22 +475,22 @@ public class CognitionTestHarness {
 
             var driveOrchestrator = new DriveOrchestrator(
                     curiosityDrive,
-                    new io.casehub.neocortex.cognition.drive.CompetenceDrive(strategy),
-                    new io.casehub.neocortex.cognition.drive.AffiliationDrive(userModel, 0.3, java.time.Duration.ofHours(1)),
-                    new io.casehub.neocortex.cognition.drive.AutonomyDrive(mentalModel, 0.5),
+                    new CompetenceDrive(strategy),
+                    new AffiliationDrive(userModel, 0.3, Duration.ofHours(1)),
+                    new AutonomyDrive(mentalModel, 0.5),
                     moodOrchestrator, new DriveComposer(), DriveConfig.defaults());
 
-            var innerLife = new io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator(
+            var innerLife = new InnerLifeOrchestrator(
                     reflectionOrch, List.of(),
-                    io.casehub.neocortex.cognition.innerlife.InnerLifeConfig.defaults(),
+                    InnerLifeConfig.defaults(),
                     driveOrchestrator, sessionPipeline);
 
-            var goals = new io.casehub.neocortex.cognition.goal.GoalProposalOrchestrator(
+            var goals = new GoalProposalOrchestrator(
                     driveOrchestrator, List.of(), null, Optional.empty(),
                     null, null, null,
-                    io.casehub.neocortex.cognition.goal.GoalProposalConfig.defaults(),
-                    io.casehub.neocortex.cognition.goal.GoalEscalationConfig.defaults(),
-                    java.time.Clock.systemUTC());
+                    GoalProposalConfig.defaults(),
+                    GoalEscalationConfig.defaults(),
+                    Clock.systemUTC());
 
             var mediator = new ConsolidationMediator();
             var config   = cognitionConfig != null ? cognitionConfig : CognitionConfig.all();
@@ -451,7 +498,7 @@ public class CognitionTestHarness {
                 config = config.with("appraisal", true);
             }
 
-            var pipelineBuilder = io.casehub.neocortex.cognition.core.CognitivePipelineBuilder
+            var pipelineBuilder = CognitivePipelineBuilder
                                .create(moodOrchestrator, driveOrchestrator)
                                .userModel(userModel).mentalModel(mentalModel).strategy(strategy)
                                .narrative(narrativeOrch).goals(goals).memoryHygiene(hygiene)
@@ -465,40 +512,40 @@ public class CognitionTestHarness {
                             "withAppraisalEnabled and withAppraisalResult/withHabituationState are mutually exclusive");
                 }
                 pipelineBuilder.appraisal(new TestAppraisalStrategy(),
-                        new io.casehub.neocortex.cognition.appraisal.NoOpSalienceStrategy());
+                        new NoOpSalienceStrategy());
             }
 
-            io.casehub.neocortex.caps.testing.InMemoryCapsEngine capsEngineInstance = null;
-            io.casehub.neocortex.caps.engine.RuleBasedSituationClassifier classifierInstance = null;
+            InMemoryCapsEngine capsEngineInstance = null;
+            RuleBasedSituationClassifier classifierInstance = null;
             if (behavioralSynthesisEnabled) {
-                capsEngineInstance = new io.casehub.neocortex.caps.testing.InMemoryCapsEngine();
-                classifierInstance = new io.casehub.neocortex.caps.engine.RuleBasedSituationClassifier(capsEngineInstance.topology());
+                capsEngineInstance = new InMemoryCapsEngine();
+                classifierInstance = new RuleBasedSituationClassifier(capsEngineInstance.topology());
                 pipelineBuilder.situationClassifier(classifierInstance);
             }
 
             var core = pipelineBuilder.build();
 
-            io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant appraisalStub = null;
+            AppraisalTickParticipant appraisalStub = null;
             if (!habituationStates.isEmpty() || !appraisalResults.isEmpty()) {
-                appraisalStub = org.mockito.Mockito.mock(io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant.class);
+                appraisalStub = Mockito.mock(AppraisalTickParticipant.class);
                 for (var entry : habituationStates.entrySet()) {
-                    org.mockito.Mockito.when(appraisalStub.currentHabituation(
-                               org.mockito.Mockito.eq(entry.getKey()), org.mockito.Mockito.anyString()))
+                    Mockito.when(appraisalStub.currentHabituation(
+                               Mockito.eq(entry.getKey()), Mockito.anyString()))
                                        .thenReturn(entry.getValue());
                 }
                 for (var entry : appraisalResults.entrySet()) {
-                    org.mockito.Mockito.when(appraisalStub.currentResult(
-                               org.mockito.Mockito.eq(entry.getKey()), org.mockito.Mockito.anyString()))
-                                       .thenReturn(java.util.Optional.of(entry.getValue()));
+                    Mockito.when(appraisalStub.currentResult(
+                               Mockito.eq(entry.getKey()), Mockito.anyString()))
+                                       .thenReturn(Optional.of(entry.getValue()));
                 }
-                org.mockito.Mockito.when(appraisalStub.thresholds())
-                                   .thenReturn(io.casehub.neocortex.cognition.appraisal.AppraisalThresholds.defaults());
-                org.mockito.Mockito.when(appraisalStub.currentConcernSalience(
-                           org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
-                                   .thenReturn(java.util.Map.of());
-                org.mockito.Mockito.when(appraisalStub.currentChannelWeights(
-                           org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
-                                   .thenReturn(java.util.Optional.empty());
+                Mockito.when(appraisalStub.thresholds())
+                                   .thenReturn(AppraisalThresholds.defaults());
+                Mockito.when(appraisalStub.currentConcernSalience(
+                           Mockito.anyString(), Mockito.anyString()))
+                                   .thenReturn(Map.of());
+                Mockito.when(appraisalStub.currentChannelWeights(
+                           Mockito.anyString(), Mockito.anyString()))
+                                   .thenReturn(Optional.empty());
                 CognitionTestAccess.setAppraisalParticipant(core, appraisalStub);
             }
 
@@ -521,10 +568,10 @@ public class CognitionTestHarness {
                 phases.add(CognitionTestAccess.createRecurringThoughtPhase(memStore, store, registry));
             }
 
-            io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase bsp = null;
-            io.casehub.neocortex.caps.CapsEngine capsEngineRef = null;
+            BehavioralSynthesisPhase bsp = null;
+            CapsEngine capsEngineRef = null;
             if (behavioralSynthesisEnabled) {
-                bsp = new io.casehub.neocortex.mindmap.intelligence.consolidation.BehavioralSynthesisPhase(
+                bsp = new BehavioralSynthesisPhase(
                         store, capsEngineInstance, classifierInstance, 20, cbrStore, registry);
                 phases.add(bsp);
                 capsEngineRef = capsEngineInstance;
@@ -538,7 +585,7 @@ public class CognitionTestHarness {
         }
 
         private static CaseMemoryStore createDefaultMemoryStore() {
-            return new InMemoryMemoryStore(new io.casehub.platform.api.identity.CurrentPrincipal() {
+            return new InMemoryMemoryStore(new CurrentPrincipal() {
                 @Override public String actorId() { return "test-actor"; }
                 @Override public Set<String> groups() { return Set.of(); }
                 @Override public String tenancyId() { return "test-tenant"; }

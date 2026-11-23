@@ -2,6 +2,7 @@ package io.casehub.neocortex.cognition.memory;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Set;
 
 class AdaptiveRetentionConfigTest {
 
@@ -62,7 +63,7 @@ class AdaptiveRetentionConfigTest {
         holder.update("t1", new RetentionConfig(0.2, 1.0, 1.0, 0.5, 0.5));
         holder.update("t2", new RetentionConfig(0.3, 1.0, 1.0, 0.5, 0.5));
         holder.update("t3", new RetentionConfig(0.4, 1.0, 1.0, 0.5, 0.5));
-        holder.evictAbsent(java.util.Set.of("t1", "t3"));
+        holder.evictAbsent(Set.of("t1", "t3"));
         assertThat(holder.current("t1").retentionThreshold()).isEqualTo(0.2);
         assertThat(holder.current("t2")).isEqualTo(RetentionConfig.DEFAULT);
         assertThat(holder.current("t3").retentionThreshold()).isEqualTo(0.4);

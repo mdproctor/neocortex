@@ -13,6 +13,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.assertj.core.data.Offset;
 
 class ConfidenceScorerTest {
 
@@ -59,7 +60,7 @@ class ConfidenceScorerTest {
                 new WeightedScorer(fixed20, 1.0)));
         var memory = scored("p", "s", Map.of("k", FeatureValue.string("v")));
         assertThat(composite.score(memory, Instant.now()))
-                .isCloseTo(0.65, org.assertj.core.data.Offset.offset(0.001));
+                .isCloseTo(0.65, Offset.offset(0.001));
     }
 
     @Test
@@ -78,7 +79,7 @@ class ConfidenceScorerTest {
     void arousalScorer_contentScorer_noHighArousalWords() {
         var scorer = new ArousalScorer();
         var content = new ScoreableContent("a peaceful calm day", Map.of(), Instant.EPOCH);
-        assertThat(scorer.score(content)).isCloseTo(0.0, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(scorer.score(content)).isCloseTo(0.0, Offset.offset(0.001));
     }
 
     @Test
@@ -96,6 +97,6 @@ class ConfidenceScorerTest {
         double cbrScore = scorer.score(cbrScored, Instant.now());
         var content = new ScoreableContent("critical error urgent fix", Map.of(), Instant.EPOCH);
         double contentScore = scorer.score(content);
-        assertThat(cbrScore).isCloseTo(contentScore, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(cbrScore).isCloseTo(contentScore, Offset.offset(0.001));
     }
 }

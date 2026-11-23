@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.assertj.core.data.Offset;
 
 class EmotionRegulationMindMapTest {
 
@@ -209,9 +210,9 @@ class EmotionRegulationMindMapTest {
 
         assertThat(summaries).hasSize(3);
         assertThat(summaries.get("PREDICTOR").episodeCount()).isEqualTo(2);
-        assertThat(summaries.get("PREDICTOR").meanEffectiveness()).isCloseTo(0.65, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(summaries.get("PREDICTOR").meanEffectiveness()).isCloseTo(0.65, Offset.offset(0.001));
         assertThat(summaries.get("LLM").episodeCount()).isEqualTo(1);
-        assertThat(summaries.get("LLM").meanEffectiveness()).isCloseTo(0.80, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(summaries.get("LLM").meanEffectiveness()).isCloseTo(0.80, Offset.offset(0.001));
         assertThat(summaries.get("SAFETY_GATE").episodeCount()).isEqualTo(1);
     }
 
@@ -230,7 +231,7 @@ class EmotionRegulationMindMapTest {
         var report = PredictionCalibrationAnalyzer.analyze(summaries, 20);
 
         assertThat(report.miscalibrated()).isTrue();
-        assertThat(report.delta()).isCloseTo(-0.20, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(report.delta()).isCloseTo(-0.20, Offset.offset(0.001));
         assertThat(report.totalEpisodes()).isEqualTo(50);
     }
 

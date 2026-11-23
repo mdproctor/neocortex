@@ -10,6 +10,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator;
+import io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator;
+import io.casehub.neocortex.cognition.narrative.NarrativeOrchestrator;
+import io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator;
+import io.casehub.neocortex.cognition.temporal.ReflectionRetrievalOrchestrator;
+import io.casehub.neocortex.cognition.temporal.TemporalFocusOrchestrator;
+import io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator;
+import io.casehub.neocortex.cognitive.index.AttentionItem;
+import io.casehub.neocortex.memory.KnowledgeGapSummary;
+import io.casehub.neocortex.memory.ReflectionEntry;
+import java.util.Set;
+import org.mockito.Mockito;
 
 class CognitionCoreJournalTest {
 
@@ -20,19 +32,19 @@ class CognitionCoreJournalTest {
     void tick_records_temporalFocus_entry() {
         var config = CognitionConfig.all().with("temporalFocus", true);
         var mood   = new MoodOrchestrator(MoodConfig.defaults());
-        io.casehub.neocortex.cognition.temporal.TemporalFocusOrchestrator temporalFocus =
-                new io.casehub.neocortex.cognition.temporal.TemporalFocusOrchestrator() {
+        TemporalFocusOrchestrator temporalFocus =
+                new TemporalFocusOrchestrator() {
                     @Override
-                    public void tick(String agentId, String tenantId, java.util.Set<String> subjects)     {}
+                    public void tick(String agentId, String tenantId, Set<String> subjects)     {}
 
                     @Override
-                    public java.util.List<io.casehub.neocortex.cognitive.index.AttentionItem> lastFocus() {return List.of();}
+                    public List<AttentionItem> lastFocus() {return List.of();}
                 };
         var core = new CognitionCore(mood, null, null, null, null, null, null, null,
                                      null, config, null, null, null, null, temporalFocus, null, null, null);
         core.configureCognitiveJournal(journal);
 
-        core.tick("a1", "t1", null, (a, t) -> java.util.Set.of("subject-1", "subject-2"));
+        core.tick("a1", "t1", null, (a, t) -> Set.of("subject-1", "subject-2"));
 
         assertThat(entries)
                 .filteredOn(e -> e instanceof CognitiveEntry.TemporalFocusTicked)
@@ -48,19 +60,19 @@ class CognitionCoreJournalTest {
     void tick_records_memoryHygiene_entry() {
         var config = CognitionConfig.all().with("memoryHygiene", true);
         var mood   = new MoodOrchestrator(MoodConfig.defaults());
-        io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator hygiene =
-                new io.casehub.neocortex.cognition.memory.MemoryHygieneOrchestrator() {
+        MemoryHygieneOrchestrator hygiene =
+                new MemoryHygieneOrchestrator() {
                     @Override
                     public void tick(String agentId, String tenantId)                                                               {}
 
                     @Override
-                    public io.casehub.neocortex.memory.KnowledgeGapSummary knowledgeGaps(String agentId, String tenantId) {return null;}
+                    public KnowledgeGapSummary knowledgeGaps(String agentId, String tenantId) {return null;}
                 };
         var core = new CognitionCore(mood, null, null, null, null, null, null, hygiene,
                                      null, config, null, null, null, null, null, null, null, null);
         core.configureCognitiveJournal(journal);
 
-        core.tick("a1", "t1", null, (a, t) -> java.util.Set.of());
+        core.tick("a1", "t1", null, (a, t) -> Set.of());
 
         assertThat(entries)
                 .filteredOn(e -> e instanceof CognitiveEntry.MemoryHygieneTicked)
@@ -71,12 +83,12 @@ class CognitionCoreJournalTest {
     void tick_records_narrative_entry() {
         var config    = CognitionConfig.all().with("narrative", true);
         var mood      = new MoodOrchestrator(MoodConfig.defaults());
-        var narrative = org.mockito.Mockito.mock(io.casehub.neocortex.cognition.narrative.NarrativeOrchestrator.class);
+        var narrative = Mockito.mock(NarrativeOrchestrator.class);
         var core = new CognitionCore(mood, null, null, null, null, narrative, null, null,
                                      null, config, null, null, null, null, null, null, null, null);
         core.configureCognitiveJournal(journal);
 
-        core.tick("a1", "t1", null, (a, t) -> java.util.Set.of());
+        core.tick("a1", "t1", null, (a, t) -> Set.of());
 
         assertThat(entries)
                 .filteredOn(e -> e instanceof CognitiveEntry.NarrativeUpdated)
@@ -87,12 +99,12 @@ class CognitionCoreJournalTest {
     void tick_records_strategy_entry() {
         var config   = CognitionConfig.all().with("strategy", true);
         var mood     = new MoodOrchestrator(MoodConfig.defaults());
-        var strategy = org.mockito.Mockito.mock(io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator.class);
+        var strategy = Mockito.mock(StrategyLearningOrchestrator.class);
         var core = new CognitionCore(mood, null, null, null, strategy, null, null, null,
                                      null, config, null, null, null, null, null, null, null, null);
         core.configureCognitiveJournal(journal);
 
-        core.tick("a1", "t1", null, (a, t) -> java.util.Set.of());
+        core.tick("a1", "t1", null, (a, t) -> Set.of());
 
         assertThat(entries)
                 .filteredOn(e -> e instanceof CognitiveEntry.StrategyUpdated)
@@ -103,19 +115,19 @@ class CognitionCoreJournalTest {
     void tick_records_reflection_entry() {
         var config = CognitionConfig.all().with("reflection", true);
         var mood   = new MoodOrchestrator(MoodConfig.defaults());
-        io.casehub.neocortex.cognition.temporal.ReflectionRetrievalOrchestrator reflection =
-                new io.casehub.neocortex.cognition.temporal.ReflectionRetrievalOrchestrator() {
+        ReflectionRetrievalOrchestrator reflection =
+                new ReflectionRetrievalOrchestrator() {
                     @Override
                     public void tick(String agentId, String tenantId)                                                {}
 
                     @Override
-                    public java.util.List<io.casehub.neocortex.memory.ReflectionEntry> lastReflections() {return List.of();}
+                    public List<ReflectionEntry> lastReflections() {return List.of();}
                 };
         var core = new CognitionCore(mood, null, null, null, null, null, null, null,
                                      null, config, null, null, null, null, null, reflection, null, null);
         core.configureCognitiveJournal(journal);
 
-        core.tick("a1", "t1", null, (a, t) -> java.util.Set.of());
+        core.tick("a1", "t1", null, (a, t) -> Set.of());
 
         assertThat(entries)
                 .filteredOn(e -> e instanceof CognitiveEntry.ReflectionRetrieved)
@@ -128,13 +140,13 @@ class CognitionCoreJournalTest {
                                     .with("userModel", true)
                                     .with("mentalModel", true);
         var mood        = new MoodOrchestrator(MoodConfig.defaults());
-        var userModel   = org.mockito.Mockito.mock(io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator.class);
-        var mentalModel = org.mockito.Mockito.mock(io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator.class);
+        var userModel   = Mockito.mock(UserModelOrchestrator.class);
+        var mentalModel = Mockito.mock(MentalModelOrchestrator.class);
         var core = new CognitionCore(mood, null, userModel, mentalModel, null, null, null, null,
                                      null, config, null, null, null, null, null, null, null, null);
         core.configureCognitiveJournal(journal);
 
-        core.tick("a1", "t1", null, (a, t) -> java.util.Set.of("alice", "bob"));
+        core.tick("a1", "t1", null, (a, t) -> Set.of("alice", "bob"));
 
         var userEntries = entries.stream()
                                  .filter(e -> e instanceof CognitiveEntry.UserModelUpdated)

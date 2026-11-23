@@ -14,6 +14,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import io.casehub.neocortex.cognition.mentalmodel.TheoryOfMindPosterior;
 
 class TheoryOfMindBridgeTest {
 
@@ -138,13 +139,13 @@ class TheoryOfMindBridgeTest {
     @Test
     void posteriorRejectsNegativeProbabilities() {
         assertThrows(IllegalArgumentException.class,
-                     () -> new io.casehub.neocortex.cognition.mentalmodel.TheoryOfMindPosterior(-0.1, 0.6, 0.5));
+                     () -> new TheoryOfMindPosterior(-0.1, 0.6, 0.5));
     }
 
     @Test
     void posteriorRejectsSumNotOne() {
         assertThrows(IllegalArgumentException.class,
-                     () -> new io.casehub.neocortex.cognition.mentalmodel.TheoryOfMindPosterior(0.5, 0.5, 0.5));
+                     () -> new TheoryOfMindPosterior(0.5, 0.5, 0.5));
     }
 
     @Test

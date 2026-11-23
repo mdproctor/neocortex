@@ -24,6 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.smallrye.mutiny.Uni;
+import java.time.Duration;
+import java.util.Set;
 
 class NarrativeContentSummariserTest {
 
@@ -78,8 +81,8 @@ class NarrativeContentSummariserTest {
                 if (shouldThrow) return Multi.createFrom().failure(new RuntimeException("LLM unavailable"));
                 return Multi.createFrom().item(new AgentEvent.TextDelta(llmResponse));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         return s;
     }
@@ -129,7 +132,7 @@ class NarrativeContentSummariserTest {
     void summarise_themesFullyReDerived() {
         var oldTheme = new DerivedTheme("old-id", Instant.EPOCH, null,
                 List.of(), "old-theme", 0.5,
-                java.util.Map.of(), List.of());
+                Map.of(), List.of());
         var state = existingState(List.of(oldTheme));
 
         var items = List.of(reflection("new insight"));
@@ -232,7 +235,7 @@ class NarrativeContentSummariserTest {
     void summarise_groupEpisodesIncludedInTagMatching() {
         var groupEpisode = new GroupEpisode("gep1", Instant.EPOCH, Instant.EPOCH,
                 List.of("crisis"), "group desc", 0.3,
-                java.util.Set.of("member1"), java.util.Map.of(), 0.5);
+                Set.of("member1"), Map.of(), 0.5);
         var state = existingState(List.of(groupEpisode));
 
         var result = summariser.summarise(List.of(reflection("x")), state)
@@ -268,10 +271,10 @@ class NarrativeContentSummariserTest {
                                                    }
 
                                                    @Override
-                                                   public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+                                                   public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
                                                    @Override
-                                                   public void close(java.time.Duration timeout)   {}
+                                                   public void close(Duration timeout)   {}
                                                }), retriever);
 
         s.summarise(List.of(reflection("resolved outage")), null).toCompletableFuture().join();

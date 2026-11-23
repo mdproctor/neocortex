@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.mindmap.NodeUpdate;
 
 class CognitiveGoalOrchestratorTest {
 
@@ -98,7 +99,7 @@ class CognitiveGoalOrchestratorTest {
     void tick_detectsDecaySignal() {
         String goalId = createGoal("active", 0.7, 0.3, 0.8);
         mindMapStore.updateNode(goalId,
-                io.casehub.neocortex.mindmap.NodeUpdate.empty()
+                NodeUpdate.empty()
                         .withPropertiesToSet(Map.of("decay-signal", "dormant",
                                 "eidos-goal-name", "explore-topic")),
                 TENANT);

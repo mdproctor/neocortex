@@ -26,6 +26,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.Map;
+import org.junit.jupiter.api.Assertions;
 
 class DispositionSignalRecorderTest {
 
@@ -56,7 +58,7 @@ class DispositionSignalRecorderTest {
     @Test
     void neutralRelationshipShortCircuits() {
         var event = new RelationshipEvent(AGENT, "other", TENANT, null, null, NOW,
-                "experience", QualitySignal.NEUTRAL, "test interaction", null, java.util.Map.of());
+                "experience", QualitySignal.NEUTRAL, "test interaction", null, Map.of());
         recorder.onRelationshipRecorded(new RelationshipRecorded(event, "mem-1"));
 
         verify(stateService, never()).read(any(), any(), any());
@@ -117,7 +119,7 @@ class DispositionSignalRecorderTest {
                 new RelationshipPressureSource(), new RelationshipPressureSource());
         try {
             new DispositionSignalRecorder(sources, stateService, agentRegistry, signalWriter);
-            org.junit.jupiter.api.Assertions.fail("Expected IllegalStateException");
+            Assertions.fail("Expected IllegalStateException");
         } catch (IllegalStateException e) {
             assertThat(e.getMessage()).contains("Duplicate");
         }

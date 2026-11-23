@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.memory.cbr.CbrRetentionPolicy;
 
 class HygieneAdaptationPhaseTest {
 
@@ -368,7 +369,7 @@ class HygieneAdaptationPhaseTest {
         @Override public int supersedeAll(Collection<String> caseIds, String reason, String tenantId) { return 0; }
         @Override public int reinstateMatching(MemoryDomain domain, String caseType, Map<String, CbrFilter> filters, String tenantId) { return 0; }
         @Override public int reinstateAll(Collection<String> caseIds, String tenantId) { return 0; }
-        @Override public int purge(io.casehub.neocortex.memory.cbr.CbrRetentionPolicy policy) { return 0; }
+        @Override public int purge(CbrRetentionPolicy policy) { return 0; }
     }
 
     static class StubHygieneOrchestrator implements MemoryHygieneOrchestrator {

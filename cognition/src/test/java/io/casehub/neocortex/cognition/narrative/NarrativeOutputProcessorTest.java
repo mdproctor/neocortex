@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Set;
 
 class NarrativeOutputProcessorTest {
 
@@ -66,7 +67,7 @@ class NarrativeOutputProcessorTest {
         var episode = new IndividualEpisode("ep1", Instant.EPOCH, null,
                 List.of(), "desc", 0.5, List.of());
         var groupEpisode = new GroupEpisode("gep1", Instant.EPOCH, Instant.EPOCH,
-                List.of(), "group-desc", 0.3, java.util.Set.of(), java.util.Map.of(), 0.5);
+                List.of(), "group-desc", 0.3, Set.of(), Map.of(), 0.5);
         var fragments = List.<NarrativeFragment>of(episode, groupEpisode);
         var state = new NarrativeState("a1", "t1",
                 NarrativeScope.INDIVIDUAL, fragments, Instant.now(), 0);

@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
 
 class EntityAwareSalienceStrategyTest {
 
@@ -25,7 +26,7 @@ class EntityAwareSalienceStrategyTest {
     private Memory concern(String memoryId, String text) {
         return new Memory(memoryId, Subject.of("agent", "a1"),
                           new MemoryDomain("experience"), "t1", null, text,
-                          java.util.Map.of(), Instant.now(), null, null, null, null, null, null);
+                          Map.of(), Instant.now(), null, null, null, null, null, null);
     }
 
     @Test

@@ -27,6 +27,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
 import static org.mockito.Mockito.mock;
+import io.casehub.neocortex.cognition.appraisal.EmotionMapper;
+import io.casehub.neocortex.cognition.appraisal.SecDimensions;
+import io.casehub.neocortex.cognition.appraisal.SecResult;
+import java.util.Map;
 
 class AppraisalStatePropagationTest {
 
@@ -87,7 +91,7 @@ class AppraisalStatePropagationTest {
         var baseline = drives.currentDrives("a1", "t1").orElseThrow()
                 .drives().get(DriveAxis.COMPETENCE).intensity();
 
-        var modulation = java.util.Map.of(
+        var modulation = Map.of(
                 DriveAxis.COMPETENCE, 0.15,
                 DriveAxis.CURIOSITY, 0.0,
                 DriveAxis.AFFILIATION, 0.0,
@@ -156,13 +160,13 @@ class AppraisalStatePropagationTest {
     @Test
     void highNoveltyAppraisalDrivesCuriosityViaHope() {
         var secResults = List.of(
-                io.casehub.neocortex.cognition.appraisal.SecResult.of("relevance",
-                                                                      io.casehub.neocortex.cognition.appraisal.SecDimensions.RELEVANCE, 0.7,
-                                                                      io.casehub.neocortex.cognition.appraisal.SecDimensions.NOVELTY, 0.9),
-                io.casehub.neocortex.cognition.appraisal.SecResult.of("implication",
-                                                                      io.casehub.neocortex.cognition.appraisal.SecDimensions.CONDUCIVENESS, 0.1));
+                SecResult.of("relevance",
+                                                                      SecDimensions.RELEVANCE, 0.7,
+                                                                      SecDimensions.NOVELTY, 0.9),
+                SecResult.of("implication",
+                                                                      SecDimensions.CONDUCIVENESS, 0.1));
 
-        var emotions = io.casehub.neocortex.cognition.appraisal.EmotionMapper.mapEmotions(secResults, "novel-discovery");
+        var emotions = EmotionMapper.mapEmotions(secResults, "novel-discovery");
         assertThat(emotions).extracting("type").contains(EmotionType.HOPE);
 
         var hopeEmotion = emotions.stream()

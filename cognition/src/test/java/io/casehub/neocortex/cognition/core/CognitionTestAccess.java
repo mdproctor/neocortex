@@ -8,6 +8,7 @@ import io.casehub.neocortex.mindmap.intelligence.consolidation.ConsolidationComp
 import io.casehub.neocortex.mindmap.intelligence.consolidation.RecurringThoughtPhase;
 
 import java.util.Map;
+import io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant;
 
 public class CognitionTestAccess {
 
@@ -17,7 +18,7 @@ public class CognitionTestAccess {
     }
 
     public static void setAppraisalParticipant(CognitionCore core,
-                                               io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant participant) {
+                                               AppraisalTickParticipant participant) {
         try {
             var field = CognitionCore.class.getDeclaredField("appraisalParticipant");
             field.setAccessible(true);

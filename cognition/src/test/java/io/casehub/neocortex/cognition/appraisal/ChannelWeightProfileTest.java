@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.assertj.core.data.Offset;
 
 class ChannelWeightProfileTest {
 
@@ -49,8 +50,8 @@ class ChannelWeightProfileTest {
         var b = new ChannelWeightProfile(0.20, 0.40, 0.20, 0.20);
 
         var blended = a.blend(b, 0.5);
-        assertThat(blended.somatic()).isCloseTo(0.30, org.assertj.core.data.Offset.offset(0.01));
-        assertThat(blended.attentional()).isCloseTo(0.30, org.assertj.core.data.Offset.offset(0.01));
+        assertThat(blended.somatic()).isCloseTo(0.30, Offset.offset(0.01));
+        assertThat(blended.attentional()).isCloseTo(0.30, Offset.offset(0.01));
     }
 
     @Test
@@ -59,7 +60,7 @@ class ChannelWeightProfileTest {
         var b = ChannelWeightProfile.DEFAULT;
 
         var blended = a.blend(b, 0.0);
-        assertThat(blended.somatic()).isCloseTo(0.40, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(blended.somatic()).isCloseTo(0.40, Offset.offset(0.001));
     }
 
     @Test

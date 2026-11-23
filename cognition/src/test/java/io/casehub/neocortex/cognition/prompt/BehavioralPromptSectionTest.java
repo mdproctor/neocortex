@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
 
 class BehavioralPromptSectionTest {
 
@@ -307,7 +308,7 @@ class BehavioralPromptSectionTest {
                       "t1");
 
         var activatedContext = new CognitionRenderContext("agent1", "t1", null,
-                                                          java.util.List.of("social"));
+                                                          List.of("social"));
         var rendered = section.render(activatedContext);
         assertThat(rendered).isNotNull();
         int activatedPos = rendered.indexOf("weak-activated");
@@ -339,7 +340,7 @@ class BehavioralPromptSectionTest {
                       "t1");
 
         var activatedContext = new CognitionRenderContext("agent1", "t1", null,
-                                                          java.util.List.of("social", "achievement"));
+                                                          List.of("social", "achievement"));
         var rendered = section.render(activatedContext);
         assertThat(rendered).isNotNull();
         int strongerPos = rendered.indexOf("stronger-activated");
@@ -403,7 +404,7 @@ class BehavioralPromptSectionTest {
                       "t1");
 
         var activatedContext = new CognitionRenderContext("agent1", "t1", null,
-                                                          java.util.List.of("social"));
+                                                          List.of("social"));
         var rendered = section.render(activatedContext);
         assertThat(rendered).isNotNull();
         assertThat(rendered).contains("activated-low");

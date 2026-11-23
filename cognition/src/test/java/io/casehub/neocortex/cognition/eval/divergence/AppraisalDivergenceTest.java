@@ -5,6 +5,13 @@ import org.junit.jupiter.api.Test;
 
 import static io.casehub.neocortex.cognition.eval.divergence.DivergenceFixtures.TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.cognitive.Confidence;
+import io.casehub.neocortex.cognitive.ConfidenceOrigin;
+import io.casehub.neocortex.mindmap.EdgeInput;
+import io.casehub.neocortex.mindmap.NodeInput;
+import io.casehub.neocortex.mindmap.SubgraphInput;
+import io.casehub.neocortex.mindmap.SubgraphTypes;
+import java.util.ArrayList;
 
 class AppraisalDivergenceTest {
 
@@ -164,16 +171,16 @@ class AppraisalDivergenceTest {
     void curiosityChannelDiverges() {
         var store = new InMemoryMindMapStore();
         var subgraphId = store.createSubgraph(
-                new io.casehub.neocortex.mindmap.SubgraphInput("General",
-                        io.casehub.neocortex.mindmap.SubgraphTypes.GENERAL, null), TENANT);
-        var nodeIds = new java.util.ArrayList<String>();
+                new SubgraphInput("General",
+                        SubgraphTypes.GENERAL, null), TENANT);
+        var nodeIds = new ArrayList<String>();
         for (int i = 0; i < 5; i++) {
-            nodeIds.add(store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("topic-" + i, subgraphId)
-                    .withConfidence(new io.casehub.neocortex.cognitive.Confidence(
-                            io.casehub.neocortex.cognitive.ConfidenceOrigin.INFERRED, 0.4, null)), TENANT));
+            nodeIds.add(store.addNode(NodeInput.of("topic-" + i, subgraphId)
+                    .withConfidence(new Confidence(
+                            ConfidenceOrigin.INFERRED, 0.4, null)), TENANT));
         }
         for (int i = 1; i < nodeIds.size(); i++) {
-            store.addEdge(io.casehub.neocortex.mindmap.EdgeInput.of(
+            store.addEdge(EdgeInput.of(
                     nodeIds.get(i), nodeIds.get(0), "related"), TENANT);
         }
 

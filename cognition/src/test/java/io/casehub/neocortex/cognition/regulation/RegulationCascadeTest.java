@@ -31,6 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.caps.WeightUpdateContext;
 
 class RegulationCascadeTest {
 
@@ -128,7 +129,7 @@ class RegulationCascadeTest {
                 any(CognitionTickContext.class), any(AppraisalResult.class), any(),
                 anyDouble(), anyDouble(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(regulationResult);
-        when(capsEngine.updateWeights(any(), any(io.casehub.neocortex.caps.WeightUpdateContext.class)))
+        when(capsEngine.updateWeights(any(), any(WeightUpdateContext.class)))
                 .thenReturn(new AgentCapsState("a1", "t1", 2, Map.of(), Map.of()));
 
         var participant = new EmotionRegulationTickParticipant(
@@ -137,6 +138,6 @@ class RegulationCascadeTest {
         participant.tick(context);
 
         verify(capsEngine).updateWeights(
-                any(AgentCapsState.class), any(io.casehub.neocortex.caps.WeightUpdateContext.class));
+                any(AgentCapsState.class), any(WeightUpdateContext.class));
     }
 }

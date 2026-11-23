@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognition.salience.EntityAwareSalienceStrategy;
 
 class CognitionDefaultBeansTest {
 
@@ -37,13 +38,13 @@ class CognitionDefaultBeansTest {
     void salienceStrategyWrapsWithEntityAwareWhenMindMapStoreAvailable() {
         var              beans    = new CognitionDefaultBeans();
         SalienceStrategy strategy = beans.salienceStrategy(resolvable());
-        assertThat(strategy).isInstanceOf(io.casehub.neocortex.cognition.salience.EntityAwareSalienceStrategy.class);
+        assertThat(strategy).isInstanceOf(EntityAwareSalienceStrategy.class);
     }
 
     @Test
     void salienceStrategyWrapsNoOpWhenMindMapStoreUnavailable() {
         var              beans    = new CognitionDefaultBeans();
         SalienceStrategy strategy = beans.salienceStrategy(unresolvable());
-        assertThat(strategy).isInstanceOf(io.casehub.neocortex.cognition.salience.EntityAwareSalienceStrategy.class);
+        assertThat(strategy).isInstanceOf(EntityAwareSalienceStrategy.class);
     }
 }

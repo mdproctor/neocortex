@@ -3,6 +3,7 @@ package io.casehub.neocortex.cognition.eval.divergence;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Objects;
 
 class DerivationDivergenceTest {
 
@@ -128,9 +129,9 @@ class DerivationDivergenceTest {
         assertThat(open).isNotNull();
         assertThat(cautious).isNotNull();
 
-        boolean differs = !java.util.Objects.equals(open.relationalComplexity(), cautious.relationalComplexity())
-                || !java.util.Objects.equals(open.associativeReach(), cautious.associativeReach())
-                || !java.util.Objects.equals(open.workingMemorySpan(), cautious.workingMemorySpan());
+        boolean differs = !Objects.equals(open.relationalComplexity(), cautious.relationalComplexity())
+                || !Objects.equals(open.associativeReach(), cautious.associativeReach())
+                || !Objects.equals(open.workingMemorySpan(), cautious.workingMemorySpan());
 
         assertThat(differs)
                 .as("capacity config should differ — open[rc=%s ar=%s wm=%s] vs cautious[rc=%s ar=%s wm=%s]",

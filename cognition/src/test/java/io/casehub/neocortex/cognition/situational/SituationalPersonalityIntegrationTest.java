@@ -32,6 +32,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
+import java.util.LinkedHashMap;
 
 class SituationalPersonalityIntegrationTest {
 
@@ -74,7 +75,7 @@ class SituationalPersonalityIntegrationTest {
             @Override public Optional<PersonalityStateSnapshot> find(String t, String a, Instant n) {
                 var state = stateService.currentState(t, a);
                 if (state == null) return Optional.empty();
-                var facets = new java.util.LinkedHashMap<String, PersonalityStateSnapshot.FacetDisplacement>();
+                var facets = new LinkedHashMap<String, PersonalityStateSnapshot.FacetDisplacement>();
                 for (var entry : state.facets().entrySet()) {
                     var fs = entry.getValue();
                     facets.put(entry.getKey(),

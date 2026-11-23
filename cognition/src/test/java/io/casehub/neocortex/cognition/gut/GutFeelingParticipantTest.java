@@ -19,6 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import io.casehub.neocortex.cognitive.index.CognitiveMemoryRetriever;
+import java.util.List;
 
 class GutFeelingParticipantTest {
 
@@ -210,8 +212,8 @@ class GutFeelingParticipantTest {
         store.store(MemoryInput.of(Subject.of("agent", "a1"), ExperienceEvents.DOMAIN, "t1",
                                    "Authority figure criticized harshly").withPad(-0.7, 0.6, -0.3));
 
-        var retriever = new io.casehub.neocortex.cognitive.index.CognitiveMemoryRetriever(
-                store, java.util.List.of(), java.util.List.of());
+        var retriever = new CognitiveMemoryRetriever(
+                store, List.of(), List.of());
 
         var participant = new GutFeelingParticipant(retriever, store, null, null);
         var ctx         = new CognitionTickContext("a1", "t1", null, (a, t) -> Set.of(), "authority");

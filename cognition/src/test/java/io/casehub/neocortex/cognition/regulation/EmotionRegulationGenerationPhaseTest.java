@@ -27,6 +27,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognition.coping.CopingStrategy;
+import io.casehub.neocortex.cognitive.index.RegulationDefaults;
 
 class EmotionRegulationGenerationPhaseTest {
 
@@ -408,7 +410,7 @@ class EmotionRegulationGenerationPhaseTest {
         var emotion = new CognitiveEmotion(EmotionType.FEAR, 0.7, "subject1",
                                            Instant.now(), EmotionSource.INTRINSIC, PadProjection.NEUTRAL);
         var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
-        var rd        = new io.casehub.neocortex.cognitive.index.RegulationDefaults(0.5, 0.5, 0.5, 0.8);
+        var rd        = new RegulationDefaults(0.5, 0.5, 0.5, 0.8);
 
         var msg = EmotionRegulationGenerationPhase.buildUserMessage(
                 ctxWithAgents, appraisal, List.of(), 0.5, null, 0.0, null,
@@ -424,7 +426,7 @@ class EmotionRegulationGenerationPhaseTest {
         var emotion = new CognitiveEmotion(EmotionType.FEAR, 0.7, "subject1",
                                            Instant.now(), EmotionSource.INTRINSIC, PadProjection.NEUTRAL);
         var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
-        var rd        = new io.casehub.neocortex.cognitive.index.RegulationDefaults(0.5, 0.5, 0.5, 0.8);
+        var rd        = new RegulationDefaults(0.5, 0.5, 0.5, 0.8);
 
         var msg = EmotionRegulationGenerationPhase.buildUserMessage(
                 context, appraisal, List.of(), 0.5, null, 0.0, null,
@@ -554,13 +556,13 @@ class EmotionRegulationGenerationPhaseTest {
     @Test
     void buildCopingAwareMessage_includesCopingContext() {
         var emotion = new CognitiveEmotion(EmotionType.ANGER, 0.75, "subject1",
-                                           Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
-                                           io.casehub.neocortex.cognitive.PadProjection.NEUTRAL);
+                                           Instant.now(), EmotionSource.INTRINSIC,
+                                           PadProjection.NEUTRAL);
         var appraisal = new AppraisalResult(List.of(emotion), List.of(), null);
 
         var msg = EmotionRegulationGenerationPhase.buildCopingAwareMessage(
                 context, appraisal, List.of(), 0.8, null, 0.1,
-                io.casehub.neocortex.cognition.coping.CopingStrategy.POSITIVE_REINTERPRETATION,
+                CopingStrategy.POSITIVE_REINTERPRETATION,
                 EmotionRegulationStrategy.COGNITIVE_CHANGE,
                 "I see this as a growth opportunity");
 

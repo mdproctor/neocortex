@@ -26,6 +26,36 @@ import io.casehub.neocortex.cognition.mood.MoodOrchestrator;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.cognition.goal.CognitiveGoalConfig;
+import io.casehub.neocortex.cognition.goal.CognitiveGoalOrchestrator;
+import io.casehub.neocortex.cognition.goal.GoalEscalationConfig;
+import io.casehub.neocortex.cognition.goal.GoalProposalConfig;
+import io.casehub.neocortex.cognition.goal.GoalProposalOrchestrator;
+import io.casehub.neocortex.cognition.innerlife.InnerLifeConfig;
+import io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator;
+import io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig;
+import io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator;
+import io.casehub.neocortex.cognition.mood.GoalEmotionMoodBridge;
+import io.casehub.neocortex.cognition.prompt.EntityKnowledgePromptSection;
+import io.casehub.neocortex.cognition.strategy.StrategyLearningConfig;
+import io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator;
+import io.casehub.neocortex.cognition.usermodel.UserModelConfig;
+import io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator;
+import io.casehub.neocortex.cognitive.PadProjection;
+import io.casehub.neocortex.cognitive.index.CognitiveMemoryRetriever;
+import io.casehub.neocortex.cognitive.index.CognitiveProfile;
+import io.casehub.neocortex.cognitive.index.DomainActivation;
+import io.casehub.neocortex.memory.inmem.InMemoryMemoryStore;
+import io.casehub.neocortex.mindmap.GoalAppraisal;
+import io.casehub.neocortex.mindmap.NodeInput;
+import io.casehub.neocortex.mindmap.SubgraphInput;
+import io.casehub.neocortex.mindmap.SubgraphTypes;
+import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
+import io.casehub.platform.api.identity.CurrentPrincipal;
+import java.time.Clock;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 class CognitivePipelineBuilderTest {
 
@@ -36,14 +66,14 @@ class CognitivePipelineBuilderTest {
             NOOP_DRIVE, NOOP_DRIVE, NOOP_DRIVE, NOOP_DRIVE,
             mood, new DriveComposer(), DriveConfig.defaults());
 
-    private static io.casehub.neocortex.memory.inmem.InMemoryMemoryStore createMemoryStore() {
-        return new io.casehub.neocortex.memory.inmem.InMemoryMemoryStore(
-                new io.casehub.platform.api.identity.CurrentPrincipal() {
+    private static InMemoryMemoryStore createMemoryStore() {
+        return new InMemoryMemoryStore(
+                new CurrentPrincipal() {
                     @Override
                     public String actorId()               {return "test-actor";}
 
                     @Override
-                    public java.util.Set<String> groups() {return java.util.Set.of();}
+                    public Set<String> groups() {return Set.of();}
 
                     @Override
                     public String tenancyId()             {return "test-tenant";}
@@ -67,11 +97,11 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void buildWithOptionalOrchestratorsWiresThem() {
-        var userModel   = new io.casehub.neocortex.cognition.usermodel.UserModelOrchestrator(null, io.casehub.neocortex.cognition.usermodel.UserModelConfig.defaults(), null);
-        var mentalModel = new io.casehub.neocortex.cognition.mentalmodel.MentalModelOrchestrator(null, io.casehub.neocortex.cognition.mentalmodel.MentalModelConfig.defaults(), java.time.Clock.systemUTC(), null);
-        var strategy    = new io.casehub.neocortex.cognition.strategy.StrategyLearningOrchestrator(null, null, io.casehub.neocortex.cognition.strategy.StrategyLearningConfig.defaults(), java.time.Clock.systemUTC(), null);
-        var innerLife   = new io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator(null, java.util.List.of(), io.casehub.neocortex.cognition.innerlife.InnerLifeConfig.defaults(), drives, null);
-        var goals       = new io.casehub.neocortex.cognition.goal.GoalProposalOrchestrator(drives, java.util.List.of(), null, java.util.Optional.empty(), null, null, null, io.casehub.neocortex.cognition.goal.GoalProposalConfig.defaults(), io.casehub.neocortex.cognition.goal.GoalEscalationConfig.defaults(), java.time.Clock.systemUTC());
+        var userModel   = new UserModelOrchestrator(null, UserModelConfig.defaults(), null);
+        var mentalModel = new MentalModelOrchestrator(null, MentalModelConfig.defaults(), Clock.systemUTC(), null);
+        var strategy    = new StrategyLearningOrchestrator(null, null, StrategyLearningConfig.defaults(), Clock.systemUTC(), null);
+        var innerLife   = new InnerLifeOrchestrator(null, List.of(), InnerLifeConfig.defaults(), drives, null);
+        var goals       = new GoalProposalOrchestrator(drives, List.of(), null, Optional.empty(), null, null, null, GoalProposalConfig.defaults(), GoalEscalationConfig.defaults(), Clock.systemUTC());
 
         var core = CognitivePipelineBuilder.create(mood, drives)
                                            .userModel(userModel)
@@ -108,9 +138,9 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void buildWithCognitiveProfileWiresParticipant() {
-        var mindMapStore = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var mindMapStore = new InMemoryMindMapStore();
         var memoryStore  = createMemoryStore();
-        var profile      = new io.casehub.neocortex.cognitive.index.CognitiveProfile(mindMapStore, memoryStore);
+        var profile      = new CognitiveProfile(mindMapStore, memoryStore);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
                                            .cognitiveProfile(profile)
@@ -122,9 +152,9 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void buildWithDomainActivationAndMindMapStoreWiresParticipant() {
-        var mindMapStore     = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var mindMapStore     = new InMemoryMindMapStore();
         var memoryStore      = createMemoryStore();
-        var domainActivation = new io.casehub.neocortex.cognitive.index.DomainActivation(mindMapStore, memoryStore);
+        var domainActivation = new DomainActivation(mindMapStore, memoryStore);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
                                            .mindMapStore(mindMapStore)
@@ -137,9 +167,9 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void buildWithDomainActivationButNoMindMapStoreIsNoOp() {
-        var mindMapStore     = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var mindMapStore     = new InMemoryMindMapStore();
         var memoryStore      = createMemoryStore();
-        var domainActivation = new io.casehub.neocortex.cognitive.index.DomainActivation(mindMapStore, memoryStore);
+        var domainActivation = new DomainActivation(mindMapStore, memoryStore);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
                                            .domainActivation(domainActivation)
@@ -151,27 +181,27 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void cognitiveProfileProducesEntityKnowledgeSectionAfterTick() {
-        var mindMapStore = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var mindMapStore = new InMemoryMindMapStore();
         var memoryStore  = createMemoryStore();
         var tenantId     = "test-tenant";
 
         var sgId = mindMapStore.createSubgraph(
-                new io.casehub.neocortex.mindmap.SubgraphInput("people", io.casehub.neocortex.mindmap.SubgraphTypes.PERSON, null), tenantId);
-        mindMapStore.addNode(io.casehub.neocortex.mindmap.NodeInput.of("Alice", sgId), tenantId);
+                new SubgraphInput("people", SubgraphTypes.PERSON, null), tenantId);
+        mindMapStore.addNode(NodeInput.of("Alice", sgId), tenantId);
 
-        var profile = new io.casehub.neocortex.cognitive.index.CognitiveProfile(mindMapStore, memoryStore);
+        var profile = new CognitiveProfile(mindMapStore, memoryStore);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
                                            .config(CognitionConfig.all().with("entityKnowledge", true))
                                            .cognitiveProfile(profile)
                                            .build();
 
-        SubjectResolver resolver = (agentId, tid) -> java.util.Set.of("Alice");
+        SubjectResolver resolver = (agentId, tid) -> Set.of("Alice");
         core.tick("agent-1", tenantId, null, resolver);
 
         var sections = core.promptSections();
         var hasEntityKnowledge = sections.stream()
-                                         .anyMatch(s -> s instanceof io.casehub.neocortex.cognition.prompt.EntityKnowledgePromptSection);
+                                         .anyMatch(s -> s instanceof EntityKnowledgePromptSection);
         assertThat(hasEntityKnowledge)
                 .as("EntityKnowledgePromptSection should be present when entityKnowledge explicitly enabled")
                 .isTrue();
@@ -179,15 +209,15 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void cognitiveProfileSectionAbsentWhenEntityKnowledgeDisabled() {
-        var mindMapStore = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var mindMapStore = new InMemoryMindMapStore();
         var memoryStore  = createMemoryStore();
         var tenantId     = "test-tenant";
 
         var sgId = mindMapStore.createSubgraph(
-                new io.casehub.neocortex.mindmap.SubgraphInput("people", io.casehub.neocortex.mindmap.SubgraphTypes.PERSON, null), tenantId);
-        mindMapStore.addNode(io.casehub.neocortex.mindmap.NodeInput.of("Bob", sgId), tenantId);
+                new SubgraphInput("people", SubgraphTypes.PERSON, null), tenantId);
+        mindMapStore.addNode(NodeInput.of("Bob", sgId), tenantId);
 
-        var profile = new io.casehub.neocortex.cognitive.index.CognitiveProfile(mindMapStore, memoryStore);
+        var profile = new CognitiveProfile(mindMapStore, memoryStore);
         var config  = CognitionConfig.all().with("entityKnowledge", false);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
@@ -195,12 +225,12 @@ class CognitivePipelineBuilderTest {
                                            .cognitiveProfile(profile)
                                            .build();
 
-        SubjectResolver resolver = (agentId, tid) -> java.util.Set.of("Bob");
+        SubjectResolver resolver = (agentId, tid) -> Set.of("Bob");
         core.tick("agent-1", tenantId, null, resolver);
 
         var sections = core.promptSections();
         var hasEntityKnowledge = sections.stream()
-                                         .anyMatch(s -> s instanceof io.casehub.neocortex.cognition.prompt.EntityKnowledgePromptSection);
+                                         .anyMatch(s -> s instanceof EntityKnowledgePromptSection);
         assertThat(hasEntityKnowledge)
                 .as("EntityKnowledgePromptSection should be absent when entityKnowledgeEnabled=false")
                 .isFalse();
@@ -208,15 +238,15 @@ class CognitivePipelineBuilderTest {
 
     @Test
     void buildWithGoalEmotionMoodBridgeAndCognitiveGoalOrchestratorWiresThem() {
-        var                                        mindMapStore = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var                                        mindMapStore = new InMemoryMindMapStore();
         var                                        memoryStore  = createMemoryStore();
-        io.casehub.neocortex.mindmap.GoalAppraisal appraisal    = (goal, ctx) -> java.util.List.of();
-        var goalOrchestrator = new io.casehub.neocortex.cognition.goal.CognitiveGoalOrchestrator(
+        GoalAppraisal appraisal    = (goal, ctx) -> List.of();
+        var goalOrchestrator = new CognitiveGoalOrchestrator(
                 mindMapStore, appraisal, memoryStore,
-                io.casehub.neocortex.cognition.goal.CognitiveGoalConfig.defaults(),
-                (a, t) -> new io.casehub.neocortex.cognitive.PadProjection(0, 0, 0),
-                java.time.Clock.systemUTC());
-        var bridge = new io.casehub.neocortex.cognition.mood.GoalEmotionMoodBridge(
+                CognitiveGoalConfig.defaults(),
+                (a, t) -> new PadProjection(0, 0, 0),
+                Clock.systemUTC());
+        var bridge = new GoalEmotionMoodBridge(
                 goalOrchestrator, mood);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
@@ -230,8 +260,8 @@ class CognitivePipelineBuilderTest {
     @Test
     void buildWithCognitiveMemoryRetrieverWiresIt() {
         var store = createMemoryStore();
-        var retriever = new io.casehub.neocortex.cognitive.index.CognitiveMemoryRetriever(
-                store, java.util.List.of());
+        var retriever = new CognitiveMemoryRetriever(
+                store, List.of());
 
         var core = CognitivePipelineBuilder.create(mood, drives)
                                            .cognitiveMemoryRetriever(retriever)
@@ -244,9 +274,9 @@ class CognitivePipelineBuilderTest {
     @Test
     void innerLifeDisabledNullsOutOrchestrator() {
         var config = CognitionConfig.all().with("innerLife", false);
-        var innerLifeOrch = new io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator(
-                null, java.util.List.of(),
-                io.casehub.neocortex.cognition.innerlife.InnerLifeConfig.defaults(),
+        var innerLifeOrch = new InnerLifeOrchestrator(
+                null, List.of(),
+                InnerLifeConfig.defaults(),
                 drives, null);
 
         var core = CognitivePipelineBuilder.create(mood, drives)
@@ -262,9 +292,9 @@ class CognitivePipelineBuilderTest {
     @Test
     void innerLifeEnabledPreservesOrchestrator() {
         var config = CognitionConfig.all();
-        var innerLifeOrch = new io.casehub.neocortex.cognition.innerlife.InnerLifeOrchestrator(
-                null, java.util.List.of(),
-                io.casehub.neocortex.cognition.innerlife.InnerLifeConfig.defaults(),
+        var innerLifeOrch = new InnerLifeOrchestrator(
+                null, List.of(),
+                InnerLifeConfig.defaults(),
                 drives, null);
 
         var core = CognitivePipelineBuilder.create(mood, drives)

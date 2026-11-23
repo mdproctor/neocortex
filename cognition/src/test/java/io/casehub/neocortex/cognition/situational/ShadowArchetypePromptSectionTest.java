@@ -10,6 +10,11 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.mindmap.NodeInput;
+import io.casehub.neocortex.mindmap.SubgraphInput;
+import io.casehub.neocortex.mindmap.SubgraphTypes;
+import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
+import java.util.Set;
 
 class ShadowArchetypePromptSectionTest {
 
@@ -79,14 +84,14 @@ class ShadowArchetypePromptSectionTest {
                 Map.of("anxiousness", 0.15, "emotional-lability", 0.12,
                        "hostility", 0.08, "grandiosity", 0.03),
                 3);
-        var store = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var store = new InMemoryMindMapStore();
         var personSgId = store.createSubgraph(
-                new io.casehub.neocortex.mindmap.SubgraphInput(
-                        "Person", io.casehub.neocortex.mindmap.SubgraphTypes.PERSON, null), "t1");
-        store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("agent-1", personSgId)
+                new SubgraphInput(
+                        "Person", SubgraphTypes.PERSON, null), "t1");
+        store.addNode(NodeInput.of("agent-1", personSgId)
                                                             .withProperties(Map.of("archetype-1-family", "creator")), "t1");
 
-        java.util.Set<String> modeProfileFacets = java.util.Set.of("anxiousness", "emotional-lability");
+        Set<String> modeProfileFacets = Set.of("anxiousness", "emotional-lability");
         var                   config            = ShadowFrameConfig.defaults();
 
         var section = new ShadowArchetypePromptSection(
@@ -113,7 +118,7 @@ class ShadowArchetypePromptSectionTest {
                 Map.of("anxiousness", 0.15, "hostility", 0.08),
                 2);
 
-        java.util.Set<String> modeProfileFacets = java.util.Set.of("anxiousness");
+        Set<String> modeProfileFacets = Set.of("anxiousness");
         var                   config            = ShadowFrameConfig.defaults();
 
         var section = new ShadowArchetypePromptSection(
@@ -133,7 +138,7 @@ class ShadowArchetypePromptSectionTest {
                 "STRESS", null,
                 Map.of("anxiousness", 0.01),
                 1);
-        var store = new io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore();
+        var store = new InMemoryMindMapStore();
 
         var section = new ShadowArchetypePromptSection(
                 (a, t) -> Optional.of(snapshot),

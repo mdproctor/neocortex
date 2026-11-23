@@ -22,6 +22,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognition.relationship.RelationshipStageConfig;
+import io.casehub.neocortex.session.testing.StubPipelines;
+import io.casehub.platform.agent.AgentSession;
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
 
 class UserModelOrchestratorTest {
 
@@ -57,16 +62,16 @@ class UserModelOrchestratorTest {
     @Test
     void tick_withMemoryRetriever_includesMemoriesInLlmPrompt() {
         var capturedPrompt = new AtomicReference<String>();
-        var pipeline = io.casehub.neocortex.session.testing.StubPipelines.create(
-            init -> new io.casehub.platform.agent.AgentSession() {
-                @Override public io.smallrye.mutiny.Multi<AgentEvent> query(String prompt) {
+        var pipeline = StubPipelines.create(
+            init -> new AgentSession() {
+                @Override public Multi<AgentEvent> query(String prompt) {
                     capturedPrompt.set(prompt);
-                    return io.smallrye.mutiny.Multi.createFrom().item(new AgentEvent.TextDelta(
+                    return Multi.createFrom().item(new AgentEvent.TextDelta(
                         "{\"communicationStyle\":\"friendly\",\"topicsOfInterest\":\"tech\"," +
                         "\"preferences\":\"concise\",\"synthesisNotes\":\"engaged\"}"));
                 }
-                @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-                @Override public void close(java.time.Duration timeout) {}
+                @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+                @Override public void close(Duration timeout) {}
             });
 
         var mockStore = mock(CaseMemoryStore.class);
@@ -82,7 +87,7 @@ class UserModelOrchestratorTest {
 
         var config = new UserModelConfig(
                 1, Duration.ZERO, 0.01, 1.0, 0.5,
-                io.casehub.neocortex.cognition.relationship.RelationshipStageConfig.defaults(),
+                RelationshipStageConfig.defaults(),
                 Duration.ofHours(1), Duration.ofDays(7),
                 "user-model", "user-profile", 50);
         var orchestrator = new UserModelOrchestrator(profileMemory, config, pipeline, retriever);
@@ -101,21 +106,21 @@ class UserModelOrchestratorTest {
     @Test
     void tick_withoutMemoryRetriever_promptOmitsMemorySection() {
         var capturedPrompt = new AtomicReference<String>();
-        var pipeline = io.casehub.neocortex.session.testing.StubPipelines.create(
-            init -> new io.casehub.platform.agent.AgentSession() {
-                @Override public io.smallrye.mutiny.Multi<AgentEvent> query(String prompt) {
+        var pipeline = StubPipelines.create(
+            init -> new AgentSession() {
+                @Override public Multi<AgentEvent> query(String prompt) {
                     capturedPrompt.set(prompt);
-                    return io.smallrye.mutiny.Multi.createFrom().item(new AgentEvent.TextDelta(
+                    return Multi.createFrom().item(new AgentEvent.TextDelta(
                         "{\"communicationStyle\":\"friendly\",\"topicsOfInterest\":\"tech\"," +
                         "\"preferences\":\"concise\",\"synthesisNotes\":\"engaged\"}"));
                 }
-                @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-                @Override public void close(java.time.Duration timeout) {}
+                @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+                @Override public void close(Duration timeout) {}
             });
 
         var config = new UserModelConfig(
                 1, Duration.ZERO, 0.01, 1.0, 0.5,
-                io.casehub.neocortex.cognition.relationship.RelationshipStageConfig.defaults(),
+                RelationshipStageConfig.defaults(),
                 Duration.ofHours(1), Duration.ofDays(7),
                 "user-model", "user-profile", 50);
         var orchestrator = new UserModelOrchestrator(profileMemory, config, pipeline);
@@ -132,16 +137,16 @@ class UserModelOrchestratorTest {
     @Test
     void tick_withMemoryRetriever_emptyMemories_promptOmitsMemorySection() {
         var capturedPrompt = new AtomicReference<String>();
-        var pipeline = io.casehub.neocortex.session.testing.StubPipelines.create(
-            init -> new io.casehub.platform.agent.AgentSession() {
-                @Override public io.smallrye.mutiny.Multi<AgentEvent> query(String prompt) {
+        var pipeline = StubPipelines.create(
+            init -> new AgentSession() {
+                @Override public Multi<AgentEvent> query(String prompt) {
                     capturedPrompt.set(prompt);
-                    return io.smallrye.mutiny.Multi.createFrom().item(new AgentEvent.TextDelta(
+                    return Multi.createFrom().item(new AgentEvent.TextDelta(
                         "{\"communicationStyle\":\"friendly\",\"topicsOfInterest\":\"tech\"," +
                         "\"preferences\":\"concise\",\"synthesisNotes\":\"engaged\"}"));
                 }
-                @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-                @Override public void close(java.time.Duration timeout) {}
+                @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+                @Override public void close(Duration timeout) {}
             });
 
         var mockStore = mock(CaseMemoryStore.class);
@@ -150,7 +155,7 @@ class UserModelOrchestratorTest {
 
         var config = new UserModelConfig(
                 1, Duration.ZERO, 0.01, 1.0, 0.5,
-                io.casehub.neocortex.cognition.relationship.RelationshipStageConfig.defaults(),
+                RelationshipStageConfig.defaults(),
                 Duration.ofHours(1), Duration.ofDays(7),
                 "user-model", "user-profile", 50);
         var orchestrator = new UserModelOrchestrator(profileMemory, config, pipeline, retriever);
@@ -167,16 +172,16 @@ class UserModelOrchestratorTest {
     @Test
     void tick_withMemoryRetriever_truncatesLongMemoryText() {
         var capturedPrompt = new AtomicReference<String>();
-        var pipeline = io.casehub.neocortex.session.testing.StubPipelines.create(
-            init -> new io.casehub.platform.agent.AgentSession() {
-                @Override public io.smallrye.mutiny.Multi<AgentEvent> query(String prompt) {
+        var pipeline = StubPipelines.create(
+            init -> new AgentSession() {
+                @Override public Multi<AgentEvent> query(String prompt) {
                     capturedPrompt.set(prompt);
-                    return io.smallrye.mutiny.Multi.createFrom().item(new AgentEvent.TextDelta(
+                    return Multi.createFrom().item(new AgentEvent.TextDelta(
                         "{\"communicationStyle\":\"friendly\",\"topicsOfInterest\":\"tech\"," +
                         "\"preferences\":\"concise\",\"synthesisNotes\":\"engaged\"}"));
                 }
-                @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-                @Override public void close(java.time.Duration timeout) {}
+                @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+                @Override public void close(Duration timeout) {}
             });
 
         var longText = "A".repeat(200);
@@ -190,7 +195,7 @@ class UserModelOrchestratorTest {
 
         var config = new UserModelConfig(
                 1, Duration.ZERO, 0.01, 1.0, 0.5,
-                io.casehub.neocortex.cognition.relationship.RelationshipStageConfig.defaults(),
+                RelationshipStageConfig.defaults(),
                 Duration.ofHours(1), Duration.ofDays(7),
                 "user-model", "user-profile", 50);
         var orchestrator = new UserModelOrchestrator(profileMemory, config, pipeline, retriever);

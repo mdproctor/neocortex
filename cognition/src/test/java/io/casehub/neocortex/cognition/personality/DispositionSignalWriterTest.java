@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.LinkedHashMap;
 
 class DispositionSignalWriterTest {
 
@@ -123,7 +124,7 @@ class DispositionSignalWriterTest {
         public Map<String, Double> activationWeights(String agentId, String tenancyId) {
             var agent = counts.get(key(agentId, tenancyId));
             if (agent == null) {return Map.of();}
-            var result = new java.util.LinkedHashMap<String, Double>();
+            var result = new LinkedHashMap<String, Double>();
             agent.forEach((k, v) -> {if (v.get() > 0) {result.put(k, (double) v.get());}});
             return result;
         }

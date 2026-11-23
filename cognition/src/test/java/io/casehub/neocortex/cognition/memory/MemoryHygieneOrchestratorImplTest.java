@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import io.casehub.platform.api.path.Path;
 
 class MemoryHygieneOrchestratorImplTest {
 
@@ -53,7 +54,7 @@ class MemoryHygieneOrchestratorImplTest {
         var cbrCase = new CbrFeatureRecord("problem text", "solution text", null, null,
                 Map.of("k", FeatureValue.string("v")), null, agentId);
         return new CbrMatch<>(cbrCase, caseId, "memory", 0.5, false,
-                Map.of(), storedAt, io.casehub.platform.api.path.Path.root(), null);
+                Map.of(), storedAt, Path.root(), null);
     }
 
     @Test

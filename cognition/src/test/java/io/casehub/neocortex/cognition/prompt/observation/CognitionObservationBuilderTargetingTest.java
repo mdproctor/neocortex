@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.caps.SituationContext;
 
 class CognitionObservationBuilderTargetingTest {
 
@@ -101,7 +102,7 @@ class CognitionObservationBuilderTargetingTest {
                 new SubgraphInput("cognitive-" + OBSERVER, "cognitive", null), TENANT);
         store.addNode(
                 NodeInput.of("drive-description-gloating-prey", cogSgId)
-                         .withTraits(java.util.Set.of("DriveDescriptionGenerated"))
+                         .withTraits(Set.of("DriveDescriptionGenerated"))
                          .withProperties(Map.of(
                                  "agent-id", OBSERVER,
                                  "drive-type", "gloating",
@@ -110,7 +111,7 @@ class CognitionObservationBuilderTargetingTest {
                 TENANT);
         store.addNode(
                 NodeInput.of("drive-description-gloating", cogSgId)
-                         .withTraits(java.util.Set.of("DriveDescriptionGenerated"))
+                         .withTraits(Set.of("DriveDescriptionGenerated"))
                          .withProperties(Map.of(
                                  "agent-id", OBSERVER,
                                  "drive-type", "gloating",
@@ -121,7 +122,7 @@ class CognitionObservationBuilderTargetingTest {
                 new DriveSnapshot("gloating", 0.7, "gloating desc")));
 
         var section = builder.renderInternalState(
-                List.of(), "", Set.of(TARGET), io.casehub.neocortex.caps.SituationContext.EMPTY, Map.of(TARGET, "Penelope"));
+                List.of(), "", Set.of(TARGET), SituationContext.EMPTY, Map.of(TARGET, "Penelope"));
 
         assertThat(section).isNotNull();
         String text = ((ObservationSection.TextBlock) section).content();
@@ -137,7 +138,7 @@ class CognitionObservationBuilderTargetingTest {
                 new SubgraphInput("cognitive-" + OBSERVER, "cognitive", null), TENANT);
         store.addNode(
                 NodeInput.of("drive-description-gloating", cogSgId)
-                         .withTraits(java.util.Set.of("DriveDescriptionGenerated"))
+                         .withTraits(Set.of("DriveDescriptionGenerated"))
                          .withProperties(Map.of(
                                  "agent-id", OBSERVER,
                                  "drive-type", "gloating",
@@ -148,7 +149,7 @@ class CognitionObservationBuilderTargetingTest {
                 new DriveSnapshot("gloating", 0.7, "gloating desc")));
 
         var section = builder.renderInternalState(
-                List.of(), "", Set.of(TARGET), io.casehub.neocortex.caps.SituationContext.EMPTY, Map.of(TARGET, "Penelope"));
+                List.of(), "", Set.of(TARGET), SituationContext.EMPTY, Map.of(TARGET, "Penelope"));
 
         assertThat(section).isNotNull();
         String text = ((ObservationSection.TextBlock) section).content();

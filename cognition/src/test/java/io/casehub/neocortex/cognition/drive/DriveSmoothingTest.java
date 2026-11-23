@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.eidos.api.AgentDescriptor;
 
 class DriveSmoothingTest {
 
@@ -31,7 +32,7 @@ class DriveSmoothingTest {
         var moodOrch = mock(MoodOrchestrator.class);
         when(moodOrch.currentMood(any(), any())).thenReturn(Optional.empty());
         var clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
-        var descriptor = mock(io.casehub.eidos.api.AgentDescriptor.class);
+        var descriptor = mock(AgentDescriptor.class);
 
         var highSource = new DriveSource[]{forAxis(DriveAxis.CURIOSITY, 0.8)};
         DriveSource curiosity = (a, t) -> highSource[0].evaluate(a, t);
@@ -66,7 +67,7 @@ class DriveSmoothingTest {
         var moodOrch = mock(MoodOrchestrator.class);
         when(moodOrch.currentMood(any(), any())).thenReturn(Optional.empty());
         var clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
-        var descriptor = mock(io.casehub.eidos.api.AgentDescriptor.class);
+        var descriptor = mock(AgentDescriptor.class);
 
         var source = new DriveSource[]{forAxis(DriveAxis.CURIOSITY, 0.2)};
         DriveSource curiosity = (a, t) -> source[0].evaluate(a, t);

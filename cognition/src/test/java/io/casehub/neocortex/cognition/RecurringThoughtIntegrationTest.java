@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.cognitive.index.CognitiveDefaults;
+import java.time.Duration;
 
 class RecurringThoughtIntegrationTest {
 
@@ -52,9 +54,9 @@ class RecurringThoughtIntegrationTest {
         // lower fixation threshold (derived by CognitiveDerivationEngine, tested separately).
         // Here we verify the scorer respects different thresholds.
         var sensitiveConfig = new RecurringThoughtConfig(
-                Map.of(), 0.15, 0.5, 0.75, java.time.Duration.ofDays(7), 3);
+                Map.of(), 0.15, 0.5, 0.75, Duration.ofDays(7), 3);
         var resilientConfig = new RecurringThoughtConfig(
-                Map.of(), 0.45, 0.7, 0.85, java.time.Duration.ofDays(7), 3);
+                Map.of(), 0.45, 0.7, 0.85, Duration.ofDays(7), 3);
 
         String sgId = createSubgraph();
         String nodeId = mindMapStore.addNode(NodeInput.of("worry-topic", sgId)
@@ -82,7 +84,7 @@ class RecurringThoughtIntegrationTest {
 
         var harness = CognitionTestHarness.builder()
                                           .withMindMapStore(store)
-                                          .agentFromDefaults(AGENT, io.casehub.neocortex.cognitive.index.CognitiveDefaults.empty(AGENT))
+                                          .agentFromDefaults(AGENT, CognitiveDefaults.empty(AGENT))
                                           .withConsolidationEnabled(true)
                                           .build();
 

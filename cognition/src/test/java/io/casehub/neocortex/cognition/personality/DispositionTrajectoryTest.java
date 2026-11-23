@@ -38,6 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognitive.CognitiveCapacityConfig;
+import io.casehub.neocortex.cognitive.index.WeightedTerm;
+import java.util.Comparator;
 
 /**
  * 240-day trajectory tests (spec test group 14) exercising real Eidos SPIs
@@ -329,8 +332,8 @@ class DispositionTrajectoryTest {
         String dominant = null;
         if (state.livedProfile() != null && !state.livedProfile().profile().isEmpty()) {
             dominant = state.livedProfile().profile().stream()
-                    .max(java.util.Comparator.comparingDouble(io.casehub.neocortex.cognitive.index.WeightedTerm::weight))
-                    .map(io.casehub.neocortex.cognitive.index.WeightedTerm::term).orElse(null);
+                    .max(Comparator.comparingDouble(WeightedTerm::weight))
+                    .map(WeightedTerm::term).orElse(null);
         }
 
         return new TrajectoryResult(journal.transitions, journal.reversals,
@@ -370,7 +373,7 @@ class DispositionTrajectoryTest {
 
     private void configureLearningProfileRc(EffectiveCognitiveDefaults effectiveDefaults, double rc) {
         var defaults = CognitiveDefaults.empty(AGENT)
-                .withCapacityConfig(new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(rc, null, null));
+                .withCapacityConfig(new CognitiveCapacityConfig(rc, null, null));
         when(effectiveDefaults.restingFor(eq(TENANT), eq(AGENT))).thenReturn(LearningProfile.from(defaults));
     }
 

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.cognitive.observability.testing.InMemoryPipelineSnapshotStore;
 
 class CognitionStateProviderIntegrationTest {
 
@@ -77,7 +78,7 @@ class CognitionStateProviderIntegrationTest {
 
     @Test
     void tickCaptureStoresSnapshotWhenStoreConfigured() {
-        var store = new io.casehub.neocortex.cognitive.observability.testing.InMemoryPipelineSnapshotStore();
+        var store = new InMemoryPipelineSnapshotStore();
         core.configurePipelineSnapshotStore(store);
 
         core.tick("agent1", "t1", null, (a, t) -> Set.of());

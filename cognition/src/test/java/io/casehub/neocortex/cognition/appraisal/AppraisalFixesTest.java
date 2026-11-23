@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import java.util.Set;
 
 class AppraisalFixesTest {
 
@@ -210,11 +211,11 @@ class AppraisalFixesTest {
     // --- helpers ---
 
     private CognitionTickContext contextWithObservation(String observation) {
-        return new CognitionTickContext("a1", "t1", null, (a, t) -> java.util.Set.of(), observation);
+        return new CognitionTickContext("a1", "t1", null, (a, t) -> Set.of(), observation);
     }
 
     private CognitionTickContext contextWithEventRef(String observation, EventRef tickEventRef) {
-        return new CognitionTickContext("a1", "t1", null, (a, t) -> java.util.Set.of(),
+        return new CognitionTickContext("a1", "t1", null, (a, t) -> Set.of(),
                 observation, null, null, null, tickEventRef);
     }
 

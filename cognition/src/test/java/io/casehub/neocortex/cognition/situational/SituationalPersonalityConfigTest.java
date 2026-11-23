@@ -14,6 +14,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.assertj.core.data.Offset;
 
 class SituationalPersonalityConfigTest {
 
@@ -46,10 +47,10 @@ class SituationalPersonalityConfigTest {
         assertThat(stress.fadeTau()).isEqualTo(Duration.ofHours(2));
 
         double exoSum = stress.exogenous().stream().mapToDouble(SignalConfig::weight).sum();
-        assertThat(exoSum).isCloseTo(1.0, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(exoSum).isCloseTo(1.0, Offset.offset(0.001));
 
         double endoSum = stress.endogenous().stream().mapToDouble(SignalConfig::weight).sum();
-        assertThat(endoSum).isCloseTo(1.0, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(endoSum).isCloseTo(1.0, Offset.offset(0.001));
     }
 
     @Test
@@ -197,35 +198,35 @@ class SituationalPersonalityConfigTest {
 
     @Test
     void signalTransformComplement() {
-        assertThat(SignalTransform.COMPLEMENT.apply(0.3)).isCloseTo(0.7, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(SignalTransform.COMPLEMENT.apply(0.3)).isCloseTo(0.7, Offset.offset(1e-9));
     }
 
     @Test
     void signalTransformAboveFloor() {
         assertThat(SignalTransform.ABOVE_FLOOR.applyWithFloor(0.5, 0.6)).isEqualTo(0.0);
-        assertThat(SignalTransform.ABOVE_FLOOR.applyWithFloor(0.8, 0.6)).isCloseTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
-        assertThat(SignalTransform.ABOVE_FLOOR.applyWithFloor(1.0, 0.6)).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(SignalTransform.ABOVE_FLOOR.applyWithFloor(0.8, 0.6)).isCloseTo(0.5, Offset.offset(1e-9));
+        assertThat(SignalTransform.ABOVE_FLOOR.applyWithFloor(1.0, 0.6)).isCloseTo(1.0, Offset.offset(1e-9));
     }
 
     @Test
     void signalTransformRiseFromRest() {
-        assertThat(SignalTransform.RISE_FROM_REST.applyFromRest(0.5, 0.3, 1.0, 0.0)).isCloseTo(0.2857, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(SignalTransform.RISE_FROM_REST.applyFromRest(0.5, 0.3, 1.0, 0.0)).isCloseTo(0.2857, Offset.offset(0.001));
         assertThat(SignalTransform.RISE_FROM_REST.applyFromRest(0.2, 0.3, 1.0, 0.0)).isEqualTo(0.0);
     }
 
     @Test
     void signalTransformDropFromRest() {
-        assertThat(SignalTransform.DROP_FROM_REST.applyFromRest(0.1, 0.3, 1.0, 0.0)).isCloseTo(0.6667, org.assertj.core.data.Offset.offset(0.001));
+        assertThat(SignalTransform.DROP_FROM_REST.applyFromRest(0.1, 0.3, 1.0, 0.0)).isCloseTo(0.6667, Offset.offset(0.001));
         assertThat(SignalTransform.DROP_FROM_REST.applyFromRest(0.5, 0.3, 1.0, 0.0)).isEqualTo(0.0);
     }
 
     @Test
     void parameterisedBandTransform() {
         var band = new ParameterisedTransform.Band(0.25, 0.6);
-        assertThat(band.apply(0.25)).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-9));
-        assertThat(band.apply(-0.35)).isCloseTo(0.0, org.assertj.core.data.Offset.offset(1e-9));
-        assertThat(band.apply(0.85)).isCloseTo(0.0, org.assertj.core.data.Offset.offset(1e-9));
-        assertThat(band.apply(0.55)).isCloseTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
+        assertThat(band.apply(0.25)).isCloseTo(1.0, Offset.offset(1e-9));
+        assertThat(band.apply(-0.35)).isCloseTo(0.0, Offset.offset(1e-9));
+        assertThat(band.apply(0.85)).isCloseTo(0.0, Offset.offset(1e-9));
+        assertThat(band.apply(0.55)).isCloseTo(0.5, Offset.offset(1e-9));
     }
 
     private static CapsTopology minimalTopology() {

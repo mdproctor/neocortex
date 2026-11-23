@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.mockito.Mockito;
 
 /**
  * 300-tick scenario validation for the post-DERIVED mood/drive re-tick (#919).
@@ -211,9 +212,9 @@ class RetickScenarioValidationTest {
             harness.observe("open", TENANT, OBSERVATIONS[tick % OBSERVATIONS.length]);
 
             var appraisal = appraisalForObservation(tick);
-            org.mockito.Mockito.when(
+            Mockito.when(
                 harness.core().appraisalParticipant().currentResult(
-                    org.mockito.Mockito.eq("open"), org.mockito.Mockito.anyString()))
+                    Mockito.eq("open"), Mockito.anyString()))
                 .thenReturn(Optional.of(appraisal));
 
             harness.tick("open", TENANT);

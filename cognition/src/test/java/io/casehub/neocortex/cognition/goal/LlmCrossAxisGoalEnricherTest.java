@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.smallrye.mutiny.Uni;
+import java.time.Duration;
 
 class LlmCrossAxisGoalEnricherTest {
 
@@ -24,8 +26,8 @@ class LlmCrossAxisGoalEnricherTest {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().item(new AgentEvent.TextDelta(response));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
         return e;
     }
@@ -56,8 +58,8 @@ class LlmCrossAxisGoalEnricherTest {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().empty();
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
 
         var proposal = proposal(DriveAxis.CURIOSITY, 0.8);
@@ -86,8 +88,8 @@ class LlmCrossAxisGoalEnricherTest {
             @Override public Multi<AgentEvent> query(String prompt) {
                 return Multi.createFrom().failure(new RuntimeException("timeout"));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
 
         var proposal = proposal(DriveAxis.CURIOSITY, 0.8);
@@ -106,8 +108,8 @@ class LlmCrossAxisGoalEnricherTest {
                 capturedPrompt[0] = prompt;
                 return Multi.createFrom().item(new AgentEvent.TextDelta("enriched goal"));
             }
-            @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-            @Override public void close(java.time.Duration timeout) {}
+            @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+            @Override public void close(Duration timeout) {}
         }));
 
         var episode = new IndividualEpisode("ep-1", Instant.now(), null,

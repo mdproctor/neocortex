@@ -24,6 +24,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 
 class GoalProposalOrchestratorTest {
 
@@ -262,7 +264,7 @@ class GoalProposalOrchestratorTest {
                 Optional.empty(), GoalProposalConfig.defaults(), clock);
 
         setupDrives("a1", "t1", DriveAxis.CURIOSITY, 0.7);
-        when(strategy.propose(org.mockito.ArgumentMatchers.any(DriveGoalFormationContext.class)))
+        when(strategy.propose(ArgumentMatchers.any(DriveGoalFormationContext.class)))
                 .thenReturn(new DriveGoalProposal(
                         DriveAxis.CURIOSITY, "llm-explore-physics",
                         "Deep exploration of physics concepts", "curiosity: LLM refined", 0.7));
@@ -283,7 +285,7 @@ class GoalProposalOrchestratorTest {
                 Optional.empty(), GoalProposalConfig.defaults(), clock);
 
         setupDrives("a1", "t1", DriveAxis.CURIOSITY, 0.7);
-        when(strategy.propose(org.mockito.ArgumentMatchers.any(DriveGoalFormationContext.class)))
+        when(strategy.propose(ArgumentMatchers.any(DriveGoalFormationContext.class)))
                 .thenReturn(null);
         when(curiosityMapper.evaluate("a1", "t1", driveIntensity(DriveAxis.CURIOSITY, 0.7)))
                 .thenReturn(new DriveGoalProposal(
@@ -299,8 +301,8 @@ class GoalProposalOrchestratorTest {
 
     @Test
     void strategyReceivesCorrectContext() {
-        org.mockito.ArgumentCaptor<DriveGoalFormationContext> captor =
-                org.mockito.ArgumentCaptor.forClass(DriveGoalFormationContext.class);
+        ArgumentCaptor<DriveGoalFormationContext> captor =
+                ArgumentCaptor.forClass(DriveGoalFormationContext.class);
         DriveGoalFormationStrategy strategy = mock(DriveGoalFormationStrategy.class);
         when(strategy.propose(captor.capture())).thenReturn(null);
 
@@ -329,7 +331,7 @@ class GoalProposalOrchestratorTest {
     @Test
     void fallsBackToMapper_whenStrategyThrows() {
         DriveGoalFormationStrategy strategy = mock(DriveGoalFormationStrategy.class);
-        when(strategy.propose(org.mockito.ArgumentMatchers.any(DriveGoalFormationContext.class)))
+        when(strategy.propose(ArgumentMatchers.any(DriveGoalFormationContext.class)))
                 .thenThrow(new RuntimeException("LLM unavailable"));
 
         var orch = new GoalProposalOrchestrator(

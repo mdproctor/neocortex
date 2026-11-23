@@ -10,6 +10,13 @@ import io.casehub.neocortex.cognitive.index.WeightedTerm;
 import io.casehub.neocortex.mindmap.inmem.InMemoryMindMapStore;
 
 import java.util.List;
+import io.casehub.neocortex.caps.CapsAttractor;
+import io.casehub.neocortex.mindmap.NodeInput;
+import io.casehub.neocortex.mindmap.SubgraphInput;
+import io.casehub.neocortex.mindmap.SubgraphTypes;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.assertj.core.api.Assertions;
 
 public final class DivergenceFixtures {
 
@@ -85,14 +92,14 @@ public final class DivergenceFixtures {
         var store = new InMemoryMindMapStore();
 
         var cogSgId = store.createSubgraph(
-                new io.casehub.neocortex.mindmap.SubgraphInput("Cognitive",
-                                                               io.casehub.neocortex.mindmap.SubgraphTypes.COGNITIVE, null), TENANT);
+                new SubgraphInput("Cognitive",
+                                                               SubgraphTypes.COGNITIVE, null), TENANT);
 
         for (String agentId : List.of("open", "cautious")) {
             for (int i = 0; i < 5; i++) {
                 store.addNode(
-                        io.casehub.neocortex.mindmap.NodeInput.of("experience-" + agentId + "-" + i, cogSgId)
-                                                              .withProperties(java.util.Map.of(
+                        NodeInput.of("experience-" + agentId + "-" + i, cogSgId)
+                                                              .withProperties(Map.of(
                                                                       "source-memory-id", "mem-" + agentId + "-" + i,
                                                                       "agent-id", agentId,
                                                                       "event-type", "observation")),
@@ -100,49 +107,49 @@ public final class DivergenceFixtures {
             }
         }
 
-        store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("drive-adventure-open", cogSgId)
-                                                            .withProperties(java.util.Map.of(
+        store.addNode(NodeInput.of("drive-adventure-open", cogSgId)
+                                                            .withProperties(Map.of(
                                                                     "cognitiveKind", "drive-intensity", "agent-id", "open",
                                                                     "drive-type", "adventure", "intensity", "0.9")), TENANT);
-        store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("drive-curiosity-open", cogSgId)
-                                                            .withProperties(java.util.Map.of(
+        store.addNode(NodeInput.of("drive-curiosity-open", cogSgId)
+                                                            .withProperties(Map.of(
                                                                     "cognitiveKind", "drive-intensity", "agent-id", "open",
                                                                     "drive-type", "curiosity", "intensity", "0.8")), TENANT);
 
-        store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("drive-suspicion-cautious", cogSgId)
-                                                            .withProperties(java.util.Map.of(
+        store.addNode(NodeInput.of("drive-suspicion-cautious", cogSgId)
+                                                            .withProperties(Map.of(
                                                                     "cognitiveKind", "drive-intensity", "agent-id", "cautious",
                                                                     "drive-type", "suspicion", "intensity", "0.9")), TENANT);
-        store.addNode(io.casehub.neocortex.mindmap.NodeInput.of("drive-self-preservation-cautious", cogSgId)
-                                                            .withProperties(java.util.Map.of(
+        store.addNode(NodeInput.of("drive-self-preservation-cautious", cogSgId)
+                                                            .withProperties(Map.of(
                                                                     "cognitiveKind", "drive-intensity", "agent-id", "cautious",
                                                                     "drive-type", "self-preservation", "intensity", "0.8")), TENANT);
 
         return store;
     }
 
-    public static void assertAttractorsDiverge(io.casehub.neocortex.cognition.eval.CognitionTestHarness harness) {
+    public static void assertAttractorsDiverge(CognitionTestHarness harness) {
         var openResult     = harness.capsSettlingResult("open", TENANT);
         var cautiousResult = harness.capsSettlingResult("cautious", TENANT);
 
-        org.assertj.core.api.Assertions.assertThat(openResult).as("open agent should have settling result").isPresent();
-        org.assertj.core.api.Assertions.assertThat(cautiousResult).as("cautious agent should have settling result").isPresent();
+        Assertions.assertThat(openResult).as("open agent should have settling result").isPresent();
+        Assertions.assertThat(cautiousResult).as("cautious agent should have settling result").isPresent();
 
         var openAttractors     = openResult.get().attractors();
         var cautiousAttractors = cautiousResult.get().attractors();
 
-        org.assertj.core.api.Assertions.assertThat(openAttractors).as("open agent should have attractors").isNotEmpty();
-        org.assertj.core.api.Assertions.assertThat(cautiousAttractors).as("cautious agent should have attractors").isNotEmpty();
+        Assertions.assertThat(openAttractors).as("open agent should have attractors").isNotEmpty();
+        Assertions.assertThat(cautiousAttractors).as("cautious agent should have attractors").isNotEmpty();
 
         var openByCategory = openAttractors.stream()
-                                           .collect(java.util.stream.Collectors.toMap(
-                                                   io.casehub.neocortex.caps.CapsAttractor::category,
-                                                   io.casehub.neocortex.caps.CapsAttractor::strength,
+                                           .collect(Collectors.toMap(
+                                                   CapsAttractor::category,
+                                                   CapsAttractor::strength,
                                                    Math::max));
         var cautiousByCategory = cautiousAttractors.stream()
-                                                   .collect(java.util.stream.Collectors.toMap(
-                                                           io.casehub.neocortex.caps.CapsAttractor::category,
-                                                           io.casehub.neocortex.caps.CapsAttractor::strength,
+                                                   .collect(Collectors.toMap(
+                                                           CapsAttractor::category,
+                                                           CapsAttractor::strength,
                                                            Math::max));
 
         boolean attractorsDiffer = !openByCategory.keySet().equals(cautiousByCategory.keySet());
@@ -156,7 +163,7 @@ public final class DivergenceFixtures {
             }
         }
 
-        org.assertj.core.api.Assertions.assertThat(attractorsDiffer)
+        Assertions.assertThat(attractorsDiffer)
                                        .as("behavioral attractor strengths should differ — open=%s vs cautious=%s",
                                            openByCategory, cautiousByCategory)
                                        .isTrue();

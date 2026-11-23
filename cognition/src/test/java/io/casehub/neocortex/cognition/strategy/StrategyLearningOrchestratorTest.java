@@ -33,6 +33,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.session.testing.StubPipelines;
+import io.casehub.platform.agent.AgentSession;
+import io.smallrye.mutiny.Uni;
+import java.util.Optional;
 
 class StrategyLearningOrchestratorTest {
 
@@ -245,10 +249,10 @@ class StrategyLearningOrchestratorTest {
         var storedEvidence = new CopyOnWriteArrayList<EngagementEvidence>();
         var config = new StrategyLearningConfig(
                 1, 2, 50, 10, 0.5, 100, Duration.ofSeconds(1),
-                new io.casehub.neocortex.memory.MemoryDomain("test"),
+                new MemoryDomain("test"),
                 "engagement-evidence", "strategy-profile",
                 0.6, 0.4, 0.2);
-        var storedProfile = new java.util.concurrent.atomic.AtomicReference<StrategyProfile>();
+        var storedProfile = new AtomicReference<StrategyProfile>();
         var testStrategyMemory = mock(StrategyMemory.class);
         doAnswer(inv -> {
             storedProfile.set(inv.getArgument(0));
@@ -261,7 +265,7 @@ class StrategyLearningOrchestratorTest {
         })
                 .when(testStrategyMemory).storeEvidence(any(EngagementEvidence.class));
         when(testStrategyMemory.lookup("agent-1", "tenant-1"))
-                .thenAnswer(inv -> java.util.Optional.ofNullable(storedProfile.get()));
+                .thenAnswer(inv -> Optional.ofNullable(storedProfile.get()));
         when(testStrategyMemory.evidenceCount("agent-1", "tenant-1"))
                 .thenAnswer(inv -> storedEvidence.size());
         when(testStrategyMemory.recentEvidence(any(), any(), anyInt()))
@@ -269,14 +273,14 @@ class StrategyLearningOrchestratorTest {
         var testOrchestrator = new StrategyLearningOrchestrator(
                 testStrategyMemory,
                 (a, t, s, m) -> List.of(), config, clock,
-                io.casehub.neocortex.session.testing.StubPipelines.create(
-            init -> new io.casehub.platform.agent.AgentSession() {
+                StubPipelines.create(
+            init -> new AgentSession() {
                 @Override public Multi<AgentEvent> query(String prompt) {
                     return Multi.createFrom().item(new AgentEvent.TextDelta(
                         "{\"guidelines\":[\"use specific examples\"],\"dimensionDeltas\":{}}"));
                 }
-                @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-                @Override public void close(java.time.Duration timeout) {}
+                @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+                @Override public void close(Duration timeout) {}
             }));
 
         for (int i = 0; i < 2; i++) {
@@ -307,7 +311,7 @@ class StrategyLearningOrchestratorTest {
     // --- currentStrategy ---
 
     @Test void currentStrategy_returnsEmpty_whenNoProfile() {
-        when(strategyMemory.lookup("agent-1", "tenant-1")).thenReturn(java.util.Optional.empty());
+        when(strategyMemory.lookup("agent-1", "tenant-1")).thenReturn(Optional.empty());
         assertThat(orchestrator.currentStrategy("agent-1", "tenant-1")).isEmpty();
     }
 
@@ -315,7 +319,7 @@ class StrategyLearningOrchestratorTest {
         var profile = new StrategyProfile("agent-1", "tenant-1",
                 Map.of("verbosity", 0.3), List.of("Be concise"), Instant.now(), 5);
         when(strategyMemory.lookup("agent-1", "tenant-1"))
-                .thenReturn(java.util.Optional.of(profile));
+                .thenReturn(Optional.of(profile));
         var result = orchestrator.currentStrategy("agent-1", "tenant-1");
         assertThat(result).isPresent();
         assertThat(result.get().dimensions().get("verbosity")).isEqualTo(0.3);
@@ -368,7 +372,7 @@ class StrategyLearningOrchestratorTest {
                         "initiative", 0.5, "directness", 0.5, "questionRate", 0.5),
                 List.of(), Instant.now(), 0);
         when(strategyMemory.lookup("agent-1", "tenant-1"))
-                .thenReturn(java.util.Optional.of(profile));
+                .thenReturn(Optional.of(profile));
 
         var cases = buildEngagementCases(5, "agent-1");
         when(strategyMemory.recentEvidence(any(), any(), anyInt())).thenReturn(cases);
@@ -407,7 +411,7 @@ class StrategyLearningOrchestratorTest {
                         "initiative", 0.5, "directness", 0.5, "questionRate", 0.5),
                 List.of("Existing guideline"), Instant.now(), 3);
         when(strategyMemory.lookup("agent-1", "tenant-1"))
-                .thenReturn(java.util.Optional.of(profile));
+                .thenReturn(Optional.of(profile));
 
         var cases = buildEngagementCases(5, "agent-1");
         when(strategyMemory.recentEvidence(any(), any(), anyInt())).thenReturn(cases);
@@ -470,8 +474,8 @@ class StrategyLearningOrchestratorTest {
     @Test
     void reflect_withMemoryRetriever_includesMemoriesInPrompt() {
         var capturedPrompt = new AtomicReference<String>();
-        var pipeline = io.casehub.neocortex.session.testing.StubPipelines.create(
-                init -> new io.casehub.platform.agent.AgentSession() {
+        var pipeline = StubPipelines.create(
+                init -> new AgentSession() {
                     @Override
                     public Multi<AgentEvent> query(String prompt) {
                         capturedPrompt.set(prompt);
@@ -480,10 +484,10 @@ class StrategyLearningOrchestratorTest {
                     }
 
                     @Override
-                    public io.smallrye.mutiny.Uni<Void> interrupt() {return io.smallrye.mutiny.Uni.createFrom().voidItem();}
+                    public Uni<Void> interrupt() {return Uni.createFrom().voidItem();}
 
                     @Override
-                    public void close(java.time.Duration timeout)   {}
+                    public void close(Duration timeout)   {}
                 });
 
         var mockStore = mock(CaseMemoryStore.class);
@@ -542,13 +546,13 @@ class StrategyLearningOrchestratorTest {
     }
 
     private void mockLlmResponse(String text) {
-        var pipeline = io.casehub.neocortex.session.testing.StubPipelines.create(
-            init -> new io.casehub.platform.agent.AgentSession() {
+        var pipeline = StubPipelines.create(
+            init -> new AgentSession() {
                 @Override public Multi<AgentEvent> query(String prompt) {
                     return Multi.createFrom().item(new AgentEvent.TextDelta(text));
                 }
-                @Override public io.smallrye.mutiny.Uni<Void> interrupt() { return io.smallrye.mutiny.Uni.createFrom().voidItem(); }
-                @Override public void close(java.time.Duration timeout) {}
+                @Override public Uni<Void> interrupt() { return Uni.createFrom().voidItem(); }
+                @Override public void close(Duration timeout) {}
             });
         orchestrator = new StrategyLearningOrchestrator(
                 strategyMemory, reflectionOrchestrator,

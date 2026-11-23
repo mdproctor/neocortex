@@ -28,6 +28,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognition.appraisal.ChannelWeightProfile;
+import io.casehub.neocortex.cognition.core.DefaultCognitiveResourcePool;
+import io.casehub.neocortex.cognition.drive.CuriosityChannel;
+import io.casehub.neocortex.cognition.drive.CuriosityDrive;
+import io.casehub.neocortex.cognitive.ChannelModulationConfig;
+import io.casehub.neocortex.cognitive.CognitiveCapacityConfig;
+import io.casehub.neocortex.cognitive.CognitiveResourcePoolConfig;
+import io.casehub.neocortex.cognitive.ExtremeInteractionConfig;
 
 class SearchBudgetTickParticipantTest {
 
@@ -160,10 +168,10 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void specific_focus_high_gap_boosts_depth_reduces_breadth() {
-        var channel = new io.casehub.neocortex.cognition.drive.CuriosityChannel(
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.HedonicType.I_TYPE, 0.3,
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.FocusType.SPECIFIC, 0.9);
-        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, io.casehub.neocortex.cognitive.ChannelModulationConfig.defaults());
+        var channel = new CuriosityChannel(
+                CuriosityChannel.HedonicType.I_TYPE, 0.3,
+                CuriosityChannel.FocusType.SPECIFIC, 0.9);
+        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, ChannelModulationConfig.defaults());
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
         var baseline = baselineBudget(DriveAxis.CURIOSITY, 0.5);
@@ -175,10 +183,10 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void diversive_focus_boosts_breadth_laterality_reduces_convergence() {
-        var channel = new io.casehub.neocortex.cognition.drive.CuriosityChannel(
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.HedonicType.I_TYPE, 0.5,
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.FocusType.DIVERSIVE, 0.5);
-        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, io.casehub.neocortex.cognitive.ChannelModulationConfig.defaults());
+        var channel = new CuriosityChannel(
+                CuriosityChannel.HedonicType.I_TYPE, 0.5,
+                CuriosityChannel.FocusType.DIVERSIVE, 0.5);
+        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, ChannelModulationConfig.defaults());
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
         var baseline = baselineBudget(DriveAxis.CURIOSITY, 0.5);
@@ -189,10 +197,10 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void d_type_hedonic_boosts_convergence() {
-        var channel = new io.casehub.neocortex.cognition.drive.CuriosityChannel(
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.HedonicType.D_TYPE, 0.5,
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.FocusType.SPECIFIC, 0.5);
-        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, io.casehub.neocortex.cognitive.ChannelModulationConfig.defaults());
+        var channel = new CuriosityChannel(
+                CuriosityChannel.HedonicType.D_TYPE, 0.5,
+                CuriosityChannel.FocusType.SPECIFIC, 0.5);
+        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, ChannelModulationConfig.defaults());
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
         var baseline = baselineBudget(DriveAxis.CURIOSITY, 0.5);
@@ -201,7 +209,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void null_channel_preserves_baseline() {
-        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, null, io.casehub.neocortex.cognitive.ChannelModulationConfig.defaults());
+        var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, null, ChannelModulationConfig.defaults());
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
         var baseline = baselineBudget(DriveAxis.CURIOSITY, 0.5);
@@ -213,9 +221,9 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void null_channel_modulation_config_preserves_baseline() {
-        var channel = new io.casehub.neocortex.cognition.drive.CuriosityChannel(
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.HedonicType.D_TYPE, 0.5,
-                io.casehub.neocortex.cognition.drive.CuriosityChannel.FocusType.SPECIFIC, 0.9);
+        var channel = new CuriosityChannel(
+                CuriosityChannel.HedonicType.D_TYPE, 0.5,
+                CuriosityChannel.FocusType.SPECIFIC, 0.9);
         var participant = withChannelAndConfig(DriveAxis.CURIOSITY, 0.5, channel, null);
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -227,7 +235,7 @@ class SearchBudgetTickParticipantTest {
     void channel_weight_somatic_dominance_boosts_convergence() {
         var driveOrch = mockDriveOrch(DriveAxis.COMPETENCE, 0.5);
         var appraisal = mock(AppraisalTickParticipant.class);
-        var cw = new io.casehub.neocortex.cognition.appraisal.ChannelWeightProfile(0.40, 0.15, 0.10, 0.35);
+        var cw = new ChannelWeightProfile(0.40, 0.15, 0.10, 0.35);
         when(appraisal.currentChannelWeights(AGENT, TENANT)).thenReturn(Optional.of(cw));
         when(appraisal.currentResult(AGENT, TENANT)).thenReturn(Optional.empty());
 
@@ -278,7 +286,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void extreme_interaction_narrows_breadth_past_peak() {
-        var extreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults();
+        var extreme = ExtremeInteractionConfig.defaults();
         var config = SearchBudgetConfig.defaults()
                                        .withExtremePeak(0.7)
                                        .withExtremeInteraction(extreme);
@@ -307,7 +315,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void per_parameter_peak_differentiates_decay_onset() {
-        var extreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults()
+        var extreme = ExtremeInteractionConfig.defaults()
                                                                              .withBreadthPeak(0.6)
                                                                              .withDepthPeak(0.95);
         var config = SearchBudgetConfig.defaults()
@@ -317,7 +325,7 @@ class SearchBudgetTickParticipantTest {
         participant.tick(context());
         var budget = participant.currentBudget(AGENT, TENANT).orElseThrow();
 
-        var uniformExtreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults();
+        var uniformExtreme = ExtremeInteractionConfig.defaults();
         var uniformConfig = SearchBudgetConfig.defaults()
                                               .withExtremePeak(0.85)
                                               .withExtremeInteraction(uniformExtreme);
@@ -333,7 +341,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void null_per_parameter_peaks_fall_back_to_global() {
-        var extreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults();
+        var extreme = ExtremeInteractionConfig.defaults();
         var config = SearchBudgetConfig.defaults()
                                        .withExtremePeak(0.7)
                                        .withExtremeInteraction(extreme);
@@ -341,7 +349,7 @@ class SearchBudgetTickParticipantTest {
         participant.tick(context());
         var nullPeakBudget = participant.currentBudget(AGENT, TENANT).orElseThrow();
 
-        var explicitExtreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults()
+        var explicitExtreme = ExtremeInteractionConfig.defaults()
                                                                                      .withBreadthPeak(0.7).withDepthPeak(0.7).withLateralityPeak(0.7).withConvergencePeak(0.7);
         var explicitConfig = SearchBudgetConfig.defaults()
                                                .withExtremePeak(0.7)
@@ -359,7 +367,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void separate_amplification_threshold_diverges_from_decay_peak() {
-        var extreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults()
+        var extreme = ExtremeInteractionConfig.defaults()
                                                                              .withBreadthPeak(0.9)
                                                                              .withAmplificationThreshold(0.6);
         var config = SearchBudgetConfig.defaults()
@@ -369,7 +377,7 @@ class SearchBudgetTickParticipantTest {
         participant.tick(context());
         var separateBudget = participant.currentBudget(AGENT, TENANT).orElseThrow();
 
-        var sharedExtreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults()
+        var sharedExtreme = ExtremeInteractionConfig.defaults()
                                                                                    .withBreadthPeak(0.9);
         var sharedConfig = SearchBudgetConfig.defaults()
                                              .withExtremePeak(0.85)
@@ -384,7 +392,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void null_amplification_threshold_falls_back_to_peak() {
-        var extreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults()
+        var extreme = ExtremeInteractionConfig.defaults()
                                                                              .withBreadthPeak(0.7);
         var config = SearchBudgetConfig.defaults()
                                        .withExtremePeak(0.85)
@@ -393,7 +401,7 @@ class SearchBudgetTickParticipantTest {
         participant.tick(context());
         var nullThresholdBudget = participant.currentBudget(AGENT, TENANT).orElseThrow();
 
-        var explicitExtreme = io.casehub.neocortex.cognitive.ExtremeInteractionConfig.defaults()
+        var explicitExtreme = ExtremeInteractionConfig.defaults()
                                                                                      .withBreadthPeak(0.7)
                                                                                      .withAmplificationThreshold(0.7);
         var explicitConfig = SearchBudgetConfig.defaults()
@@ -493,13 +501,13 @@ class SearchBudgetTickParticipantTest {
 
     private SearchBudgetTickParticipant withChannelAndConfig(
             DriveAxis axis, double intensity,
-            io.casehub.neocortex.cognition.drive.CuriosityChannel channel,
-            io.casehub.neocortex.cognitive.ChannelModulationConfig channelMod) {
-        var curiosityDrive = mock(io.casehub.neocortex.cognition.drive.CuriosityDrive.class);
+            CuriosityChannel channel,
+            ChannelModulationConfig channelMod) {
+        var curiosityDrive = mock(CuriosityDrive.class);
         when(curiosityDrive.lastChannel()).thenReturn(channel);
         var config = channelMod != null
-                     ? new io.casehub.neocortex.cognitive.SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.5, 1.4, channelMod, 0.85, null, null)
-                     : io.casehub.neocortex.cognitive.SearchBudgetConfig.defaults();
+                     ? new SearchBudgetConfig(6.0, 0.5, 6.0, 0.5, 0.7, 3.0, 0.5, 6.0, 0.5, 1.4, channelMod, 0.85, null, null)
+                     : SearchBudgetConfig.defaults();
         var reg = mock(EffectiveCognitiveDefaults.class);
         when(reg.forAgentOrDefaults(anyString(), anyString())).thenReturn(
                 CognitiveDefaults.empty(AGENT).withSearchBudgetConfig(config));
@@ -523,11 +531,11 @@ class SearchBudgetTickParticipantTest {
     }
 
     private SearchBudgetTickParticipant withDriveConfigAndPool(DriveAxis axis, double intensity, SearchBudgetConfig config) {
-        var poolConfig = io.casehub.neocortex.cognitive.CognitiveResourcePoolConfig.defaults();
+        var poolConfig = CognitiveResourcePoolConfig.defaults();
         var reg        = mock(EffectiveCognitiveDefaults.class);
         when(reg.forAgentOrDefaults(anyString(), anyString())).thenReturn(
                 CognitiveDefaults.empty(AGENT).withSearchBudgetConfig(config).withCognitiveResourcePoolConfig(poolConfig));
-        var pool = new io.casehub.neocortex.cognition.core.DefaultCognitiveResourcePool(reg);
+        var pool = new DefaultCognitiveResourcePool(reg);
         return new SearchBudgetTickParticipant(
                 mockDriveOrch(axis, intensity), null, null, null, reg, null, null, pool);
     }
@@ -536,7 +544,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void capacity_ceiling_bounds_depth() {
-        var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.4, 1.0, 1.0);
+        var capacity    = new CognitiveCapacityConfig(0.4, 1.0, 1.0);
         var participant = withDriveAndCapacity(DriveAxis.COMPETENCE, 0.8, capacity);
         participant.tick(context());
         var budget = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -545,7 +553,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void capacity_below_activation_has_no_effect() {
-        var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.95, 0.95, 0.95);
+        var capacity    = new CognitiveCapacityConfig(0.95, 0.95, 0.95);
         var participant = withDriveAndCapacity(DriveAxis.CURIOSITY, 0.5, capacity);
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -556,7 +564,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void capacity_gap_signal_fires_above_threshold() {
-        var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.4, 1.0, 1.0);
+        var capacity    = new CognitiveCapacityConfig(0.4, 1.0, 1.0);
         var participant = withDriveAndCapacity(DriveAxis.COMPETENCE, 0.8, capacity);
         participant.tick(context());
         var budget = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -566,7 +574,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void capacity_gap_below_threshold_does_not_fire() {
-        var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.95, 0.95, 0.95);
+        var capacity    = new CognitiveCapacityConfig(0.95, 0.95, 0.95);
         var participant = withDriveAndCapacity(DriveAxis.CURIOSITY, 0.5, capacity);
         participant.tick(context());
         var budget = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -597,7 +605,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void convergence_never_capped_by_capacity() {
-        var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.1, 0.1, 0.1);
+        var capacity    = new CognitiveCapacityConfig(0.1, 0.1, 0.1);
         var participant = withDriveAndCapacity(DriveAxis.COMPETENCE, 0.8, capacity);
         participant.tick(context());
         var budget   = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -608,7 +616,7 @@ class SearchBudgetTickParticipantTest {
 
     @Test
     void per_parameter_gap_values_are_correct() {
-        var capacity    = new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.3, 0.3, 0.3);
+        var capacity    = new CognitiveCapacityConfig(0.3, 0.3, 0.3);
         var participant = withDriveAndCapacity(DriveAxis.CURIOSITY, 0.8, capacity);
         participant.tick(context());
         var budget = participant.currentBudget(AGENT, TENANT).orElseThrow();
@@ -620,7 +628,7 @@ class SearchBudgetTickParticipantTest {
     }
 
     private SearchBudgetTickParticipant withDriveAndCapacity(DriveAxis axis, double intensity,
-                                                             io.casehub.neocortex.cognitive.CognitiveCapacityConfig capacity) {
+                                                             CognitiveCapacityConfig capacity) {
         var reg = mock(EffectiveCognitiveDefaults.class);
         when(reg.forAgentOrDefaults(anyString(), anyString())).thenReturn(
                 CognitiveDefaults.empty(AGENT)

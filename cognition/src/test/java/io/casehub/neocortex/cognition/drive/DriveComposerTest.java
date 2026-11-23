@@ -12,6 +12,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
+import java.time.Duration;
 
 class DriveComposerTest {
 
@@ -50,7 +51,7 @@ class DriveComposerTest {
                 Map.of(DriveAxis.CURIOSITY, 2.0, DriveAxis.COMPETENCE, 1.0,
                        DriveAxis.AFFILIATION, 1.0, DriveAxis.AUTONOMY, 1.0),
                 0.05, 0.3, 0.2, 0.25, 1.0, 0.0,
-                0.5, java.time.Duration.ofHours(24), 0.6, 0.25, 0.6,
+                0.5, Duration.ofHours(24), 0.6, 0.25, 0.6,
                 0.5, 0.3);
         var raw = Map.of(
                 DriveAxis.CURIOSITY, new DriveIntensity(DriveAxis.CURIOSITY, 1.0, "x"),

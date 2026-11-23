@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.casehub.neocortex.cognition.core.CognitionCore;
 
 class CognitionObservationBuilderTomModulationTest {
 
@@ -85,7 +86,7 @@ class CognitionObservationBuilderTomModulationTest {
         return store;
     }
 
-    private io.casehub.neocortex.cognition.core.CognitionCore buildCoreWithSuspiciousness(double suspiciousness) {
+    private CognitionCore buildCoreWithSuspiciousness(double suspiciousness) {
         var facets = List.of(
                 new PersonalityFacet(PersonalityFacet.SUSPICIOUSNESS, suspiciousness, "test"),
                 new PersonalityFacet(PersonalityFacet.ANXIOUSNESS, 0.5, "test"),

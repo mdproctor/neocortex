@@ -19,6 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognitive.index.DescriptorView;
+import java.util.LinkedHashMap;
 
 class SituationalDeformationPhasePromotionTest {
 
@@ -39,7 +41,7 @@ class SituationalDeformationPhasePromotionTest {
 
         effectiveDefaults = mock(EffectiveCognitiveDefaults.class);
         var defaults = mock(CognitiveDefaults.class);
-        var descriptor = mock(io.casehub.neocortex.cognitive.index.DescriptorView.class);
+        var descriptor = mock(DescriptorView.class);
         when(descriptor.personalityFacets()).thenReturn(
                 List.of(new PersonalityFacet("Anxiousness", 0.5, "authored")));
         when(defaults.descriptor()).thenReturn(descriptor);
@@ -55,7 +57,7 @@ class SituationalDeformationPhasePromotionTest {
         var saturatedSince = NOW.minus(Duration.ofDays(31));
         stateService.read("t1", "agent1", NOW);
         stateService.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", new FacetState(0.0, 0.09, 1.0, 0, 0, 0.0, saturatedSince, null));
             return st.withFacets(facets);
         });
@@ -75,7 +77,7 @@ class SituationalDeformationPhasePromotionTest {
         var saturatedSince = NOW.minus(Duration.ofDays(10));
         stateService.read("t1", "agent1", NOW);
         stateService.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", new FacetState(0.0, 0.09, 1.0, 0, 0, 0.0, saturatedSince, null));
             return st.withFacets(facets);
         });
@@ -92,7 +94,7 @@ class SituationalDeformationPhasePromotionTest {
         var saturatedSince = NOW.minus(Duration.ofDays(31));
         stateService.read("t1", "agent1", NOW);
         stateService.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", new FacetState(0.0, 0.09, 1.0, 0, 0, 0.0, saturatedSince, null));
             return st.withFacets(facets);
         });

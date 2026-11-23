@@ -11,6 +11,15 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import io.casehub.neocortex.cognition.appraisal.ActionReadiness;
+import io.casehub.neocortex.cognition.appraisal.ActionTendency;
+import io.casehub.neocortex.cognition.appraisal.AppraisalResult;
+import io.casehub.neocortex.cognition.appraisal.HabituationState;
+import io.casehub.neocortex.cognitive.CognitiveEmotion;
+import io.casehub.neocortex.cognitive.EmotionSource;
+import io.casehub.neocortex.cognitive.EmotionType;
+import io.casehub.neocortex.cognitive.PadProjection;
+import java.util.Map;
 
 class SearchBudgetPromptSectionTest {
 
@@ -106,14 +115,14 @@ void crisisEmotion_injectsCrisisQualifier() {
     var participant = mock(SearchBudgetTickParticipant.class);
     when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 
-    var appraisal = new io.casehub.neocortex.cognition.appraisal.AppraisalResult(
-            List.of(new io.casehub.neocortex.cognitive.CognitiveEmotion(
-                    io.casehub.neocortex.cognitive.EmotionType.FEAR, 0.89, "subject",
-                    Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
-                    io.casehub.neocortex.cognitive.PadProjection.NEUTRAL)),
-            List.of(new io.casehub.neocortex.cognition.appraisal.ActionTendency(
-                    io.casehub.neocortex.cognition.appraisal.ActionReadiness.AVOIDANCE, 0.92, "")),
-            io.casehub.neocortex.cognition.appraisal.HabituationState.empty());
+    var appraisal = new AppraisalResult(
+            List.of(new CognitiveEmotion(
+                    EmotionType.FEAR, 0.89, "subject",
+                    Instant.now(), EmotionSource.INTRINSIC,
+                    PadProjection.NEUTRAL)),
+            List.of(new ActionTendency(
+                    ActionReadiness.AVOIDANCE, 0.92, "")),
+            HabituationState.empty());
 
     var section = new SearchBudgetPromptSection(participant, null, null, () -> appraisal);
     var context = new CognitionRenderContext("agent1", "tenant1", null, List.of());
@@ -129,15 +138,15 @@ void highArousalHighTendency_injectsUrgency() {
     var participant = mock(SearchBudgetTickParticipant.class);
     when(participant.currentBudget("agent1", "tenant1")).thenReturn(Optional.of(budget));
 
-    var appraisal = new io.casehub.neocortex.cognition.appraisal.AppraisalResult(
-            List.of(new io.casehub.neocortex.cognitive.CognitiveEmotion(
-                    io.casehub.neocortex.cognitive.EmotionType.ANGER, 0.8, "subject",
-                    Instant.now(), io.casehub.neocortex.cognitive.EmotionSource.INTRINSIC,
-                    io.casehub.neocortex.cognitive.PadProjection.NEUTRAL)),
-            List.of(new io.casehub.neocortex.cognition.appraisal.ActionTendency(
-                    io.casehub.neocortex.cognition.appraisal.ActionReadiness.ANTAGONISM, 0.85, "")),
-            io.casehub.neocortex.cognition.appraisal.HabituationState.empty(),
-            null, java.util.Map.of("urgency", 0.9));
+    var appraisal = new AppraisalResult(
+            List.of(new CognitiveEmotion(
+                    EmotionType.ANGER, 0.8, "subject",
+                    Instant.now(), EmotionSource.INTRINSIC,
+                    PadProjection.NEUTRAL)),
+            List.of(new ActionTendency(
+                    ActionReadiness.ANTAGONISM, 0.85, "")),
+            HabituationState.empty(),
+            null, Map.of("urgency", 0.9));
 
     var section = new SearchBudgetPromptSection(participant, null, null, () -> appraisal);
     var context = new CognitionRenderContext("agent1", "tenant1", null, List.of());

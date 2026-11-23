@@ -10,13 +10,15 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
+import java.util.LinkedHashMap;
+import java.util.Set;
 
 class PersonalityStateServiceTest {
 
     private              InMemoryMindMapStore    store;
     private              PersonalityStateService service;
     private static final Instant                 NOW = Instant.parse("2026-11-17T10:00:00Z");
-    private static final java.util.Set<String>   FACETS = java.util.Set.of(
+    private static final Set<String>   FACETS = Set.of(
             "Anxiousness", "Callousness", "Hostility", "Emotional Lability",
             "Grandiosity", "Impulsivity", "Risk Taking", "Suspiciousness",
             "Withdrawal", "Manipulativeness", "Deceitfulness",
@@ -111,7 +113,7 @@ class PersonalityStateServiceTest {
 
     @Test
     void propertiesRoundTrip() {
-        var facets = new java.util.LinkedHashMap<String, FacetState>();
+        var facets = new LinkedHashMap<String, FacetState>();
         facets.put("Anxiousness", new FacetState(0.12, 0.03, 0.85, 2.1, 0.4));
         facets.put("Hostility", FacetState.initial());
         var state = new PersonalityState(facets,
@@ -136,7 +138,7 @@ class PersonalityStateServiceTest {
     void transitionAppliesOperatorAtomicallyAndIncrementsVersion() {
         service.read("t1", "agent1", NOW);
         var result = service.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", st.facets().get("Anxiousness").withHomeOffset(0.05));
             return st.withFacets(facets);
         });
@@ -151,7 +153,7 @@ class PersonalityStateServiceTest {
         assertThat(service.compositionVersion("t1", "agent1")).isZero();
 
         service.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", st.facets().get("Anxiousness").withHomeOffset(0.05));
             return st.withFacets(facets);
         });
@@ -167,14 +169,14 @@ class PersonalityStateServiceTest {
     void promotionDoesNotBumpCompositionVersion() {
         service.read("t1", "agent1", NOW);
         service.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", st.facets().get("Anxiousness").withHomeOffset(0.05));
             return st.withFacets(facets);
         });
         var v1 = service.compositionVersion("t1", "agent1");
 
         service.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             var anx    = facets.get("Anxiousness");
             facets.put("Anxiousness", new FacetState(anx.displacement(), anx.homeOffset() - 0.03,
                                                      anx.resilience(), anx.exposure(), anx.load(), anx.promoted() + 0.03));
@@ -190,14 +192,14 @@ class PersonalityStateServiceTest {
 
         var t1 = new Thread(() -> {
             service.transition("t1", "agent1", NOW, st -> {
-                var facets = new java.util.LinkedHashMap<>(st.facets());
+                var facets = new LinkedHashMap<>(st.facets());
                 facets.put("Anxiousness", st.facets().get("Anxiousness").withHomeOffset(0.05));
                 return st.withFacets(facets);
             });
         });
         var t2 = new Thread(() -> {
             service.transition("t1", "agent1", NOW, st -> {
-                var facets = new java.util.LinkedHashMap<>(st.facets());
+                var facets = new LinkedHashMap<>(st.facets());
                 facets.put("Hostility", st.facets().get("Hostility").withHomeOffset(0.03));
                 return st.withFacets(facets);
             });
@@ -225,7 +227,7 @@ class PersonalityStateServiceTest {
     @Test
     void readReturnsPersistedStateAfterServiceRecreation() {
         service.transition("t1", "agent1", NOW, st -> {
-            var facets = new java.util.LinkedHashMap<>(st.facets());
+            var facets = new LinkedHashMap<>(st.facets());
             facets.put("Anxiousness", st.facets().get("Anxiousness").withHomeOffset(0.07));
             return st.withFacets(facets);
         });

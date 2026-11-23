@@ -37,6 +37,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import io.casehub.neocortex.cognitive.CognitiveCapacityConfig;
+import io.casehub.neocortex.cognitive.index.LearningProfile;
 
 class DispositionEvolutionPhaseTest {
 
@@ -78,7 +80,7 @@ class DispositionEvolutionPhaseTest {
 
         var defaults = CognitiveDefaults.empty(AGENT);
         when(effectiveDefaults.restingFor(eq(TENANT), eq(AGENT))).thenReturn(
-                io.casehub.neocortex.cognitive.index.LearningProfile.from(defaults));
+                LearningProfile.from(defaults));
 
         journalEntries = new ArrayList<>();
         journal = journalEntries::add;
@@ -192,9 +194,9 @@ class DispositionEvolutionPhaseTest {
     void disabledAgent_rcZero_skipsProbe() {
         seedState(Duration.ofHours(25));
         var disabledDefaults = CognitiveDefaults.empty(AGENT)
-                .withCapacityConfig(new io.casehub.neocortex.cognitive.CognitiveCapacityConfig(0.0, 0.75, 0.75));
+                .withCapacityConfig(new CognitiveCapacityConfig(0.0, 0.75, 0.75));
         when(effectiveDefaults.restingFor(eq(TENANT), eq(AGENT))).thenReturn(
-                io.casehub.neocortex.cognitive.index.LearningProfile.from(disabledDefaults));
+                LearningProfile.from(disabledDefaults));
 
         phase.run(TENANT, List.of());
 

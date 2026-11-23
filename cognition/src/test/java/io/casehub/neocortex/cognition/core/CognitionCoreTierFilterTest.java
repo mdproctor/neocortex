@@ -15,11 +15,17 @@
  */
 package io.casehub.neocortex.cognition.core;
 
+import io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant;
+import io.casehub.neocortex.cognition.appraisal.NoOpAppraisalStrategy;
+import io.casehub.neocortex.cognition.appraisal.NoOpSalienceStrategy;
 import io.casehub.neocortex.cognition.mood.MoodConfig;
 import io.casehub.neocortex.cognition.mood.MoodOrchestrator;
 import io.casehub.neocortex.cognition.mood.MoodSignal;
 import io.casehub.neocortex.cognition.prompt.SectionTier;
 import io.casehub.neocortex.cognition.prompt.TierFilterCustomizer;
+import java.util.Map;
+import java.util.Set;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,7 +42,7 @@ class CognitionCoreTierFilterTest {
         mood.record(new MoodSignal.DirectShift(0.0, 0.5, 0.0, "test-arousal"), "agent1", "tenant1");
         mood.tick("agent1", "tenant1");
 
-        core.tick("agent1", "tenant1", null, (a, t) -> java.util.Set.of());
+        core.tick("agent1", "tenant1", null, (a, t) -> Set.of());
 
         var sections = core.promptSections();
         assertThat(sections).allSatisfy(s ->
@@ -48,7 +54,7 @@ class CognitionCoreTierFilterTest {
         var mood = new MoodOrchestrator(MoodConfig.defaults());
         var core = new CognitionCore(mood, null, null, null, null, null, null, null);
 
-        core.tick("agent1", "tenant1", null, (a, t) -> java.util.Set.of());
+        core.tick("agent1", "tenant1", null, (a, t) -> Set.of());
 
         var sections = core.promptSections();
         assertThat(sections).isNotEmpty();
@@ -61,7 +67,7 @@ class CognitionCoreTierFilterTest {
 
         core.configureTierFilter(0.5);
 
-        core.tick("agent1", "tenant1", null, (a, t) -> java.util.Set.of());
+        core.tick("agent1", "tenant1", null, (a, t) -> Set.of());
 
         var sections = core.promptSections();
         assertThat(sections).isNotEmpty();
@@ -75,7 +81,7 @@ class CognitionCoreTierFilterTest {
         core.configureTierFilter(0.9);
         core.configureTierFilter(0.5);
 
-        core.tick("agent1", "tenant1", null, (a, t) -> java.util.Set.of());
+        core.tick("agent1", "tenant1", null, (a, t) -> Set.of());
 
         var sections = core.promptSections();
         // scalar=0.5 → suppThreshold=0.5, arousal=0.0 < 0.5 → all tiers render
@@ -95,7 +101,7 @@ class CognitionCoreTierFilterTest {
         var mood = new MoodOrchestrator(MoodConfig.defaults());
         var core = new CognitionCore(mood, null, null, null, null, null, null, null);
 
-        core.tick("agent1", "tenant1", null, (a, t) -> java.util.Set.of());
+        core.tick("agent1", "tenant1", null, (a, t) -> Set.of());
 
         assertThat(core.activatedDriveCategories()).isEmpty();
     }
@@ -113,19 +119,19 @@ class CognitionCoreTierFilterTest {
         var mood = new MoodOrchestrator(MoodConfig.defaults());
         var core = new CognitionCore(mood, null, null, null, null, null, null, null);
 
-        var stubAppraisal = new io.casehub.neocortex.cognition.appraisal.AppraisalTickParticipant(
-                new io.casehub.neocortex.cognition.appraisal.NoOpSalienceStrategy(),
-                new io.casehub.neocortex.cognition.appraisal.NoOpAppraisalStrategy(),
+        var stubAppraisal = new AppraisalTickParticipant(
+                new NoOpSalienceStrategy(),
+                new NoOpAppraisalStrategy(),
                 null, mood, null,
-                io.casehub.neocortex.cognition.core.CognitionConfig.none().with("appraisal", true)) {
+                CognitionConfig.none().with("appraisal", true)) {
             @Override
-            public java.util.Map<String, Double> currentConcernSalience(String agentId, String tenantId) {
-                return java.util.Map.of("scheming", 0.8);
+            public Map<String, Double> currentConcernSalience(String agentId, String tenantId) {
+                return Map.of("scheming", 0.8);
             }
         };
         core.setAppraisalParticipant(stubAppraisal);
 
-        core.tick("agent1", "tenant1", null, (a, t) -> java.util.Set.of());
+        core.tick("agent1", "tenant1", null, (a, t) -> Set.of());
 
         assertThat(core.activatedDriveCategories()).contains("scheming");
     }
