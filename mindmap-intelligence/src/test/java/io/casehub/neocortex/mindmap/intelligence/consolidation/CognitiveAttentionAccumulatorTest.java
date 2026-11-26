@@ -148,6 +148,28 @@ class CognitiveAttentionAccumulatorTest {
     }
 
     @Test
+    void broadcast_with_mixed_tenants_routes_to_correct_agents() {
+        var fired = new ArrayList<CognitiveAttentionRequired>();
+        var registry = EffectiveCognitiveDefaults.forTesting(
+                CognitiveDefaults.empty("agent-1"));
+        var acc = new CognitiveAttentionAccumulator(
+                registry, null, fired::add, Clock.systemUTC(), 1.0, 0);
+
+        acc.addSignals(List.of(
+                new AttentionSignal(null, "t1", SignalCategory.MERGE_CANDIDATE,
+                                    "n1", "Dup A", 2.0, "r1"),
+                new AttentionSignal(null, "t2", SignalCategory.MERGE_CANDIDATE,
+                                    "n2", "Dup B", 2.0, "r2")));
+
+        assertEquals(2, fired.size(), "one fire per tenant");
+        var tenantIds = fired.stream()
+                             .map(e -> e.briefing().tenantId())
+                             .sorted().toList();
+        assertEquals(List.of("t1", "t2"), tenantIds);
+    }
+
+
+    @Test
     void threshold_floor_prevents_zero_threshold() {
         var fired = new ArrayList<CognitiveAttentionRequired>();
         var registry = EffectiveCognitiveDefaults.forTesting(

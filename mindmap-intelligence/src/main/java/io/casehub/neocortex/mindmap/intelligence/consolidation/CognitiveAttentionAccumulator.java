@@ -110,15 +110,17 @@ public class CognitiveAttentionAccumulator {
     }
 
     public void addSignals(List<AttentionSignal> signals) {
-        var byKey = new HashMap<String, List<AttentionSignal>>();
+        var byKey             = new HashMap<String, List<AttentionSignal>>();
+        var broadcastByTenant = new HashMap<String, List<AttentionSignal>>();
         for (var signal : signals) {
-            String key = signal.principalId() != null
-                         ? compositeKey(signal.principalId(), signal.tenantId())
-                         : "__broadcast__";
-            byKey.computeIfAbsent(key, k -> new ArrayList<>()).add(signal);
+            if (signal.principalId() != null) {
+                String key = compositeKey(signal.principalId(), signal.tenantId());
+                byKey.computeIfAbsent(key, k -> new ArrayList<>()).add(signal);
+            } else {
+                String tenantId = signal.tenantId() != null ? signal.tenantId() : "__global__";
+                broadcastByTenant.computeIfAbsent(tenantId, k -> new ArrayList<>()).add(signal);
+            }
         }
-
-        var broadcastSignals = byKey.remove("__broadcast__");
 
         for (var entry : byKey.entrySet()) {
             var pa = perPrincipal.computeIfAbsent(
@@ -127,14 +129,17 @@ public class CognitiveAttentionAccumulator {
             evaluateThreshold(entry.getKey(), pa);
         }
 
-        if (broadcastSignals != null && registry != null) {
-            String broadcastTenantId = broadcastSignals.get(0).tenantId();
-            for (String agentId : registry.agentIds(broadcastTenantId)) {
-                String cKey = compositeKey(agentId, broadcastTenantId);
-                var pa = perPrincipal.computeIfAbsent(
-                        cKey, k -> new PrincipalAttention());
-                deduplicateAndAdd(pa, broadcastSignals);
-                evaluateThreshold(cKey, pa);
+        if (!broadcastByTenant.isEmpty() && registry != null) {
+            for (var tenantEntry : broadcastByTenant.entrySet()) {
+                String tenantId      = tenantEntry.getKey();
+                var    tenantSignals = tenantEntry.getValue();
+                for (String agentId : registry.agentIds(tenantId)) {
+                    String cKey = compositeKey(agentId, tenantId);
+                    var pa = perPrincipal.computeIfAbsent(
+                            cKey, k -> new PrincipalAttention());
+                    deduplicateAndAdd(pa, tenantSignals);
+                    evaluateThreshold(cKey, pa);
+                }
             }
         }
     }
