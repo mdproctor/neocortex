@@ -86,6 +86,17 @@ public class EffectiveCognitiveDefaults {
         slots.entrySet().removeIf(e -> e.getValue().lastAccess.isBefore(cutoff));
     }
 
+    public void refreshStale(Duration maxAge) {
+        var cutoff = Instant.now().minus(maxAge);
+        for (var entry : slots.entrySet()) {
+            if (entry.getValue().lastAccess.isBefore(cutoff)) {
+                incrementBaseVersion(entry.getKey());
+                ensureSlot(entry.getKey());
+            }
+        }
+    }
+
+
     public void onExplicitReload() {
         for (var key : slots.keySet()) {
             incrementBaseVersion(key);

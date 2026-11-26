@@ -157,6 +157,26 @@ class EffectiveCognitiveDefaultsTest {
     }
 
     @Test
+    void refreshStaleRecomputesSlotsOlderThanMaxAge() {
+        var view = DescriptorView.of("agent-1",
+                                     new DispositionAxes("cooperative", "moderate", "calculated", "moderate", "analytical"),
+                                     List.of(new WeightedTerm("fe", 0.8)), List.of());
+        viewSource.add("t1", view);
+        effective.forAgent("t1", "agent-1");
+
+        var updatedView = DescriptorView.of("agent-1",
+                                            new DispositionAxes("competitive", "strict", "bold", "high", "analytical"),
+                                            List.of(new WeightedTerm("te", 0.9)), List.of());
+        viewSource.add("t1", updatedView);
+
+        effective.refreshStale(java.time.Duration.ZERO);
+
+        var defaults = effective.forAgent("t1", "agent-1");
+        assertThat(defaults.descriptor()).isEqualTo(updatedView);
+    }
+
+
+    @Test
     void restingExcludesDisplacementEffectiveIncludes() {
         var facets = List.of(new PersonalityFacet("Anxiousness", 0.5, "eidos"));
         var view = new DescriptorView("agent-1",
