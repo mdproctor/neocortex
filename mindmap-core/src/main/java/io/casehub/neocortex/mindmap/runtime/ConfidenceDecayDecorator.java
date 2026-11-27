@@ -2,13 +2,14 @@ package io.casehub.neocortex.mindmap.runtime;
 
 import io.casehub.neocortex.cognitive.Confidence;
 import io.casehub.neocortex.mindmap.AbstractForwardingMindMapStore;
+import io.casehub.neocortex.mindmap.EdgeTypeDefinition;
 import io.casehub.neocortex.mindmap.MindMapEdge;
 import io.casehub.neocortex.mindmap.MindMapNode;
 import io.casehub.neocortex.mindmap.MindMapQuery;
 import io.casehub.neocortex.mindmap.MindMapStore;
 import io.casehub.neocortex.mindmap.NodeRef;
-import io.casehub.platform.api.identity.PrincipalId;
 import io.casehub.neocortex.mindmap.ValidationTier;
+import io.casehub.platform.api.identity.PrincipalId;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -97,11 +98,24 @@ public class ConfidenceDecayDecorator extends AbstractForwardingMindMapStore {
         return new DecayedNode(node, c.withValue(decayed));
     }
 
+
     private MindMapEdge withDecayedConfidence(MindMapEdge edge) {
-        Confidence c = edge.confidence();
-        double decayed = applyDecay(c.value(), c.decayReference(), defaultHalfLifeDays);
+        Confidence c        = edge.confidence();
+        double     halfLife = resolveHalfLife(edge.edgeType());
+        double     decayed  = applyDecay(c.value(), c.decayReference(), halfLife);
         if (decayed == c.value()) {return edge;}
         return new DecayedEdge(edge, c.withValue(decayed));
+    }
+
+
+    private double resolveHalfLife(String edgeType) {
+        for (EdgeTypeDefinition def : delegate().registeredEdgeTypes()) {
+            if (def.defaultDecayHalfLifeDays() != null
+                && (def.canonical().equals(edgeType) || def.aliases().contains(edgeType))) {
+                return def.defaultDecayHalfLifeDays();
+            }
+        }
+        return defaultHalfLifeDays;
     }
 
     static double applyDecay(double confidence, Instant since, double halfLifeDays) {
