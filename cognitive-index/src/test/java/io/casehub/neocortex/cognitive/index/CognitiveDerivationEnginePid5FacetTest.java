@@ -404,6 +404,145 @@ class CognitiveDerivationEnginePid5FacetTest {
         assertThat(high.reappraisalCapacity()).isLessThan(low.reappraisalCapacity());
     }
 
+    // --- Missing directional tests (Refs #1242) ---
+
+    @Test
+    void curiosity_anhedoniaReducesCategoryWeights() {
+        var high = CognitiveDerivationEngine.deriveCuriosity(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.ANHEDONIA, 0.9));
+        var low = CognitiveDerivationEngine.deriveCuriosity(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.ANHEDONIA, 0.1));
+        assertThat(high.categoryWeight("STRUCTURAL")).isLessThan(low.categoryWeight("STRUCTURAL"));
+        assertThat(high.categoryWeight("QUALITY")).isLessThan(low.categoryWeight("QUALITY"));
+        assertThat(high.categoryWeight("CENTRALITY")).isLessThan(low.categoryWeight("CENTRALITY"));
+    }
+
+    @Test
+    void cbrStrategy_anhedoniaIncreasesTemporalDecay() {
+        var high = CognitiveDerivationEngine.deriveCbrStrategy(DEFAULT_AXES, facetsOf(PersonalityFacet.ANHEDONIA, 0.9));
+        var low = CognitiveDerivationEngine.deriveCbrStrategy(DEFAULT_AXES, facetsOf(PersonalityFacet.ANHEDONIA, 0.1));
+        assertThat(high.temporalDecayDays()).isGreaterThanOrEqualTo(low.temporalDecayDays());
+    }
+
+    @Test
+    void appraisalWeights_depressivityReducesFearThreshold() {
+        var high = CognitiveDerivationEngine.deriveAppraisalWeights(BALANCED_PROFILE, DEFAULT_AXES, facetsOf(PersonalityFacet.DEPRESSIVITY, 0.9));
+        var low = CognitiveDerivationEngine.deriveAppraisalWeights(BALANCED_PROFILE, DEFAULT_AXES, facetsOf(PersonalityFacet.DEPRESSIVITY, 0.1));
+        assertThat(high.fearOnsetThreshold()).isLessThan(low.fearOnsetThreshold());
+    }
+
+    @Test
+    void pool_depressivityReducesMaxEffort() {
+        var high = CognitiveDerivationEngine.derivePoolConfig(facetsOf(PersonalityFacet.DEPRESSIVITY, 0.9), DEFAULT_AXES);
+        var low = CognitiveDerivationEngine.derivePoolConfig(facetsOf(PersonalityFacet.DEPRESSIVITY, 0.1), DEFAULT_AXES);
+        assertThat(high.maxEffort()).isLessThan(low.maxEffort());
+    }
+
+    @Test
+    void habituation_perseverationReducesHabituationRate() {
+        var high = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.PERSEVERATION, 0.9));
+        var low = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.PERSEVERATION, 0.1));
+        assertThat(high.habituationRate()).isLessThan(low.habituationRate());
+    }
+
+    @Test
+    void habituation_perseverationIncreasesRepetitionTolerance() {
+        var high = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.PERSEVERATION, 0.9));
+        var low = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.PERSEVERATION, 0.1));
+        assertThat(high.repetitionTolerance()).isGreaterThan(low.repetitionTolerance());
+    }
+
+    @Test
+    void searchBudget_rigidPerfectionismIncreasesConvergence() {
+        var high = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.9), DEFAULT_AXES, 0.5);
+        var low = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.1), DEFAULT_AXES, 0.5);
+        assertThat(high.convergenceMidpoint()).isGreaterThan(low.convergenceMidpoint());
+    }
+
+    @Test
+    void searchBudget_rigidPerfectionismReducesLaterality() {
+        var high = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.9), DEFAULT_AXES, 0.5);
+        var low = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.1), DEFAULT_AXES, 0.5);
+        assertThat(high.lateralityMidpoint()).isLessThan(low.lateralityMidpoint());
+    }
+
+    @Test
+    void habituation_rigidPerfectionismReducesHabituationRate() {
+        var high = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.9));
+        var low = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.1));
+        assertThat(high.habituationRate()).isLessThan(low.habituationRate());
+    }
+
+    @Test
+    void habituation_rigidPerfectionismIncreasesRepetitionTolerance() {
+        var high = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.9));
+        var low = CognitiveDerivationEngine.deriveHabituationConfig(DEFAULT_AXES, List.of(), facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.1));
+        assertThat(high.repetitionTolerance()).isGreaterThan(low.repetitionTolerance());
+    }
+
+    @Test
+    void regulation_rigidPerfectionismReducesReappraisal() {
+        var axes = new DispositionAxes("independent", "flexible", "measured", "autonomous", "confronting");
+        var high = CognitiveDerivationEngine.deriveRegulationDefaults(axes, facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.9));
+        var low = CognitiveDerivationEngine.deriveRegulationDefaults(axes, facetsOf(PersonalityFacet.RIGID_PERFECTIONISM, 0.1));
+        assertThat(high.reappraisalCapacity()).isLessThan(low.reappraisalCapacity());
+    }
+
+    @Test
+    void pool_distractibilityReducesMaxEffort() {
+        var high = CognitiveDerivationEngine.derivePoolConfig(facetsOf(PersonalityFacet.DISTRACTIBILITY, 0.9), DEFAULT_AXES);
+        var low = CognitiveDerivationEngine.derivePoolConfig(facetsOf(PersonalityFacet.DISTRACTIBILITY, 0.1), DEFAULT_AXES);
+        assertThat(high.maxEffort()).isLessThan(low.maxEffort());
+    }
+
+    @Test
+    void appraisalWeights_separationInsecurityIncreasesRelevance() {
+        var high = CognitiveDerivationEngine.deriveAppraisalWeights(BALANCED_PROFILE, DEFAULT_AXES, facetsOf(PersonalityFacet.SEPARATION_INSECURITY, 0.9));
+        var low = CognitiveDerivationEngine.deriveAppraisalWeights(BALANCED_PROFILE, DEFAULT_AXES, facetsOf(PersonalityFacet.SEPARATION_INSECURITY, 0.1));
+        assertThat(high.relationshipWeight()).isGreaterThan(low.relationshipWeight());
+    }
+
+    @Test
+    void regulation_separationInsecurityReducesReappraisal() {
+        var axes = new DispositionAxes("independent", "flexible", "measured", "autonomous", "confronting");
+        var high = CognitiveDerivationEngine.deriveRegulationDefaults(axes, facetsOf(PersonalityFacet.SEPARATION_INSECURITY, 0.9));
+        var low = CognitiveDerivationEngine.deriveRegulationDefaults(axes, facetsOf(PersonalityFacet.SEPARATION_INSECURITY, 0.1));
+        assertThat(high.reappraisalCapacity()).isLessThan(low.reappraisalCapacity());
+    }
+
+    @Test
+    void coping_irresponsibilityIncreasesDisengagement() {
+        var high = CognitiveDerivationEngine.deriveCopingDefaults(DEFAULT_AXES, facetsOf(PersonalityFacet.IRRESPONSIBILITY, 0.9));
+        var low = CognitiveDerivationEngine.deriveCopingDefaults(DEFAULT_AXES, facetsOf(PersonalityFacet.IRRESPONSIBILITY, 0.1));
+        assertThat(high.disengagementTendency()).isGreaterThan(low.disengagementTendency());
+    }
+
+    @Test
+    void cbrStrategy_irresponsibilityIncreasesTemporalDecay() {
+        var high = CognitiveDerivationEngine.deriveCbrStrategy(DEFAULT_AXES, facetsOf(PersonalityFacet.IRRESPONSIBILITY, 0.9));
+        var low = CognitiveDerivationEngine.deriveCbrStrategy(DEFAULT_AXES, facetsOf(PersonalityFacet.IRRESPONSIBILITY, 0.1));
+        assertThat(high.temporalDecayDays()).isGreaterThanOrEqualTo(low.temporalDecayDays());
+    }
+
+    @Test
+    void extractionBias_cogPerceptualDysregulationReducesAffectSensitivity() {
+        var high = CognitiveDerivationEngine.deriveExtractionBias(BALANCED_PROFILE, facetsOf(PersonalityFacet.COGNITIVE_PERCEPTUAL_DYSREGULATION, 0.9));
+        var low = CognitiveDerivationEngine.deriveExtractionBias(BALANCED_PROFILE, facetsOf(PersonalityFacet.COGNITIVE_PERCEPTUAL_DYSREGULATION, 0.1));
+        assertThat(high.affectSensitivity()).isLessThan(low.affectSensitivity());
+    }
+
+    @Test
+    void searchBudget_eccentricityIncreasesBreadth() {
+        var high = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.ECCENTRICITY, 0.9), DEFAULT_AXES, 0.5);
+        var low = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.ECCENTRICITY, 0.1), DEFAULT_AXES, 0.5);
+        assertThat(high.breadthSteepness()).isGreaterThan(low.breadthSteepness());
+    }
+
+    @Test
+    void searchBudget_deceitfulnessIncreasesDepth() {
+        var high = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.DECEITFULNESS, 0.9), DEFAULT_AXES, 0.5);
+        var low = CognitiveDerivationEngine.deriveSearchBudgetDefaults(facetsOf(PersonalityFacet.DECEITFULNESS, 0.1), DEFAULT_AXES, 0.5);
+        assertThat(high.depthMidpoint()).isGreaterThan(low.depthMidpoint());
+    }
+
     // --- Backfill: Deceitfulness, Attention Seeking ---
 
     @Test
